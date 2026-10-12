@@ -1,0 +1,11 @@
+{
+  "name": "@arena/server",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "./scripts/dev.sh",
+    "build": "go build -o bin/server ./cmd/server",
+    "test": "go test ./...",
+    "lint": "./scripts/lint.sh"
+  }
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arena</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      canvas { display: block; width: 100%; height: 100%; }
+      #hud {
+        position: fixed; top: 8px; left: 8px; color: #9f9; font: 12px/1.4 monospace;
+        white-space: pre; pointer-events: none; text-shadow: 1px 1px 0 #000;
+      }
+      #hint {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        color: #fff; font: 16px monospace; background: rgba(0, 0, 0, 0.4); cursor: pointer;
+      }
+      #hint.hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="hud"></div>
+    <div id="hint">Click to play — WASD move, mouse look, Space/Shift up/down, Esc release</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

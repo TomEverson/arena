@@ -1,0 +1,39 @@
+# Every job calls the same pnpm scripts used locally.
+stages: [lint, test, build]
+
+default:
+  image: node:22-bookworm
+  cache:
+    key:
+      files: [pnpm-lock.yaml, server/go.sum]
+    paths:
+      - .pnpm-store
+      - .go/pkg/mod
+  before_script:
+    - export GOVERSION=1.24.6 GOPATH="$CI_PROJECT_DIR/.go" GOMODCACHE="$CI_PROJECT_DIR/.go/pkg/mod"
+    - curl -fsSL "https://go.dev/dl/go${GOVERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xz
+    - export PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
+    - corepack enable
+    - pnpm config set store-dir "$CI_PROJECT_DIR/.pnpm-store"
+    - pnpm install --frozen-lockfile
+
+lint:
+  stage: lint
+  script:
+    - curl -fsSL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$GOPATH/bin"
+    - pnpm lint
+
+test:
+  stage: test
+  script:
+    - pnpm test
+
+build:
+  stage: build
+  script:
+    - pnpm build
+  artifacts:
+    paths:
+      - client/dist/
+      - server/bin/
+    expire_in: 1 week
