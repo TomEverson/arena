@@ -92,7 +92,28 @@
         "mantleFromZ": "f64",
         "mantleToX": "f64",
         "mantleToY": "f64",
-        "mantleToZ": "f64"
+        "mantleToZ": "f64",
+        "wallRunning": {
+          "type": "bool",
+          "doc": "Running along a wall (airborne, gravity mostly off)."
+        },
+        "wallRunTime": {
+          "type": "f64",
+          "doc": "Seconds spent on the current wall run."
+        },
+        "wallNormalX": {
+          "type": "f64",
+          "doc": "Direction pointing out of the last wall run on or jumped from (unit XZ), for the re-grab cooldown."
+        },
+        "wallNormalZ": "f64",
+        "wallJumps": {
+          "type": "u8",
+          "doc": "Wall jumps used since last touching the ground."
+        },
+        "wallCooldown": {
+          "type": "f64",
+          "doc": "Seconds before the wall in wallNormal can be grabbed or jumped off again."
+        }
       }
     },
     "Entity": {
@@ -106,7 +127,7 @@
         "yaw": "f64",
         "pitch": "f64",
         "flags": {
-          "type": "u8",
+          "type": "u16",
           "doc": "Bit set of EntityFlags."
         },
         "kind": {
@@ -240,7 +261,8 @@
       "onGround": 16,
       "mantling": 32,
       "dead": 64,
-      "protected": 128
+      "protected": 128,
+      "wallRunning": 256
     },
     "EventKinds": {
       "hit": 1,

@@ -44,7 +44,7 @@ FFA is teams of one: every player's `teamId` is unique. This keeps the data mode
 - Deferred: secondary weapon, power-weapon pickup, any loadout choice.
 
 ### Movement
-Apex-readable gunplay on Ultrakill/Overwatch-style mobility: sprint, slide with momentum, jump, 2-charge dash (regenerating), mantle.
+Apex-readable gunplay on Ultrakill/Overwatch-style mobility: sprint, slide with momentum, jump, 2-charge dash (regenerating), mantle, wall run and wall jump.
 Movement is a small pure function shared (in logic) between Go and TS via `testvectors/`.
 Tune movement against time-to-kill: if players are too hard to hit, gunplay degrades to spray and pray.
 

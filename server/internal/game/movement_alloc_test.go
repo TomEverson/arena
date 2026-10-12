@@ -57,3 +57,32 @@ func TestStepDoesNotAllocateWithMovingPlayers(t *testing.T) {
 		t.Fatalf("Step with moving players allocated %v times per tick, want 0", allocs)
 	}
 }
+
+// Wall running and wall jumping are part of the tick loop too: zero allocations while a
+// player runs along a wall, kicks off it and runs again.
+func TestWallRunDoesNotAllocate(t *testing.T) {
+	floor := game.Aabb{MinX: -100, MaxX: 100, MinY: -1, MaxY: 0, MinZ: -100, MaxZ: 100}
+	wall := game.Aabb{MinX: 0.8, MaxX: 2.8, MinY: 0, MaxY: 10, MinZ: -2000, MaxZ: 100}
+	w := &game.CollisionWorld{Boxes: []game.Aabb{floor, wall}}
+	s := game.SpawnState(0.5, 0, 0)
+	in := game.Input{MoveZ: 1, Yaw: 0}
+	ran := false
+	tick := 0
+	step := func() {
+		tick++
+		in.Jump = tick%90 == 25 || (s.WallRunning && tick%90 > 55)
+		game.StepPlayer(&s, &in, w, 1.0/60)
+		if s.WallRunning {
+			ran = true
+		}
+	}
+	for i := 0; i < 200; i++ {
+		step()
+	}
+	if allocs := testing.AllocsPerRun(600, step); allocs != 0 {
+		t.Fatalf("wall running allocated %v times per tick, want 0", allocs)
+	}
+	if !ran {
+		t.Fatal("the test never wall ran, so it proves nothing")
+	}
+}

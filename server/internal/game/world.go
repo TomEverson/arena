@@ -342,7 +342,7 @@ func (w *World) stepPlayer(p *Player) {
 func (p *Player) syncEntity() {
 	s := &p.State
 	p.Entity.X, p.Entity.Y, p.Entity.Z = s.X, s.Y, s.Z
-	var f uint8
+	var f uint16
 	if s.Crouching {
 		f |= protocol.EntityFlagCrouching
 	}
@@ -360,6 +360,9 @@ func (p *Player) syncEntity() {
 	}
 	if s.Mantling {
 		f |= protocol.EntityFlagMantling
+	}
+	if s.WallRunning {
+		f |= protocol.EntityFlagWallRunning
 	}
 	if !p.Health.Alive {
 		f |= protocol.EntityFlagDead

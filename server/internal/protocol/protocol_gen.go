@@ -17,14 +17,15 @@ const (
 
 // EntityFlags bits.
 const (
-	EntityFlagCrouching uint8 = 1
-	EntityFlagSliding   uint8 = 2
-	EntityFlagClimbing  uint8 = 4
-	EntityFlagDashing   uint8 = 8
-	EntityFlagOnGround  uint8 = 16
-	EntityFlagMantling  uint8 = 32
-	EntityFlagDead      uint8 = 64
-	EntityFlagProtected uint8 = 128
+	EntityFlagCrouching   uint16 = 1
+	EntityFlagSliding     uint16 = 2
+	EntityFlagClimbing    uint16 = 4
+	EntityFlagDashing     uint16 = 8
+	EntityFlagOnGround    uint16 = 16
+	EntityFlagMantling    uint16 = 32
+	EntityFlagDead        uint16 = 64
+	EntityFlagProtected   uint16 = 128
+	EntityFlagWallRunning uint16 = 256
 )
 
 // EventKinds bits.
@@ -115,6 +116,17 @@ type PlayerState struct {
 	MantleToX   float64 `json:"mantleToX"`
 	MantleToY   float64 `json:"mantleToY"`
 	MantleToZ   float64 `json:"mantleToZ"`
+	// Running along a wall (airborne, gravity mostly off).
+	WallRunning bool `json:"wallRunning"`
+	// Seconds spent on the current wall run.
+	WallRunTime float64 `json:"wallRunTime"`
+	// Direction pointing out of the last wall run on or jumped from (unit XZ), for the re-grab cooldown.
+	WallNormalX float64 `json:"wallNormalX"`
+	WallNormalZ float64 `json:"wallNormalZ"`
+	// Wall jumps used since last touching the ground.
+	WallJumps uint8 `json:"wallJumps"`
+	// Seconds before the wall in wallNormal can be grabbed or jumped off again.
+	WallCooldown float64 `json:"wallCooldown"`
 }
 
 // Entity: What other players need to draw and interpolate someone. Every entity carries a teamId.
@@ -127,7 +139,7 @@ type Entity struct {
 	Yaw    float64 `json:"yaw"`
 	Pitch  float64 `json:"pitch"`
 	// Bit set of EntityFlags.
-	Flags uint8 `json:"flags"`
+	Flags uint16 `json:"flags"`
 	// One of EntityKinds: a player or a practice-range target.
 	Kind uint8 `json:"kind"`
 }

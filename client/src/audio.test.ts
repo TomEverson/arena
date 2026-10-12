@@ -2,38 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { type MoveSound, MoveSoundTracker, StepCounter, STRIDE } from "./audio";
 import type { PlayerState } from "./net/protocol.gen";
+import { spawnState } from "./sim/movement";
 
 function state(over: Partial<PlayerState> = {}): PlayerState {
-  return {
-    x: 0,
-    y: 0,
-    z: 0,
-    vx: 0,
-    vy: 0,
-    vz: 0,
-    onGround: true,
-    climbing: false,
-    crouching: false,
-    sliding: false,
-    slideTime: 0,
-    slideCooldown: 0,
-    dashCharges: 2,
-    dashTime: 0,
-    dashDirX: 0,
-    dashDirZ: 0,
-    airJumps: 1,
-    coyote: 0,
-    jumpBuffer: 0,
-    mantling: false,
-    mantleT: 0,
-    mantleFromX: 0,
-    mantleFromY: 0,
-    mantleFromZ: 0,
-    mantleToX: 0,
-    mantleToY: 0,
-    mantleToZ: 0,
-    ...over,
-  };
+  return { ...spawnState(0, 0, 0), onGround: true, airJumps: 1, ...over };
 }
 
 function run(states: PlayerState[], dt = 1 / 60): MoveSound[] {
@@ -86,6 +58,19 @@ describe("MoveSoundTracker", () => {
 
   it("does not step on a respawn teleport", () => {
     expect(run([state(), state({ x: 40 })])).toEqual([]);
+  });
+});
+
+describe("wall sounds", () => {
+  it("scrapes when a wall run starts and again every so often, and thwacks on the kick", () => {
+    const running = (extra: Partial<PlayerState> = {}) =>
+      state({ onGround: false, y: 3, wallRunning: true, ...extra });
+    const frames = [state({ onGround: false, y: 3 })];
+    for (let i = 0; i < 90; i++) frames.push(running());
+    frames.push(running({ wallRunning: false, wallJumps: 1 }));
+    const sounds = run(frames);
+    expect(sounds.filter((s) => s === "wallRun").length).toBeGreaterThanOrEqual(3);
+    expect(sounds.filter((s) => s === "wallJump")).toHaveLength(1);
   });
 });
 

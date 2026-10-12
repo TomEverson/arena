@@ -566,6 +566,10 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 let eye = PARAMS.standEye;
 let lastFrame = 0;
 
+/** How far the camera banks away from the wall while wall running (radians, about 4 degrees). */
+const WALL_ROLL = 0.07;
+let camRoll = 0;
+
 /** Movement sounds for you, footsteps for everyone else, and where the listener is. */
 function updateSound(frameDt: number, renderTick: number, cam: THREE.PerspectiveCamera): void {
   audio.setListener(cam.position.x, cam.position.y, cam.position.z, look.yaw, look.pitch);
@@ -632,7 +636,13 @@ function frame(nowMs: number): void {
     sliding: player.sliding,
   });
   const shake = fx.update(frameDt, adsT, spread, fov, activeWeapon.reloadT);
-  cam.rotation.set(look.pitch + shake.pitch, look.yaw + shake.yaw, 0);
+  // Wall run: bank the camera away from the wall (positive roll tilts the head left).
+  const wallOnRight =
+    -player.wallNormalX * Math.cos(look.yaw) + player.wallNormalZ * Math.sin(look.yaw);
+  const rollTarget =
+    player.wallRunning && health?.alive !== false ? Math.sign(wallOnRight) * WALL_ROLL : 0;
+  camRoll += (rollTarget - camRoll) * (1 - Math.exp(-frameDt * 10));
+  cam.rotation.set(look.pitch + shake.pitch, look.yaw + shake.yaw, camRoll);
   if (netMode === "offline") dummyViews.update(dummies, frameDt, cam.position);
   else dummyViews.hideAll(); // online, the targets are other players
   const inMatch = match !== null && canAct(match.phase);
@@ -670,6 +680,7 @@ function frame(nowMs: number): void {
     player.climbing ? "climb" : "",
     player.dashTime > 0 ? "dash" : "",
     player.mantling ? "mantle" : "",
+    player.wallRunning ? "wallrun" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -678,7 +689,7 @@ function frame(nowMs: number): void {
     `jumps ${"●".repeat(player.airJumps)}${"○".repeat(PARAMS.maxAirJumps - player.airJumps)}  dash ${"●".repeat(Math.floor(player.dashCharges))}${"○".repeat(PARAMS.dashCharges - Math.floor(player.dashCharges))}  ` +
     `(${(player.dashCharges % 1).toFixed(2)})\n` +
     `${killLog}\n` +
-    `WASD move · Space jump (hold at green walls to climb) · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
+    `WASD move · Space jump (hold at green walls to climb; beside any other wall at speed you run along it, jump again to kick off) · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
     `render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks}\n` +
     netHud();
   requestAnimationFrame(frame);

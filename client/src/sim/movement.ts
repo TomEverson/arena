@@ -42,6 +42,12 @@ export function spawnState(x: number, y: number, z: number): PlayerState {
     mantleToX: 0,
     mantleToY: 0,
     mantleToZ: 0,
+    wallRunning: false,
+    wallRunTime: 0,
+    wallNormalX: 0,
+    wallNormalZ: 0,
+    wallJumps: 0,
+    wallCooldown: 0,
   };
 }
 
@@ -98,6 +104,7 @@ export function stepPlayer(
 
   // Timers
   s.slideCooldown = Math.max(0, s.slideCooldown - dt);
+  s.wallCooldown = Math.max(0, s.wallCooldown - dt);
   s.coyote = s.onGround ? P.coyoteTime : Math.max(0, s.coyote - dt);
   s.jumpBuffer = input.jump ? P.jumpBufferTime : Math.max(0, s.jumpBuffer - dt);
 
@@ -133,23 +140,31 @@ export function stepPlayer(
 
   if (s.dashTime > 0) {
     // Dash overrides everything: constant velocity, no gravity.
+    endWallRun(s);
     s.vx = s.dashDirX * P.dashSpeed;
     s.vz = s.dashDirZ * P.dashSpeed;
     s.vy = 0;
     s.dashTime = Math.max(0, s.dashTime - dt);
   } else if (wall) {
     // Climbing: stuck to the wall, moving straight up, no gravity.
+    endWallRun(s);
     s.vx = 0;
     s.vz = 0;
     s.vy = P.climbSpeed;
     s.jumpBuffer = 0;
   } else {
-    updateSlide(s, input, world, dt);
-    updateCrouch(s, input, world);
-    updateHorizontalVelocity(s, wish, dt);
-    tryJump(s, input, world);
-    if (!s.onGround) s.vy = Math.max(-P.terminalVelocity, s.vy - P.gravity * dt);
-    else if (s.vy < 0) s.vy = 0;
+    updateWallRun(s, input, wish, world);
+    if (s.wallRunning) {
+      if (input.jump) wallJump(s);
+      else runAlongWall(s, dt);
+    } else {
+      updateSlide(s, input, world, dt);
+      updateCrouch(s, input, world);
+      updateHorizontalVelocity(s, wish, dt);
+      if (!tryWallJump(s, input, world)) tryJump(s, input, world);
+      if (!s.onGround) s.vy = Math.max(-P.terminalVelocity, s.vy - P.gravity * dt);
+      else if (s.vy < 0) s.vy = 0;
+    }
   }
 
   const hit = integrate(s, world, dt);
@@ -407,6 +422,8 @@ function probeGround(s: PlayerState, world: CollisionWorld, wasGround: boolean):
   if ((s.vy <= 0 && gap <= P.groundEps) || (wasGround && s.vy <= 0 && gap <= P.snapDown)) {
     s.onGround = true;
     s.airJumps = P.maxAirJumps;
+    s.wallJumps = 0;
+    endWallRun(s);
     s.y = support;
     s.vy = 0;
   } else {
@@ -440,6 +457,149 @@ function findClimbWall(world: CollisionWorld, s: PlayerState, yaw: number): Wall
   return null;
 }
 
+// --- Wall run and wall jump -------------------------------------------------
+
+interface WallContact {
+  /** Unit XZ direction pointing out of the wall, toward the player. */
+  nx: number;
+  nz: number;
+}
+
+/** Directions from the player to a wall, checked in this order (ties go to the first). */
+const WALL_DIRS: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+
+/**
+ * A wall beside (or in front of, or behind) the player that can be run on or jumped off: a
+ * solid box face within `wallRunReach`, tall enough to matter, not climbable (those are for
+ * climbing), and not the wall we just left (see wallCooldown). When several qualify, the one
+ * we are moving along fastest wins.
+ */
+function findWall(world: CollisionWorld, s: PlayerState): WallContact | null {
+  const height = bodyHeight(s);
+  let best: WallContact | null = null;
+  let bestAlong = -1;
+  for (const [dx, dz] of WALL_DIRS) {
+    const nx = -dx;
+    const nz = -dz;
+    if (s.wallCooldown > 0 && nx * s.wallNormalX + nz * s.wallNormalZ > 0.9) continue;
+    const probe = playerBox(s.x + dx * P.wallRunReach, s.y, s.z + dz * P.wallRunReach, height);
+    let found = false;
+    for (const b of world.boxes) {
+      if (!b.climbable && b.maxY > s.y + P.wallRunMinHeight && overlaps(probe, b)) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) continue;
+    // Speed along the wall: the velocity without its component into the wall.
+    const into = s.vx * nx + s.vz * nz;
+    const along = Math.hypot(s.vx - into * nx, s.vz - into * nz);
+    if (along > bestAlong) {
+      bestAlong = along;
+      best = { nx, nz };
+    }
+  }
+  return best;
+}
+
+function endWallRun(s: PlayerState): void {
+  if (!s.wallRunning) return;
+  s.wallRunning = false;
+  s.wallRunTime = 0;
+  s.wallCooldown = P.wallRunCooldown;
+}
+
+/**
+ * Start, keep or end a wall run. To start: in the air and clear of the floor, moving along a
+ * wall fast enough, holding a direction that follows the wall. To keep going: still beside the
+ * same wall, still moving along it, still holding a direction, time not up, slide key released.
+ */
+function updateWallRun(
+  s: PlayerState,
+  input: PlayerInput,
+  wish: Wish,
+  world: CollisionWorld,
+): void {
+  const ok =
+    !s.onGround &&
+    !s.sliding &&
+    !s.crouching &&
+    !input.slide &&
+    wish.mag > 0 &&
+    s.wallRunTime < P.wallRunMaxTime &&
+    !(input.jump && s.wallJumps >= P.wallJumpMax);
+  const c = ok ? findWall(world, s) : null;
+  if (!c) {
+    endWallRun(s);
+    return;
+  }
+  const into = s.vx * c.nx + s.vz * c.nz;
+  const tx = s.vx - into * c.nx;
+  const tz = s.vz - into * c.nz;
+  const along = Math.hypot(tx, tz);
+  if (!s.wallRunning) {
+    if (along < P.wallRunMinSpeed) return;
+    if ((wish.x * tx + wish.z * tz) / along < P.wallRunWish) return;
+    if (s.y - supportHeight(world, s.x, s.z, s.y) < P.wallRunMinHeight) return;
+    s.wallRunning = true;
+    s.wallRunTime = 0;
+    s.vy = Math.min(s.vy, P.wallRunMaxRise); // a jump's rise does not carry up the wall
+  } else if (along < P.wallRunExitSpeed) {
+    endWallRun(s);
+    return;
+  }
+  s.wallNormalX = c.nx;
+  s.wallNormalZ = c.nz;
+}
+
+/** Slide along the wall at (at least) wall-run speed, pressed lightly to it, barely falling. */
+function runAlongWall(s: PlayerState, dt: number): void {
+  const nx = s.wallNormalX;
+  const nz = s.wallNormalZ;
+  const into = s.vx * nx + s.vz * nz;
+  const tx = s.vx - into * nx;
+  const tz = s.vz - into * nz;
+  const along = Math.hypot(tx, tz);
+  const speed = Math.max(along, P.wallRunSpeed);
+  s.vx = (tx / along) * speed - nx * P.wallRunStick;
+  s.vz = (tz / along) * speed - nz * P.wallRunStick;
+  s.vy = Math.max(-P.wallRunMaxFall, s.vy - P.gravity * P.wallRunGravityScale * dt);
+  s.wallRunTime += dt;
+  s.jumpBuffer = 0;
+}
+
+/** Kick off the wall: away from it, up, keeping the speed along it. Gives back one air jump. */
+function wallJump(s: PlayerState): void {
+  const nx = s.wallNormalX;
+  const nz = s.wallNormalZ;
+  const into = s.vx * nx + s.vz * nz;
+  s.vx = s.vx - into * nx + nx * P.wallJumpKick;
+  s.vz = s.vz - into * nz + nz * P.wallJumpKick;
+  s.vy = P.wallJumpSpeed;
+  s.wallJumps += 1;
+  s.airJumps = Math.min(P.maxAirJumps, s.airJumps + 1);
+  s.jumpBuffer = 0;
+  s.wallRunning = false;
+  s.wallRunTime = 0;
+  s.wallCooldown = P.wallRunCooldown;
+}
+
+/** A fresh jump press in the air, touching a wall: wall jump instead of an air jump. */
+function tryWallJump(s: PlayerState, input: PlayerInput, world: CollisionWorld): boolean {
+  if (!input.jump || s.onGround || s.coyote > 0 || s.wallJumps >= P.wallJumpMax) return false;
+  const c = findWall(world, s);
+  if (!c) return false;
+  s.wallNormalX = c.nx;
+  s.wallNormalZ = c.nz;
+  wallJump(s);
+  return true;
+}
+
 // --- Mantle ----------------------------------------------------------------
 
 function tryStartMantle(s: PlayerState, world: CollisionWorld, wish: Wish, hit: WallHit): void {
@@ -464,6 +624,7 @@ function tryStartMantle(s: PlayerState, world: CollisionWorld, wish: Wish, hit: 
   if (blocked(world, playerBox(tx, top, tz, P.standHeight))) return;
   if (top - supportHeight(world, tx, tz, top) > P.groundEps) return;
 
+  endWallRun(s);
   s.mantling = true;
   s.mantleT = 0;
   s.sliding = false;

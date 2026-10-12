@@ -15,7 +15,11 @@ const REF_DISTANCE = 4;
 const MAX_DISTANCE = 60;
 
 /** Something a body did that makes a sound. */
-export type MoveSound = "step" | "jump" | "airJump" | "land" | "dash" | "slide";
+export type MoveSound =
+  "step" | "jump" | "airJump" | "land" | "dash" | "slide" | "wallRun" | "wallJump";
+
+/** Seconds between scrape sounds while running along a wall. */
+const WALL_SCRAPE_EVERY = 0.4;
 
 /**
  * Turns a stream of player states (one per frame) into movement sounds: footsteps every STRIDE
@@ -26,6 +30,7 @@ export class MoveSoundTracker {
   private walked = 0;
   private airTime = 0;
   private fallSpeed = 0;
+  private scrapeIn = 0;
   /** How hard the last landing was (0..1), for the volume of the thump. */
   landStrength = 0;
 
@@ -39,6 +44,14 @@ export class MoveSoundTracker {
     else if (s.airJumps < p.airJumps && !s.onGround) out.push("airJump");
     if (p.dashTime <= 0 && s.dashTime > 0) out.push("dash");
     if (!p.sliding && s.sliding) out.push("slide");
+    if (s.wallJumps > p.wallJumps) out.push("wallJump");
+    if (s.wallRunning) {
+      this.scrapeIn -= dt;
+      if (!p.wallRunning || this.scrapeIn <= 0) {
+        out.push("wallRun");
+        this.scrapeIn = WALL_SCRAPE_EVERY;
+      }
+    }
 
     if (s.onGround) {
       if (this.airTime > 0.2) {
@@ -326,6 +339,15 @@ export class AudioEngine {
       case "dash":
         this.hiss(o, "highpass", 600, 4500, 0.22, 0.4 * v, 0, 0.7);
         this.tone(o, "sawtooth", 220, 110, 0.18, 0.1 * v);
+        break;
+      case "wallRun":
+        this.hiss(o, "bandpass", 1500, 900, 0.5, 0.22 * v, 0, 1.2);
+        this.hiss(o, "lowpass", 500, 250, 0.3, 0.12 * v);
+        break;
+      case "wallJump":
+        this.hiss(o, "highpass", 800, 3500, 0.15, 0.35 * v, 0, 0.8);
+        this.tone(o, "sine", 210, 80, 0.12, 0.45 * v);
+        this.tone(o, "triangle", 300, 520, 0.1, 0.12 * v);
         break;
       case "slide":
         this.hiss(o, "bandpass", 1800, 700, 0.45, 0.25 * v, 0, 0.9);

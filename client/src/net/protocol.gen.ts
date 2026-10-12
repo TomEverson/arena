@@ -11,6 +11,7 @@ export const EntityFlags = {
   mantling: 32,
   dead: 64,
   protected: 128,
+  wallRunning: 256,
 } as const;
 
 /** EventKinds bits. */
@@ -101,6 +102,17 @@ export interface PlayerState {
   mantleToX: number;
   mantleToY: number;
   mantleToZ: number;
+  /** Running along a wall (airborne, gravity mostly off). */
+  wallRunning: boolean;
+  /** Seconds spent on the current wall run. */
+  wallRunTime: number;
+  /** Direction pointing out of the last wall run on or jumped from (unit XZ), for the re-grab cooldown. */
+  wallNormalX: number;
+  wallNormalZ: number;
+  /** Wall jumps used since last touching the ground. */
+  wallJumps: number;
+  /** Seconds before the wall in wallNormal can be grabbed or jumped off again. */
+  wallCooldown: number;
 }
 
 /** What other players need to draw and interpolate someone. Every entity carries a teamId. */

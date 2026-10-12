@@ -22,6 +22,7 @@ Changing any movement number changes movement: re-record the vectors (`pnpm vect
 | `dash*` | Dash charges, speed, duration, exit speed, seconds per charge |
 | `climb*` | Climb speed, wall reach, facing cone, top-out distance |
 | `mantle*` | Mantle reach, duration, inset, exit speed |
+| `wallRun*`, `wallJump*` | Wall run speed, time, gravity, grab rules; wall jump kick, height, limit |
 
 ## Weapon parameters (`weapon`)
 Damage, health (`maxHealth`, `maxShield`), fire rate (`rpm`), magazine, reload, spread cone values, the 30-entry `recoilPitch`/`recoilYaw`

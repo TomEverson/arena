@@ -618,20 +618,19 @@ export const scenarios: Scenario[] = [
   })(),
 
   (() => {
-    const w = inline([box(0, 2.5, -12, 6, 5, 20)]);
+    const w = inline([box(0, 3.5, -12, 6, 7, 20)]);
     const input = (): InputFn => (t) => (t < 3 ? {} : { ...F, jump: t % 30 === 0 });
     return scenario(
       "mantle-too-high",
-      "A 5 m wall is out of mantle reach.",
+      "A 7 m wall is out of mantle reach, even kicking up it with wall jumps.",
       w,
       [0, 0, 3],
       { total: 123, input },
       (t) => {
         check(
-          !any(t, (s) => s.mantling) && maxOf(t, (s) => s.y) < 5,
-          "could not mantle onto the 5 m wall",
+          !any(t, (s) => s.mantling) && maxOf(t, (s) => s.y) < 7,
+          "could not mantle onto the 7 m wall",
         );
-        check(last(t).y < 1, "ended back on the floor");
       },
     );
   })(),
@@ -817,6 +816,132 @@ export const scenarios: Scenario[] = [
           t.slice(3).every((s) => s.onGround),
           "never airborne",
         );
+      },
+    );
+  })(),
+
+  // --- Wall run and wall jump ---
+  // A long tall wall on the right (+X side, face at x = 0.8), run along it facing -Z.
+  (() => {
+    const w = inline([box(1.8, 5, -30, 2, 10, 70)]);
+    const input = (): InputFn => (t) => ({ ...F, jump: t === 25 });
+    return scenario(
+      "wallrun-basic",
+      "Jump beside a tall wall at run speed: run along it with almost no fall, until the time limit.",
+      w,
+      [0.5, 0, 0],
+      { total: 230, input },
+      (t) => {
+        const run = t.filter((s) => s.wallRunning);
+        check(run.length > 60, "wall-ran for a good while");
+        check(
+          run.every((s) => speed(s) >= P.wallRunSpeed - 0.3 && speed(s) < P.wallRunSpeed + 2.5),
+          "kept wall-run speed",
+        );
+        check(maxOf(t, (s) => s.wallRunTime) <= P.wallRunMaxTime + 0.02, "time limit");
+        check(!last(t).wallRunning && last(t).onGround, "ended and landed");
+        const startY = (run[0] as PlayerState).y;
+        const endY = (run[run.length - 1] as PlayerState).y;
+        check(Math.abs(endY - startY) < 3, "stayed at about the same height while running");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(1.8, 5, -30, 2, 10, 70)]);
+    const input = (): InputFn => (t, s) => ({ ...F, jump: t === 25 || (s.wallRunning && t > 50) });
+    return scenario(
+      "wallrun-jump",
+      "Jump off a wall run: kicked away from the wall and up, one air jump given back.",
+      w,
+      [0.5, 0, 0],
+      { total: 110, input },
+      (t) => {
+        const i = t.findIndex(
+          (s, k) => k > 50 && !s.wallRunning && (t[k - 1] as PlayerState).wallRunning,
+        );
+        check(i > 0, "left the wall run");
+        const before = t[i - 1] as PlayerState;
+        const after = t[i] as PlayerState;
+        check(after.vx < before.vx - 4, "kicked away from the wall (-X)");
+        check(after.vy > P.wallJumpSpeed - 1, "kicked up");
+        check(after.wallJumps === 1, "counted the wall jump");
+        check(after.airJumps === P.maxAirJumps, "air jump available");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(1.8, 5, -30, 2, 10, 70)]);
+    const input = (): InputFn => (t) => ({ moveZ: 0.3, jump: t === 25 });
+    return scenario(
+      "wallrun-too-slow",
+      "Walking pace beside a wall is too slow to wall run.",
+      w,
+      [0.5, 0, 0],
+      { total: 80, input },
+      (t) => {
+        check(!any(t, (s) => s.wallRunning), "never wall ran");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([{ ...box(1.8, 5, -30, 2, 10, 70), climbable: true }]);
+    const input = (): InputFn => (t) => ({ ...F, jump: t === 25 });
+    return scenario(
+      "wallrun-not-climbable",
+      "Climbable (green) walls are for climbing: no wall run, no wall jump.",
+      w,
+      [0.5, 0, 0],
+      { total: 80, input },
+      (t) => {
+        check(!any(t, (s) => s.wallRunning) && last(t).wallJumps === 0, "no wall movement");
+      },
+    );
+  })(),
+
+  (() => {
+    // Facing the wall (it is in front, face at z = -8): jump presses in the air kick off it.
+    const w = inline([box(0, 5, -13, 40, 10, 10)]);
+    const input = (): InputFn => (t) => ({ ...F, jump: t === 30 || t % 24 === 0 });
+    return scenario(
+      "walljump-touch",
+      "Jump into a wall face and press jump again in the air: kicks off it, at most wallJumpMax times.",
+      w,
+      [0, 0, -4],
+      { total: 240, input },
+      (t) => {
+        check(
+          any(t, (s) => s.wallJumps >= 1),
+          "wall jumped",
+        );
+        check(maxOf(t, (s) => s.wallJumps) === P.wallJumpMax, "limited to wallJumpMax");
+        check(
+          any(t, (s) => s.vz > 5),
+          "kicked away from the wall (+Z)",
+        );
+      },
+    );
+  })(),
+
+  (() => {
+    // Two parallel walls 3 m apart (faces at x = -1.5 and x = 1.5): zig-zag between them.
+    const w = inline([box(3, 5, -40, 3, 10, 120), box(-3, 5, -40, 3, 10, 120)]);
+    const input = (): InputFn => (t, s) => ({
+      ...F,
+      jump: t === 25 || (s.wallRunning && s.wallRunTime > 0.25),
+    });
+    return scenario(
+      "wallrun-zigzag",
+      "Wall run, kick across to the other wall, wall run again: both walls get used.",
+      w,
+      [1.2, 0, 0],
+      { total: 120, input },
+      (t) => {
+        const sides = new Set(t.filter((s) => s.wallRunning).map((s) => Math.sign(s.wallNormalX)));
+        check(sides.has(1) && sides.has(-1), "ran on both walls");
+        check(maxOf(t, (s) => s.wallJumps) >= 1, "kicked between them");
       },
     );
   })(),

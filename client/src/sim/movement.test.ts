@@ -413,9 +413,17 @@ describe("mantle", () => {
   });
 
   it("does not climb a ledge that is too high", () => {
-    const tall = flatWorld({ boxes: [box(0, 2.5, -12, 6, 5, 20)] });
-    const s = run(grounded(tall, 0, 3), tall, 120, (i) => ({ ...FORWARD, jump: i % 30 === 0 }));
-    expect(s.y).toBeLessThan(1.7);
+    const tall = flatWorld({ boxes: [box(0, 3.5, -12, 6, 7, 20)] });
+    let mantled = false;
+    let top = 0;
+    run(grounded(tall, 0, 3), tall, 120, (i, st) => {
+      if (st.mantling) mantled = true;
+      top = Math.max(top, st.y);
+      return { ...FORWARD, jump: i % 30 === 0 };
+    });
+    // Wall jumps may kick it up the face, but it never gets over the 7 m top.
+    expect(mantled).toBe(false);
+    expect(top).toBeLessThan(7);
   });
 
   it("does not mantle when not pushing into the wall", () => {
@@ -541,6 +549,92 @@ describe("determinism and purity", () => {
     for (let i = 0; i < 2000; i++) {
       s = stepPlayer(s, { ...emptyInput(), ...script(i) }, world, DT);
       for (const v of [s.x, s.y, s.z, s.vx, s.vy, s.vz]) expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+});
+
+describe("wall run and wall jump", () => {
+  // A tall wall on the right, face at x = 0.8; run along it facing -Z.
+  const wall = flatWorld({ boxes: [box(1.8, 5, -30, 2, 10, 70)] });
+  const start = () => grounded(wall, 0.5, 0);
+  /** Run until the player is wall running (jumping at tick 25). */
+  const untilRunning = (input: (i: number) => object = () => ({})) => {
+    let s = start();
+    for (let i = 0; i < 80; i++) {
+      s = stepPlayer(s, { ...emptyInput(), ...FORWARD, jump: i === 25, ...input(i) }, wall, DT);
+      if (s.wallRunning) return s;
+    }
+    throw new Error("never wall ran");
+  };
+
+  it("starts when fast, in the air, beside a wall, holding forward", () => {
+    const s = untilRunning();
+    expect(s.wallNormalX).toBe(-1); // the wall is on +X, so it faces -X
+    expect(hSpeed(s)).toBeGreaterThanOrEqual(P.wallRunSpeed - 1e-6);
+  });
+
+  it("does not carry a jump's rise up the wall", () => {
+    expect(untilRunning().vy).toBeLessThanOrEqual(P.wallRunMaxRise);
+  });
+
+  it("ends when the slide key is pressed, and the wall is not re-grabbed straight away", () => {
+    let s = { ...untilRunning(), y: 8 }; // high up, so it stays in the air while cooling down
+    s = stepPlayer(s, { ...emptyInput(), ...FORWARD, slide: true }, wall, DT);
+    expect(s.wallRunning).toBe(false);
+    s = stepPlayer(s, { ...emptyInput(), ...FORWARD }, wall, DT);
+    expect(s.wallRunning).toBe(false); // cooling down
+    for (let i = 0; i < Math.ceil(P.wallRunCooldown / DT) + 2; i++) {
+      s = stepPlayer(s, { ...emptyInput(), ...FORWARD }, wall, DT);
+    }
+    expect(s.wallRunning).toBe(true); // free to grab it again
+  });
+
+  it("ends when the player lets go of the keys", () => {
+    let s = untilRunning();
+    s = stepPlayer(s, emptyInput(), wall, DT);
+    expect(s.wallRunning).toBe(false);
+  });
+
+  it("a wall jump kicks away and up, keeps the speed along the wall, and refills an air jump", () => {
+    let s = untilRunning();
+    s = stepPlayer(s, { ...emptyInput(), ...FORWARD, jump: true }, wall, DT);
+    expect(s.wallRunning).toBe(false);
+    expect(s.vx).toBeLessThan(-P.wallJumpKick + 1);
+    expect(s.vy).toBeGreaterThan(P.wallJumpSpeed - 1);
+    expect(s.vz).toBeLessThan(-P.wallRunSpeed + 1);
+    expect(s.wallJumps).toBe(1);
+    expect(s.airJumps).toBe(P.maxAirJumps);
+  });
+
+  it("the wall jump count resets on landing", () => {
+    let s = untilRunning();
+    s = stepPlayer(s, { ...emptyInput(), ...FORWARD, jump: true }, wall, DT);
+    for (let i = 0; i < 240 && !s.onGround; i++) s = stepPlayer(s, emptyInput(), wall, DT);
+    expect(s.onGround).toBe(true);
+    expect(s.wallJumps).toBe(0);
+  });
+
+  it("falls off when the time is up", () => {
+    let s = untilRunning();
+    for (let i = 0; i < 200 && s.wallRunning; i++) {
+      s = stepPlayer(s, { ...emptyInput(), ...FORWARD }, wall, DT);
+    }
+    expect(s.wallRunning).toBe(false);
+    expect(s.wallRunTime).toBe(0);
+  });
+
+  it("dashing cancels it", () => {
+    let s = untilRunning();
+    s = stepPlayer(s, { ...emptyInput(), ...FORWARD, dash: true }, wall, DT);
+    expect(s.wallRunning).toBe(false);
+    expect(s.dashTime).toBeGreaterThan(0);
+  });
+
+  it("is never on the floor: touching a wall on the ground does nothing", () => {
+    let s = start();
+    for (let i = 0; i < 60; i++) {
+      s = stepPlayer(s, { ...emptyInput(), ...FORWARD }, wall, DT);
+      expect(s.wallRunning).toBe(false);
     }
   });
 });

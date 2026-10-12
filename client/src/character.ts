@@ -34,6 +34,8 @@ export interface BodyState {
   onGround: boolean;
   sliding: boolean;
   alive: boolean;
+  /** Running along a wall (airborne, but moving like a sprint). */
+  wallRunning?: boolean;
 }
 
 const FLASH_SECONDS = 0.09;
@@ -162,11 +164,13 @@ export class CharacterBody {
   private time: number;
   private airW = 0;
   private slideW = 0;
+  private wallW = 0;
   private airTime = 0;
   private land = 0;
   private readonly ground = zeroPose();
   private readonly air = zeroPose();
   private readonly slide = zeroPose();
+  private readonly wall = zeroPose();
   private readonly pose = zeroPose();
 
   /** `seed` offsets the idle animation so several characters don't breathe in sync. */
@@ -279,9 +283,11 @@ export class CharacterBody {
     this.root.rotation.y = this.yaw;
 
     // Pose weights fade toward the current state.
-    const inAir = s.alive && !s.onGround && !s.sliding;
+    const wallRun = s.alive && s.wallRunning === true;
+    const inAir = s.alive && !s.onGround && !s.sliding && !wallRun;
     this.airW += ((inAir ? 1 : 0) - this.airW) * follow(BLEND_RATE, dt);
     this.slideW += ((s.alive && s.sliding ? 1 : 0) - this.slideW) * follow(BLEND_RATE, dt);
+    this.wallW += ((wallRun ? 1 : 0) - this.wallW) * follow(BLEND_RATE, dt);
     if (inAir) this.airTime += dt;
     else {
       if (this.airTime > 0.15) this.land = 1; // touched down after a real jump: squash
@@ -291,14 +297,16 @@ export class CharacterBody {
 
     // Walk/run cycle advances with distance, so feet keep pace with the ground.
     const runW = clamp01((this.speed - RUN_START) / (RUN_FULL - RUN_START));
-    if (s.onGround && !s.sliding)
+    if ((s.onGround && !s.sliding) || wallRun)
       this.phase += (dist / lerp(WALK_STRIDE, RUN_STRIDE, runW)) * Math.PI * 2;
 
     this.groundPose(runW);
     this.airPose();
     this.slidePose();
+    this.wallPose();
     const p = blendPose(this.pose, this.ground, this.air, this.airW);
     blendPose(p, p, this.slide, this.slideW);
+    blendPose(p, p, this.wall, this.wallW);
 
     // Landing squash: dip and lean forward for a moment.
     p.upperY -= 0.08 * this.land;
@@ -385,6 +393,23 @@ export class CharacterBody {
     sl.armLZ = -0.6;
     sl.armRX = -1.0; // gun arm forward
     sl.armRZ = 0.15;
+  }
+
+  /** Wall run: a fast sprint leaning into it, arms out wide for balance. */
+  private wallPose(): void {
+    const w = this.wall;
+    const swing = Math.sin(this.phase) * 1.1;
+    w.bodyPitch = 0;
+    w.bodyY = 0;
+    w.bodyZ = 0;
+    w.upperPitch = 0.4;
+    w.upperY = 0;
+    w.legL = swing;
+    w.legR = -swing;
+    w.armLX = -0.3;
+    w.armRX = -0.3;
+    w.armLZ = -0.9;
+    w.armRZ = 0.9;
   }
 
   private apply(p: Pose): void {

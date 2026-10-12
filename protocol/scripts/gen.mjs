@@ -53,7 +53,9 @@ function genGo() {
   for (const [name, flags] of Object.entries(schema.flags ?? {})) {
     out.push(`// ${name} bits.`);
     out.push("const (");
-    for (const [flag, bit] of Object.entries(flags)) out.push(`\t${pascal(name.replace(/s$/, ""))}${pascal(flag)} uint8 = ${bit}`);
+    // The smallest unsigned type that holds every bit (it must match the field that carries them).
+    const goType = Math.max(...Object.values(flags)) > 255 ? "uint16" : "uint8";
+    for (const [flag, bit] of Object.entries(flags)) out.push(`\t${pascal(name.replace(/s$/, ""))}${pascal(flag)} ${goType} = ${bit}`);
     out.push(")\n");
   }
 

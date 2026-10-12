@@ -44,7 +44,22 @@
     "mantleReach": 2.3,
     "mantleDuration": 0.25,
     "mantleInset": 0.15,
-    "mantleExitSpeed": 4
+    "mantleExitSpeed": 4,
+    "wallRunMinSpeed": 6,
+    "wallRunSpeed": 11,
+    "wallRunMaxTime": 1.5,
+    "wallRunExitSpeed": 4,
+    "wallRunReach": 0.12,
+    "wallRunMinHeight": 0.6,
+    "wallRunGravityScale": 0.15,
+    "wallRunMaxFall": 3,
+    "wallRunMaxRise": 3,
+    "wallRunStick": 2,
+    "wallRunWish": 0.3,
+    "wallRunCooldown": 0.3,
+    "wallJumpKick": 8,
+    "wallJumpSpeed": 9.5,
+    "wallJumpMax": 3
   },
   "weapon": {
     "damage": 9,

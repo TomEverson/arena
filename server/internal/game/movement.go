@@ -68,6 +68,7 @@ func wishOf(in *Input) wish {
 func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 	// Timers
 	s.SlideCooldown = math.Max(0, s.SlideCooldown-dt)
+	s.WallCooldown = math.Max(0, s.WallCooldown-dt)
 	if s.OnGround {
 		s.Coyote = CoyoteTime
 	} else {
@@ -112,25 +113,38 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 	switch {
 	case s.DashTime > 0:
 		// Dash overrides everything: constant velocity, no gravity.
+		endWallRun(s)
 		s.VX = s.DashDirX * DashSpeed
 		s.VZ = s.DashDirZ * DashSpeed
 		s.VY = 0
 		s.DashTime = math.Max(0, s.DashTime-dt)
 	case wall.ok:
 		// Climbing: stuck to the wall, moving straight up, no gravity.
+		endWallRun(s)
 		s.VX = 0
 		s.VZ = 0
 		s.VY = ClimbSpeed
 		s.JumpBuffer = 0
 	default:
-		updateSlide(s, in, w, dt)
-		updateCrouch(s, in, w)
-		updateHorizontalVelocity(s, &wi, dt)
-		tryJump(s, in, w)
-		if !s.OnGround {
-			s.VY = math.Max(-TerminalVelocity, s.VY-Gravity*dt)
-		} else if s.VY < 0 {
-			s.VY = 0
+		updateWallRun(s, in, &wi, w)
+		if s.WallRunning {
+			if in.Jump {
+				wallJump(s)
+			} else {
+				runAlongWall(s, dt)
+			}
+		} else {
+			updateSlide(s, in, w, dt)
+			updateCrouch(s, in, w)
+			updateHorizontalVelocity(s, &wi, dt)
+			if !tryWallJump(s, in, w) {
+				tryJump(s, in, w)
+			}
+			if !s.OnGround {
+				s.VY = math.Max(-TerminalVelocity, s.VY-Gravity*dt)
+			} else if s.VY < 0 {
+				s.VY = 0
+			}
 		}
 	}
 
@@ -433,6 +447,8 @@ func probeGround(s *PlayerState, w *CollisionWorld, wasGround bool) {
 	if (s.VY <= 0 && gap <= GroundEps) || (wasGround && s.VY <= 0 && gap <= SnapDown) {
 		s.OnGround = true
 		s.AirJumps = MaxAirJumps
+		s.WallJumps = 0
+		endWallRun(s)
 		s.Y = support
 		s.VY = 0
 	} else {
@@ -474,6 +490,150 @@ func findClimbWall(w *CollisionWorld, s *PlayerState, yaw float64) wallHit {
 		}
 	}
 	return wallHit{}
+}
+
+// --- Wall run and wall jump ------------------------------------------------
+
+// wallContact is a wall found beside the player: the unit XZ direction pointing out of it,
+// toward the player. ok is false for "no wall".
+type wallContact struct {
+	ok     bool
+	nx, nz float64
+}
+
+// wallDirs are the directions from the player to a wall, checked in this order (ties go to the first).
+var wallDirs = [4][2]float64{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+
+// findWall returns a wall beside (or in front of, or behind) the player that can be run on or
+// jumped off: a solid box face within WallRunReach, tall enough to matter, not climbable (those
+// are for climbing), and not the wall we just left (see WallCooldown). When several qualify,
+// the one we are moving along fastest wins.
+func findWall(w *CollisionWorld, s *PlayerState) wallContact {
+	height := bodyHeight(s)
+	var best wallContact
+	bestAlong := -1.0
+	for _, d := range wallDirs {
+		dx, dz := d[0], d[1]
+		nx, nz := -dx, -dz
+		if s.WallCooldown > 0 && nx*s.WallNormalX+nz*s.WallNormalZ > 0.9 {
+			continue
+		}
+		probe := playerBox(s.X+dx*WallRunReach, s.Y, s.Z+dz*WallRunReach, height)
+		found := false
+		for i := range w.Boxes {
+			b := &w.Boxes[i]
+			if !b.Climbable && b.MaxY > s.Y+WallRunMinHeight && overlaps(&probe, b) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+		// Speed along the wall: the velocity without its component into the wall.
+		into := s.VX*nx + s.VZ*nz
+		along := math.Hypot(s.VX-into*nx, s.VZ-into*nz)
+		if along > bestAlong {
+			bestAlong = along
+			best = wallContact{ok: true, nx: nx, nz: nz}
+		}
+	}
+	return best
+}
+
+func endWallRun(s *PlayerState) {
+	if !s.WallRunning {
+		return
+	}
+	s.WallRunning = false
+	s.WallRunTime = 0
+	s.WallCooldown = WallRunCooldown
+}
+
+// updateWallRun starts, keeps or ends a wall run. To start: in the air and clear of the floor,
+// moving along a wall fast enough, holding a direction that follows the wall. To keep going:
+// still beside the same wall, still moving along it, still holding a direction, time not up,
+// slide key released.
+func updateWallRun(s *PlayerState, in *Input, wi *wish, w *CollisionWorld) {
+	ok := !s.OnGround && !s.Sliding && !s.Crouching && !in.Slide && wi.mag > 0 &&
+		s.WallRunTime < WallRunMaxTime && !(in.Jump && s.WallJumps >= WallJumpMax)
+	var c wallContact
+	if ok {
+		c = findWall(w, s)
+	}
+	if !c.ok {
+		endWallRun(s)
+		return
+	}
+	into := s.VX*c.nx + s.VZ*c.nz
+	tx := s.VX - into*c.nx
+	tz := s.VZ - into*c.nz
+	along := math.Hypot(tx, tz)
+	if !s.WallRunning {
+		if along < WallRunMinSpeed {
+			return
+		}
+		if (wi.x*tx+wi.z*tz)/along < WallRunWish {
+			return
+		}
+		if s.Y-supportHeight(w, s.X, s.Z, s.Y) < WallRunMinHeight {
+			return
+		}
+		s.WallRunning = true
+		s.WallRunTime = 0
+		s.VY = math.Min(s.VY, WallRunMaxRise) // a jump's rise does not carry up the wall
+	} else if along < WallRunExitSpeed {
+		endWallRun(s)
+		return
+	}
+	s.WallNormalX = c.nx
+	s.WallNormalZ = c.nz
+}
+
+// runAlongWall slides along the wall at (at least) wall-run speed, pressed lightly to it,
+// barely falling.
+func runAlongWall(s *PlayerState, dt float64) {
+	nx, nz := s.WallNormalX, s.WallNormalZ
+	into := s.VX*nx + s.VZ*nz
+	tx := s.VX - into*nx
+	tz := s.VZ - into*nz
+	along := math.Hypot(tx, tz)
+	speed := math.Max(along, WallRunSpeed)
+	s.VX = (tx/along)*speed - nx*WallRunStick
+	s.VZ = (tz/along)*speed - nz*WallRunStick
+	s.VY = math.Max(-WallRunMaxFall, s.VY-Gravity*WallRunGravityScale*dt)
+	s.WallRunTime += dt
+	s.JumpBuffer = 0
+}
+
+// wallJump kicks off the wall: away from it, up, keeping the speed along it. Gives back one air jump.
+func wallJump(s *PlayerState) {
+	nx, nz := s.WallNormalX, s.WallNormalZ
+	into := s.VX*nx + s.VZ*nz
+	s.VX = s.VX - into*nx + nx*WallJumpKick
+	s.VZ = s.VZ - into*nz + nz*WallJumpKick
+	s.VY = WallJumpSpeed
+	s.WallJumps++
+	s.AirJumps = uint8(math.Min(MaxAirJumps, float64(s.AirJumps)+1))
+	s.JumpBuffer = 0
+	s.WallRunning = false
+	s.WallRunTime = 0
+	s.WallCooldown = WallRunCooldown
+}
+
+// tryWallJump: a fresh jump press in the air, touching a wall, wall jumps instead of an air jump.
+func tryWallJump(s *PlayerState, in *Input, w *CollisionWorld) bool {
+	if !in.Jump || s.OnGround || s.Coyote > 0 || int(s.WallJumps) >= WallJumpMax {
+		return false
+	}
+	c := findWall(w, s)
+	if !c.ok {
+		return false
+	}
+	s.WallNormalX = c.nx
+	s.WallNormalZ = c.nz
+	wallJump(s)
+	return true
 }
 
 // --- Mantle ----------------------------------------------------------------
@@ -520,6 +680,7 @@ func tryStartMantle(s *PlayerState, w *CollisionWorld, wi *wish, hit *wallHit) {
 		return
 	}
 
+	endWallRun(s)
 	s.Mantling = true
 	s.MantleT = 0
 	s.Sliding = false
