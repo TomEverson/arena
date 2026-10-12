@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import greybox from "../../levels/greybox.json";
+import { AudioEngine, type MoveSound, MoveSoundTracker, StepCounter } from "./audio";
 import {
   aliveHitboxes,
   type Dummy,
@@ -25,6 +26,7 @@ import { INTERP_TICKS, RemoteTracks } from "./net/interpolation";
 import { Predictor } from "./net/prediction";
 import {
   EntityFlags,
+  EventKinds,
   type GameEvent,
   GameEventFlags,
   type MatchInfo,
@@ -97,6 +99,22 @@ let player: PlayerState = spawnState(spawnPos[0], spawnPos[1], spawnPos[2]);
 let prevPlayer: PlayerState = player;
 const look = { yaw: 0, pitch: 0 }; // yaw 0 faces -Z, toward the arena centre from spawn zone 0
 
+// --- Audio -----------------------------------------------------------------
+const audio = new AudioEngine();
+const moveSounds = new MoveSoundTracker();
+const moveOut: MoveSound[] = [];
+const remoteSteps = new Map<number, StepCounter>();
+// Browsers allow sound only after the player interacts with the page.
+for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, () => audio.unlock());
+
+/** The sounds for one weapon step: shot, dry click, reload start and finish. */
+function shotSounds(shot: ShotResult): void {
+  if (shot.fired) audio.shot();
+  if (shot.dryFire) audio.dryFire();
+  if (shot.reloadStarted) audio.reloadStart();
+  if (shot.reloadFinished) audio.reloadDone();
+}
+
 // --- Input -----------------------------------------------------------------
 const held = new Set<string>();
 const pressed = { jump: false, dash: false, reload: false };
@@ -110,6 +128,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyR") pressed.reload = true;
   if (e.code === "Enter") net?.sendRematch(); // only counts while the results are showing
   if (e.code === "KeyL") copyInviteLink();
+  if (e.code === "KeyM") audio.toggleMute();
   if (e.code === "KeyK") practiceReset();
   if (e.code === "KeyH") practiceRefill();
   if (e.code === "KeyT") practiceStart();
@@ -250,6 +269,7 @@ function showServerHit(e: GameEvent): void {
     tick: e.tick,
   });
   remoteViews.flash(e.other);
+  audio.hit((e.flags & GameEventFlags.headshot) !== 0, (e.flags & GameEventFlags.killed) !== 0);
   hitFeedback.onHit(
     {
       targetId: e.other,
@@ -308,7 +328,11 @@ function startNet(code: string): void {
       health = s.health;
       match = s.match;
       scores = s.scores;
-      for (const e of events.fresh(s.events)) combatHud.onEvent(e);
+      for (const e of events.fresh(s.events)) {
+        combatHud.onEvent(e);
+        if (e.kind === EventKinds.hurt && e.other === myId) audio.hurt(e.amount);
+        if (e.kind === EventKinds.kill && e.other === myId) audio.death();
+      }
       // We only simulate while alive and while the match lets players act (not in the countdown or results).
       const acting = s.health.alive && canAct(s.match.phase);
       if (!predictor) {
@@ -441,6 +465,7 @@ function fireShot(shot: ShotResult, ads: boolean): void {
       tick: simTicks,
     });
     dummyViews.flash(d.id);
+    audio.hit(hit.headshot, result.killed);
     hitFeedback.onHit(
       {
         targetId: d.id,
@@ -492,6 +517,7 @@ const sim = new FixedTimestep(() => {
     predictor.step(input, look.pitch, viewTick);
     player = predictor.state;
     net?.sendInputs(predictor.recent());
+    if (predictor.lastShot) shotSounds(predictor.lastShot);
     if (predictor.lastShot?.fired) {
       practiceStats.onShot();
       fireShotOnline(predictor.lastShot, ads);
@@ -513,6 +539,7 @@ const sim = new FixedTimestep(() => {
       DT,
     );
     weapon = res.state;
+    shotSounds(res.shot);
     if (res.shot.fired) fireShot(res.shot, ads);
   } // else: still connecting, wait for the first snapshot
 
@@ -538,6 +565,26 @@ function netHud(): string {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 let eye = PARAMS.standEye;
 let lastFrame = 0;
+
+/** Movement sounds for you, footsteps for everyone else, and where the listener is. */
+function updateSound(frameDt: number, renderTick: number, cam: THREE.PerspectiveCamera): void {
+  audio.setListener(cam.position.x, cam.position.y, cam.position.z, look.yaw, look.pitch);
+  if (health === null || health.alive) {
+    moveOut.length = 0;
+    moveSounds.update(player, frameDt, moveOut);
+    for (const m of moveOut) audio.move(m, moveSounds.landStrength);
+  }
+  if (netMode !== "online" || !clock.ready) return;
+  const ids = new Set(remotes.ids());
+  for (const id of ids) {
+    const pose = remotes.sample(id, renderTick);
+    if (!pose || pose.flags & EntityFlags.dead) continue;
+    let counter = remoteSteps.get(id);
+    if (!counter) remoteSteps.set(id, (counter = new StepCounter()));
+    if (counter.update(pose.x, pose.y, pose.z)) audio.move("step", 1, pose);
+  }
+  for (const id of remoteSteps.keys()) if (!ids.has(id)) remoteSteps.delete(id);
+}
 
 function frame(nowMs: number): void {
   const frameDt = Math.min(0.1, (nowMs - lastFrame) / 1000);
@@ -576,6 +623,7 @@ function frame(nowMs: number): void {
     frameDt,
     cam.position,
   );
+  updateSound(frameDt, renderTick, cam);
   const activeWeapon = predictor ? predictor.weapon : weapon;
   const spread = spreadDegrees(activeWeapon.burst, adsHeld, {
     hSpeed: hSpeed(player),

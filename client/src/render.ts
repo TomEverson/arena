@@ -19,12 +19,12 @@ function requestedHeight(): number {
 export const RENDER_HEIGHT = requestedHeight();
 export const RENDER_WIDTH = Math.round((RENDER_HEIGHT * 16) / 9);
 
-/** ?fx=off disables the palette/dither screen effect, for comparison. */
+/** The palette/dither screen effect is off by default; ?fx=on enables it. */
 const FX_ENABLED =
-  typeof location === "undefined" || new URLSearchParams(location.search).get("fx") !== "off";
+  typeof location !== "undefined" && new URLSearchParams(location.search).get("fx") === "on";
 
 /** How far the dither pattern nudges a color before snapping. 0 = flat bands, higher = noisier. */
-const DITHER_STRENGTH = 0.12;
+const DITHER_STRENGTH = 0.03;
 
 /**
  * The screen effect (spec/art/style-guide.md): per low-res pixel, convert to sRGB,
@@ -99,7 +99,7 @@ function paletteMaterial(source: THREE.Texture): THREE.ShaderMaterial {
 /**
  * Renders the scene into a small render target, then blits it to the canvas
  * with NearestFilter, letterboxed to keep the aspect ratio. The blit applies
- * the palette/dither screen effect unless ?fx=off.
+ * the palette/dither screen effect only with ?fx=on.
  */
 export class RetroRenderer {
   readonly renderer: THREE.WebGLRenderer;

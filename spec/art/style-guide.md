@@ -58,8 +58,8 @@ Per pixel it:
 
 Controls:
 - `?res=240` (URL): internal render height. 240 is the target retro look; default is 720.
-- `?fx=off` (URL): disables the effect, for comparison.
-- `DITHER_STRENGTH` in `render.ts`: 0 gives flat color bands, higher values give noisier dithering. Currently `0.12`.
+- `?fx=on` (URL): enables the effect. **It is off by default.**
+- `DITHER_STRENGTH` in `render.ts`: 0 gives flat color bands, higher values give noisier dithering. Currently `0.03` (was `0.12`, which showed as a visible mesh; `0` is fully flat).
 
 ## Current state of level rendering
 
