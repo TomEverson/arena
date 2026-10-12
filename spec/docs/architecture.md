@@ -21,6 +21,12 @@ In dev, Vite serves the client on :5173 and proxies `/ws` and `/healthz` to the 
 - Player movement runs on the server from queued inputs (`World.stepPlayer`) and is **input-driven**: a player only moves when an input arrives (one per tick; a second when backed up, limited by banked credit), so its state is always exactly "after input `ackSeq`". Duplicate (redundantly resent) sequence numbers are skipped; a full queue drops the oldest. `server/internal/game/movement.go` is a port of the TS sim, locked to it by `testvectors/`.
 - Levels (`/levels/*.json`) are loaded by both sides (`client/src/sim/level.ts`, `server/internal/level`); tuning numbers come from `/shared/params.json` (Go constants generated).
 
+## Combat (M5)
+- The weapon is part of the per-input simulation: movement, then `StepWeapon`, then, if a shot fired, `resolveShot` (`server/internal/game/combat.go`). Weapon time advances only with a player's inputs, like movement.
+- **Lag compensation**: every tick records each player's position; a shot is traced against the other players as the shooter's screen showed them (`Input.viewTick`, interpolated between the two bracketing snapshot ticks, capped at 20 ticks). The shooter is never rewound.
+- Health, damage, kills, death, respawn timers, spawn protection and spawn choice (farthest from living enemies, preferring spawns no enemy can see) are server-only. Dead players still consume inputs.
+- Events (`hit`, `hurt`, `kill`) ride in snapshots for 6 ticks and are de-duplicated by per-recipient sequence number.
+
 ## Client
 - `FixedTimestep` (`client/src/loop.ts`) simulates at 60 Hz in an accumulator; rendering runs per
   animation frame with an interpolation alpha between the previous and current sim state.

@@ -4,7 +4,7 @@
  */
 import type { Hitbox } from "./sim/hitscan";
 import type { LevelTarget } from "./sim/level";
-import { WEAPON as W } from "./sim/params";
+import { COMBAT, WEAPON as W } from "./sim/params";
 import { fullHealth, type Health } from "./sim/weapon";
 
 const HALF_WIDTH = 0.3;
@@ -60,7 +60,7 @@ export function makeDummies(targets: readonly LevelTarget[]): Dummy[] {
 export function hitboxOf(d: Dummy): Hitbox {
   return {
     id: d.id,
-    feetY: d.y,
+    headMinY: d.y + HEIGHT - COMBAT.headSize,
     minX: d.x - HALF_WIDTH,
     maxX: d.x + HALF_WIDTH,
     minY: d.y,

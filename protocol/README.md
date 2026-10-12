@@ -23,12 +23,12 @@ Server to client
 | type | fields | notes |
 |---|---|---|
 | `welcome` | `playerId, tickRate, snapshotRate, level` | Once, on connect. |
-| `snapshot` | `tick, ackSeq, queued, you, entities` | 30 Hz. `you` is your full state right after input `ackSeq`. `entities` are everyone else (see `entitiesFor`). |
+| `snapshot` | `tick, ackSeq, queued, you, health, weapon, entities, events` | 30 Hz. `you` is your full movement state right after input `ackSeq`; `weapon` and `health` go with it. `entities` are everyone else (see `entitiesFor`). `events` are recent hits, hurts and kills (resent for 6 ticks; de-duplicate by `seq`). |
 | `pong` | `t, tick` | Echoes the ping; `tick` is the server tick. |
 
-`Input`: `seq, moveX, moveZ, yaw, pitch, jump, jumpHeld, dash, slide, ads`. `jump` and `dash` mean
+`Input`: `seq, moveX, moveZ, yaw, pitch, jump, jumpHeld, dash, slide, ads, fire, reload, viewTick`. `viewTick` is the (fractional) server tick the sender's screen was showing other players at; the server rewinds to it for lag compensation (capped; 0 means no rewind). `jump` and `dash` mean
 "pressed this tick"; the rest are held states. `Entity`: `id, teamId, x, y, z, yaw, pitch, flags`
-(`flags` is a bit set of `EntityFlags`: crouching, sliding, climbing, dashing, onGround, mantling).
+(`flags` is a bit set of `EntityFlags`: crouching, sliding, climbing, dashing, onGround, mantling, dead, protected).
 
 ## Delivery assumptions
 Messages travel over one WebSocket (TCP): in order, never lost. The fake `--loss` flag drops
@@ -39,3 +39,8 @@ whole messages anyway, which is why inputs are resent redundantly. The server's 
 Edit `messages.json`, run `pnpm gen`, fix what no longer compiles on either side. A binary codec
 (M7, if needed) would be generated from the same file; field types (`u8`, `u16`, `u32`, `f64`) are
 already chosen with that in mind.
+
+## Combat messages
+- `PlayerHealth`: `health, shield, alive, respawnIn, protectedFor`.
+- `WeaponState`: `ammo, reloadT, cooldown, burst, sinceShot, rng`. Simulated identically on both sides from the inputs; the client reconciles it like movement.
+- `GameEvent`: `seq, tick, kind, actor, other, amount, flags`. Kinds: `hit` (you landed a hit: actor = you, other = victim), `hurt` (you were hit: actor = shooter), `kill` (anyone killed anyone, sent to everyone). Flags: `headshot`, `killed`.

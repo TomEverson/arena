@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { spawnState, stepPlayer } from "../sim/movement";
+import { hSpeed, spawnState, stepPlayer } from "../sim/movement";
 import { flatWorld } from "../sim/testutil";
 import { emptyInput, type PlayerInput, type PlayerState } from "../sim/types";
 import { loadWorld } from "../sim/vectors/node";
 import { scenarios } from "../sim/vectors/scenarios";
-import { MAX_HISTORY, Predictor, REDUNDANCY, statesMatch } from "./prediction";
-import type { Input } from "./protocol.gen";
+import { spawnWeapon, stepWeapon } from "../sim/weapon";
+import { MAX_HISTORY, Predictor, REDUNDANCY, statesMatch, weaponsMatch } from "./prediction";
+import type { Input, WeaponState } from "./protocol.gen";
 
 const DT = 1 / 60;
 
 /** Same rules as the Go server: input-driven, dedupes by seq, one input per tick (two when backed up). */
 class SimServer {
   state: PlayerState;
+  weapon: WeaponState = spawnWeapon(1);
+  alive = true;
   ack = 0;
   private queue: Input[] = [];
   private lastSeq = 0;
@@ -34,8 +37,16 @@ class SimServer {
     const n = this.queue.length > 2 ? 2 : 1;
     for (let k = 0; k < n && this.queue.length > 0; k++) {
       const i = this.queue.shift() as Input;
-      this.state = stepPlayer(this.state, i, this.world, DT);
       this.ack = i.seq;
+      if (!this.alive) continue; // dead players still consume inputs, nothing else
+      this.state = stepPlayer(this.state, i, this.world, DT);
+      const ctx = {
+        hSpeed: hSpeed(this.state),
+        onGround: this.state.onGround,
+        crouching: this.state.crouching,
+        sliding: this.state.sliding,
+      };
+      this.weapon = stepWeapon(this.weapon, i, ctx, DT).state;
     }
   }
 }
@@ -71,9 +82,15 @@ function simulate(opts: RunOptions) {
   const start = spawnState(...sc.start);
 
   const server = new SimServer(world, start);
-  const client = new Predictor(world, start);
+  const client = new Predictor(world, start, 0, DT, server.weapon);
   const toServer: { at: number; inputs: Input[] }[] = [];
-  const toClient: { at: number; ack: number; state: PlayerState }[] = [];
+  const toClient: {
+    at: number;
+    ack: number;
+    state: PlayerState;
+    weapon: WeaponState;
+    alive: boolean;
+  }[] = [];
   // One WebSocket is one TCP stream: delay can pile up, but messages never overtake each other.
   const lastArrival = { up: 0, down: 0 };
   const arrival = (dir: "up" | "down", now: number) => {
@@ -91,13 +108,19 @@ function simulate(opts: RunOptions) {
   const total = opts.ticks + 4 * (opts.latency + (opts.jitter ?? 0)) + 12; // then settle without new inputs
   for (let t = 0; t < total; t++) {
     for (const m of toClient.filter((x) => x.at <= t).sort((a, b) => a.at - b.at)) {
-      const c = client.reconcile(m.ack, m.state);
+      const c = client.reconcile(m.ack, m.state, m.weapon, m.alive);
       if (c && c.error > 2) bigCorrections.push(c.error);
     }
     toClient.splice(0, toClient.length, ...toClient.filter((x) => x.at > t));
 
     if (t < opts.ticks) {
-      const input: PlayerInput = { ...emptyInput(), ...inputFor(t, client.state) };
+      const input: PlayerInput = {
+        ...emptyInput(),
+        ...inputFor(t, client.state),
+        // Shooting too: bursts with pauses, and the odd manual reload.
+        fire: t % 90 < 50,
+        reload: t % 400 === 399,
+      };
       client.step(input, 0);
       if (!lost()) toServer.push({ at: arrival("up", t), inputs: client.recent(REDUNDANCY) });
     } else {
@@ -113,10 +136,16 @@ function simulate(opts: RunOptions) {
     if (opts.serverEvent && t === opts.serverEvent.tick) opts.serverEvent.apply(server);
     server.tick();
     if (t % 2 === 1 && !lost())
-      toClient.push({ at: arrival("down", t), ack: server.ack, state: server.state });
+      toClient.push({
+        at: arrival("down", t),
+        ack: server.ack,
+        state: server.state,
+        weapon: server.weapon,
+        alive: server.alive,
+      });
   }
   // One last lossless snapshot so the comparison is not hostage to the final random loss.
-  client.reconcile(server.ack, server.state);
+  client.reconcile(server.ack, server.state, server.weapon, server.alive);
   return { client, server };
 }
 
@@ -153,6 +182,38 @@ describe("Predictor.reconcile", () => {
     expect(statesMatch(p.state, want, 1e-12)).toBe(true);
     expect(c?.error).toBeGreaterThan(1);
     expect(p.pending).toBe(5);
+  });
+
+  it("adopts the server's weapon when it disagrees (for example a reload we did not know about)", () => {
+    const p = new Predictor(world, start);
+    run(p, 10, { moveZ: 1, fire: true });
+    const mirror = new Predictor(world, start);
+    run(mirror, 5, { moveZ: 1, fire: true });
+    const serverWeapon = { ...mirror.weapon, reloadT: 1.5, ammo: 3 }; // server says: reloading
+    const c = p.reconcile(5, mirror.state, serverWeapon);
+    expect(c).not.toBeNull();
+    expect(p.corrections).toBe(1);
+    expect(p.weapon.reloadT).toBeGreaterThan(0.5);
+    expect(p.weapon.ammo).toBeLessThanOrEqual(3);
+  });
+
+  it("reports what the weapon did on each step, for effects", () => {
+    const p = new Predictor(world, start);
+    p.step({ ...emptyInput(), fire: true });
+    expect(p.lastShot?.fired).toBe(true);
+    p.step({ ...emptyInput() });
+    expect(p.lastShot).toBeNull();
+  });
+
+  it("numbers inputs but simulates nothing while dead", () => {
+    const p = new Predictor(world, start);
+    run(p, 3);
+    p.alive = false;
+    const frozen = p.state;
+    const sent = p.step({ ...emptyInput(), moveZ: 1, fire: true });
+    expect(sent.seq).toBe(4);
+    expect(p.state).toBe(frozen);
+    expect(p.lastShot).toBeNull();
   });
 
   it("ignores a stale (older) snapshot", () => {
@@ -197,6 +258,7 @@ describe("prediction against a simulated network", () => {
     const { client, server } = simulate({ latency: 5, loss: 0, ticks: 900, seed: 1 });
     expect(client.corrections).toBe(0);
     expect(statesMatch(client.state, server.state, 1e-9)).toBe(true);
+    expect(weaponsMatch(client.weapon, server.weapon, 1e-9)).toBe(true);
   });
 
   it("never corrects at 160 ms round trip with jitter and 3% loss in both directions", () => {
@@ -204,6 +266,7 @@ describe("prediction against a simulated network", () => {
     const { client, server } = simulate({ latency: 5, jitter: 2, loss: 0.03, ticks: 900, seed: 2 });
     expect(client.corrections).toBe(0);
     expect(statesMatch(client.state, server.state, 1e-9)).toBe(true);
+    expect(weaponsMatch(client.weapon, server.weapon, 1e-9)).toBe(true);
   });
 
   it("survives a long lag spike without diverging", () => {
@@ -216,12 +279,40 @@ describe("prediction against a simulated network", () => {
     });
     expect(client.corrections).toBe(0);
     expect(statesMatch(client.state, server.state, 1e-9)).toBe(true);
+    expect(weaponsMatch(client.weapon, server.weapon, 1e-9)).toBe(true);
   });
 
   it("converges to the server even when most packets are lost", () => {
     const { client, server } = simulate({ latency: 5, jitter: 3, loss: 0.4, ticks: 900, seed: 4 });
     expect(client.corrections).toBeGreaterThan(0); // some inputs never arrived
     expect(statesMatch(client.state, server.state, 1e-9)).toBe(true);
+    expect(weaponsMatch(client.weapon, server.weapon, 1e-9)).toBe(true);
+  });
+
+  it("keeps the weapon exact too: ammo, reloads, recoil pattern and spread generator", () => {
+    const { client, server } = simulate({ latency: 5, jitter: 2, loss: 0.03, ticks: 900, seed: 6 });
+    expect(client.corrections).toBe(0);
+    expect(server.weapon.ammo).not.toBe(30); // it really did fire
+    expect(client.weapon).toEqual(server.weapon);
+  });
+
+  it("stops simulating when the server says we died, and stays consistent", () => {
+    const { client, server } = simulate({
+      latency: 5,
+      loss: 0.03,
+      ticks: 600,
+      seed: 7,
+      serverEvent: {
+        tick: 300,
+        apply: (s) => {
+          s.alive = false;
+        },
+      },
+    });
+    expect(client.alive).toBe(false);
+    expect(client.corrections).toBeGreaterThanOrEqual(1); // we kept predicting until told
+    expect(statesMatch(client.state, server.state, 1e-9)).toBe(true);
+    expect(client.weapon).toEqual(server.weapon);
   });
 
   it("recovers from a server-side teleport (respawn) with one big correction", () => {
@@ -240,5 +331,6 @@ describe("prediction against a simulated network", () => {
     expect(client.corrections).toBeGreaterThanOrEqual(1);
     expect(client.maxError).toBeGreaterThan(2);
     expect(statesMatch(client.state, server.state, 1e-9)).toBe(true);
+    expect(weaponsMatch(client.weapon, server.weapon, 1e-9)).toBe(true);
   });
 });

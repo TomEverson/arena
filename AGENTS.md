@@ -19,7 +19,7 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
 1. **No allocations in the server tick loop** (`World.Step` and everything it calls). `TestStepDoesNotAllocate` must stay green.
 2. **The movement function lives only in the designated files** (`server/internal/game/movement.go`,
    `client/src/sim/` : movement.ts, collision.ts, params.ts, types.ts, level.ts). Do not duplicate movement math elsewhere.
-   Combat math (fire rate, spread, recoil, damage, hitscan) likewise lives only in `client/src/sim/weapon.ts` and `hitscan.ts` (Go twin: `server/internal/game/weapon*.go`, M5). Keep both pure and deterministic: no `Math.random`, seeded RNG only.
+   Combat math (fire rate, spread, recoil, damage, hitscan) likewise lives only in `client/src/sim/weapon.ts` and `hitscan.ts` (Go twin: `server/internal/game/weapon.go`, `hitscan.go`), locked together by `testvectors/weapon` and `testvectors/hitscan`. Keep both pure and deterministic: no `Math.random`, seeded RNG only. Health, lag compensation, death and respawn are server-only (`server/internal/game/combat.go`).
 3. **Never hand-edit generated code** (`params_gen.go`, `protocol_gen.go`, `protocol.gen.ts`). Change the source (`shared/params.json`, `protocol/messages.json`) and run `pnpm gen`.
 4. **Any change to movement must update `testvectors/`** in the same commit, and both Go and TS tests must pass. Workflow: edit `shared/params.json` and/or the sim, port to Go, then `pnpm gen`, `pnpm vectors`, `pnpm test`. Never hand-edit vectors or `params_gen.go`.
 5. **Every entity carries a `teamId`** from the start. Teams of 1 today; design for teams of 4-6. Never assume team == player.
@@ -38,6 +38,7 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
 | `pnpm gen` | Regenerate generated code: Go constants from `shared/params.json`, wire types from `protocol/messages.json` |
 | `pnpm dev:lag` | Like `pnpm dev`, with the server's fake network (80 ms each way, 3% loss) |
 | `pnpm netcheck` | End-to-end netcode check: two headless players against the real server (needs Go; takes about 20 s) |
+| `pnpm combatcheck` | End-to-end combat check: two bots fight through the fake network, with and without lag compensation (about 80 s) |
 | `pnpm vectors` | Re-record `testvectors/movement/*.json` from the TS sim (runs each scenario's verify) |
 | `pnpm bots` | Placeholder (prints "not implemented yet") |
 

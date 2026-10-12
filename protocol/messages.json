@@ -3,16 +3,52 @@
     "Input": {
       "doc": "One client command for one tick. jump and dash are \"pressed this tick\" edges; the rest are held states.",
       "fields": {
-        "seq": { "type": "u32", "doc": "Sequence number, 1-based, one per client sim tick." },
-        "moveX": { "type": "f64", "doc": "Strafe, -1 (left) to +1 (right)." },
-        "moveZ": { "type": "f64", "doc": "Forward, -1 (back) to +1 (forward)." },
-        "yaw": { "type": "f64", "doc": "Look direction in radians. Yaw 0 faces -Z; positive yaw turns left." },
-        "pitch": { "type": "f64", "doc": "Look pitch in radians; positive looks up. Not used by movement." },
+        "seq": {
+          "type": "u32",
+          "doc": "Sequence number, 1-based, one per client sim tick."
+        },
+        "moveX": {
+          "type": "f64",
+          "doc": "Strafe, -1 (left) to +1 (right)."
+        },
+        "moveZ": {
+          "type": "f64",
+          "doc": "Forward, -1 (back) to +1 (forward)."
+        },
+        "yaw": {
+          "type": "f64",
+          "doc": "Look direction in radians. Yaw 0 faces -Z; positive yaw turns left."
+        },
+        "pitch": {
+          "type": "f64",
+          "doc": "Look pitch in radians; positive looks up. Not used by movement."
+        },
         "jump": "bool",
-        "jumpHeld": { "type": "bool", "doc": "Jump button held (climbing)." },
+        "jumpHeld": {
+          "type": "bool",
+          "doc": "Jump button held (climbing)."
+        },
         "dash": "bool",
-        "slide": { "type": "bool", "doc": "Crouch/slide key held." },
-        "ads": { "type": "bool", "doc": "Aiming down sights (held): slows ground movement." }
+        "slide": {
+          "type": "bool",
+          "doc": "Crouch/slide key held."
+        },
+        "ads": {
+          "type": "bool",
+          "doc": "Aiming down sights (held): slows ground movement."
+        },
+        "fire": {
+          "type": "bool",
+          "doc": "Fire button held."
+        },
+        "reload": {
+          "type": "bool",
+          "doc": "Reload pressed this tick."
+        },
+        "viewTick": {
+          "type": "f64",
+          "doc": "The server tick (fractional) at which this player's screen was showing other players, for lag compensation. 0 means the current tick (no rewind)."
+        }
       }
     },
     "PlayerState": {
@@ -26,15 +62,27 @@
         "vz": "f64",
         "onGround": "bool",
         "climbing": "bool",
-        "crouching": { "type": "bool", "doc": "Crouched (hold the slide key without enough speed to slide)." },
+        "crouching": {
+          "type": "bool",
+          "doc": "Crouched (hold the slide key without enough speed to slide)."
+        },
         "sliding": "bool",
         "slideTime": "f64",
         "slideCooldown": "f64",
-        "dashCharges": { "type": "f64", "doc": "Fractional: regenerates continuously up to the maximum." },
-        "dashTime": { "type": "f64", "doc": "Seconds of dash remaining; 0 when not dashing." },
+        "dashCharges": {
+          "type": "f64",
+          "doc": "Fractional: regenerates continuously up to the maximum."
+        },
+        "dashTime": {
+          "type": "f64",
+          "doc": "Seconds of dash remaining; 0 when not dashing."
+        },
         "dashDirX": "f64",
         "dashDirZ": "f64",
-        "airJumps": { "type": "u8", "doc": "Air jumps left; refilled whenever grounded." },
+        "airJumps": {
+          "type": "u8",
+          "doc": "Air jumps left; refilled whenever grounded."
+        },
         "coyote": "f64",
         "jumpBuffer": "f64",
         "mantling": "bool",
@@ -57,7 +105,76 @@
         "z": "f64",
         "yaw": "f64",
         "pitch": "f64",
-        "flags": { "type": "u8", "doc": "Bit set of EntityFlags." }
+        "flags": {
+          "type": "u8",
+          "doc": "Bit set of EntityFlags."
+        }
+      }
+    },
+    "WeaponState": {
+      "doc": "Weapon fire-control state. Simulated identically on client and server from the inputs.",
+      "fields": {
+        "ammo": "u8",
+        "reloadT": {
+          "type": "f64",
+          "doc": "Seconds of reload remaining; 0 when not reloading."
+        },
+        "cooldown": {
+          "type": "f64",
+          "doc": "Seconds until the next shot is allowed."
+        },
+        "burst": {
+          "type": "u8",
+          "doc": "Consecutive shots (indexes the recoil pattern)."
+        },
+        "sinceShot": "f64",
+        "rng": {
+          "type": "u32",
+          "doc": "Seeded random generator state (bullet spread)."
+        }
+      }
+    },
+    "PlayerHealth": {
+      "doc": "Health, shield and life state. Server-authoritative.",
+      "fields": {
+        "health": "f64",
+        "shield": "f64",
+        "alive": "bool",
+        "respawnIn": {
+          "type": "f64",
+          "doc": "Seconds until respawn while dead."
+        },
+        "protectedFor": {
+          "type": "f64",
+          "doc": "Seconds of spawn protection left (ends early when you fire)."
+        }
+      }
+    },
+    "GameEvent": {
+      "doc": "Something that happened that a player should see. Resent in several snapshots; `seq` is per recipient so the client skips ones it has handled.",
+      "fields": {
+        "seq": "u32",
+        "tick": "u32",
+        "kind": {
+          "type": "u8",
+          "doc": "One of EventKinds."
+        },
+        "actor": {
+          "type": "u32",
+          "doc": "hit: you (the shooter); hurt: who shot you; kill: the killer."
+        },
+        "other": {
+          "type": "u32",
+          "doc": "hit: who you hit; hurt: you; kill: the victim."
+        },
+        "amount": {
+          "type": "f64",
+          "doc": "Damage dealt (hit, hurt)."
+        },
+        "flags": {
+          "type": "u8",
+          "doc": "Bit set of GameEventFlags."
+        }
       }
     }
   },
@@ -68,17 +185,35 @@
       "climbing": 4,
       "dashing": 8,
       "onGround": 16,
-      "mantling": 32
+      "mantling": 32,
+      "dead": 64,
+      "protected": 128
+    },
+    "EventKinds": {
+      "hit": 1,
+      "hurt": 2,
+      "kill": 3
+    },
+    "GameEventFlags": {
+      "headshot": 1,
+      "killed": 2
     }
   },
   "client": {
     "input": {
       "doc": "The latest few inputs, oldest first. Resent redundantly so a lost message does not lose inputs; the server skips sequence numbers it already has.",
-      "fields": { "inputs": "[Input]" }
+      "fields": {
+        "inputs": "[Input]"
+      }
     },
     "ping": {
       "doc": "Round-trip and clock probe.",
-      "fields": { "t": { "type": "f64", "doc": "Client time in ms, echoed back in pong." } }
+      "fields": {
+        "t": {
+          "type": "f64",
+          "doc": "Client time in ms, echoed back in pong."
+        }
+      }
     },
     "respawn": {
       "doc": "Ask the server to put this player back at a spawn point.",
@@ -92,24 +227,51 @@
         "playerId": "u32",
         "tickRate": "u16",
         "snapshotRate": "u16",
-        "level": { "type": "string", "doc": "Level the server runs, for example greybox." }
+        "level": {
+          "type": "string",
+          "doc": "Level the server runs, for example greybox."
+        }
       }
     },
     "snapshot": {
       "doc": "The world as this player may see it, 30 times a second.",
       "fields": {
-        "tick": { "type": "u32", "doc": "Server tick this snapshot describes." },
-        "ackSeq": { "type": "u32", "doc": "Last input sequence the server has simulated for you. `you` is your state right after it." },
-        "queued": { "type": "u8", "doc": "Inputs of yours still waiting on the server (a measure of how far ahead you are)." },
+        "tick": {
+          "type": "u32",
+          "doc": "Server tick this snapshot describes."
+        },
+        "ackSeq": {
+          "type": "u32",
+          "doc": "Last input sequence the server has simulated for you. `you` is your state right after it."
+        },
+        "queued": {
+          "type": "u8",
+          "doc": "Inputs of yours still waiting on the server (a measure of how far ahead you are)."
+        },
         "you": "PlayerState",
-        "entities": { "type": "[Entity]", "doc": "Everyone else you can see (see entitiesFor)." }
+        "entities": {
+          "type": "[Entity]",
+          "doc": "Everyone else you can see (see entitiesFor)."
+        },
+        "health": "PlayerHealth",
+        "weapon": "WeaponState",
+        "events": {
+          "type": "[GameEvent]",
+          "doc": "Recent events for you (hits you landed, hits you took, kills anyone made)."
+        }
       }
     },
     "pong": {
       "doc": "Reply to ping.",
       "fields": {
-        "t": { "type": "f64", "doc": "The client time from the ping." },
-        "tick": { "type": "u32", "doc": "Server tick when the ping was handled." }
+        "t": {
+          "type": "f64",
+          "doc": "The client time from the ping."
+        },
+        "tick": {
+          "type": "u32",
+          "doc": "Server tick when the ping was handled."
+        }
       }
     }
   }

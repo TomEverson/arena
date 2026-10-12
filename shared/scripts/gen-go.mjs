@@ -40,7 +40,9 @@ package game
 // Movement tuning (shared/params.json "movement").
 ${emit("", params.movement)}
 // Weapon tuning (shared/params.json "weapon"), prefixed with Weapon.
-${emit("Weapon", params.weapon)}`;
+${emit("Weapon", params.weapon)}
+// Combat tuning (shared/params.json "combat"), prefixed with Combat.
+${emit("Combat", params.combat)}`;
 
 const formatted = execFileSync("gofmt", [], { input: raw, encoding: "utf8" });
 

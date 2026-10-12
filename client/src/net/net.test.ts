@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { ServerClock, TICK_MS } from "./clock";
+import { EventTracker } from "./events";
 import { INTERP_TICKS, lerpAngle, RemoteTracks } from "./interpolation";
-import type { Entity } from "./protocol.gen";
+import type { Entity, GameEvent } from "./protocol.gen";
 import { CorrectionSmoother, SMOOTH_TIME, SNAP_DISTANCE } from "./smoothing";
 
 const ent = (id: number, x: number, extra: Partial<Entity> = {}): Entity => ({
@@ -115,5 +116,30 @@ describe("CorrectionSmoother", () => {
     const s = new CorrectionSmoother();
     s.onCorrection(correction(SNAP_DISTANCE + 5));
     expect(s.x).toBe(0);
+  });
+});
+
+describe("EventTracker", () => {
+  const ev = (seq: number): GameEvent => ({
+    seq,
+    tick: seq,
+    kind: 1,
+    actor: 1,
+    other: 2,
+    amount: 9,
+    flags: 0,
+  });
+
+  it("hands back each event once, even when snapshots resend it", () => {
+    const t = new EventTracker();
+    expect(t.fresh([ev(1), ev(2)]).map((e) => e.seq)).toEqual([1, 2]);
+    expect(t.fresh([ev(1), ev(2), ev(3)]).map((e) => e.seq)).toEqual([3]);
+    expect(t.fresh([ev(2), ev(3)])).toEqual([]);
+  });
+
+  it("sorts oldest first and tolerates a snapshot that arrives late", () => {
+    const t = new EventTracker();
+    expect(t.fresh([ev(5), ev(4)]).map((e) => e.seq)).toEqual([4, 5]);
+    expect(t.fresh([ev(3)])).toEqual([]); // older than what we already handled
   });
 });

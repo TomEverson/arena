@@ -11,7 +11,8 @@
     "vectors": "tsx scripts/record-vectors.ts",
     "dev:lag": "vite",
     "netcheck": "tsx scripts/netcheck.ts",
-    "format": "eslint . --fix && prettier --write ."
+    "format": "eslint . --fix && prettier --write .",
+    "combatcheck": "tsx scripts/combatcheck.ts"
   },
   "dependencies": {
     "three": "^0.186.1"

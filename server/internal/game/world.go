@@ -74,6 +74,17 @@ type Player struct {
 	Out  chan *Snapshot
 	Free chan *Snapshot
 
+	// Combat state (server-authoritative).
+	Weapon        WeaponState
+	Health        protocol.PlayerHealth
+	Kills, Deaths uint16
+	sinceDamage   float64 // seconds since last damage (shield recharge)
+	hist          [CombatHistoryTicks]histEntry
+	events        [eventRingSize]protocol.GameEvent
+	eventHead     int
+	eventLen      int
+	eventSeq      uint32
+
 	ackSeq        uint32 // last input sequence simulated
 	lastQueuedSeq uint32 // highest input sequence accepted into the queue (duplicates are skipped)
 	catchUpCredit float64
@@ -97,9 +108,14 @@ func NewPlayer(id uint32) *Player {
 		Free:   make(chan *Snapshot, snapshotBuffers),
 
 		catchUpCredit: catchUpCreditMax,
+		Weapon:        SpawnWeapon(id*2654435761 + 1),
 	}
 	for i := 0; i < snapshotBuffers; i++ {
-		p.Free <- &Snapshot{Type: protocol.ServerTypeSnapshot, Entities: make([]Entity, 0, MaxPlayers)}
+		p.Free <- &Snapshot{
+			Type:     protocol.ServerTypeSnapshot,
+			Entities: make([]Entity, 0, MaxPlayers),
+			Events:   make([]protocol.GameEvent, 0, eventRingSize),
+		}
 	}
 	return p
 }
@@ -151,6 +167,7 @@ type World struct {
 	players   []*Player // cap MaxPlayers, never grows
 	inbox     chan command
 	nextSpawn int
+	boxes     [MaxPlayers]Hitbox // scratch: target hitboxes for one shot
 
 	publishedTick atomic.Uint64 // readable from other goroutines (healthz)
 }
@@ -228,6 +245,13 @@ func (w *World) Step() {
 	for _, p := range w.players {
 		w.stepPlayer(p)
 	}
+	// Positions at the end of this tick, for lag compensation of later shots.
+	for _, p := range w.players {
+		w.recordHistory(p)
+	}
+	for _, p := range w.players {
+		w.updateLife(p)
+	}
 
 	if w.tick%snapshotEvery == 0 {
 		w.sendSnapshots()
@@ -251,8 +275,16 @@ func (w *World) stepPlayer(p *Player) {
 	}
 	for i := 0; i < n; i++ {
 		in := p.popInput()
-		p.ackSeq = in.Seq
+		p.ackSeq = in.Seq // dead players still consume inputs so acks keep flowing
+		if !p.Health.Alive {
+			continue
+		}
 		StepPlayer(&p.State, &in, &w.level.Collision, TickDT)
+		ctx := WeaponContext{HSpeed: hSpeed(&p.State), OnGround: p.State.OnGround, Crouching: p.State.Crouching, Sliding: p.State.Sliding}
+		shot := StepWeapon(&p.Weapon, &in, &ctx, TickDT)
+		if shot.Fired {
+			w.resolveShot(p, &in, &shot)
+		}
 		p.Entity.Yaw = in.Yaw
 		p.Entity.Pitch = in.Pitch
 	}
@@ -282,13 +314,18 @@ func (p *Player) syncEntity() {
 	if s.Mantling {
 		f |= protocol.EntityFlagMantling
 	}
+	if !p.Health.Alive {
+		f |= protocol.EntityFlagDead
+	}
+	if p.Health.ProtectedFor > 0 {
+		f |= protocol.EntityFlagProtected
+	}
 	p.Entity.Flags = f
 }
 
-// spawn puts p at the next spawn point.
+// spawn puts p at the best spawn point (see chooseSpawn).
 func (w *World) spawn(p *Player) {
-	sp := w.level.Spawns[w.nextSpawn%len(w.level.Spawns)]
-	w.nextSpawn++
+	sp := w.chooseSpawn(p)
 	p.State = SpawnState(sp.X, sp.Y, sp.Z)
 	p.syncEntity()
 }
@@ -309,13 +346,15 @@ func (w *World) apply(c command) {
 	case cmdJoin:
 		if len(w.players) < cap(w.players) {
 			p := c.player
+			w.players = append(w.players, p) // before choosing a spawn so others count as enemies
 			if p.hasInitial {
 				p.State = p.initial
+				p.Health = protocol.PlayerHealth{Health: WeaponMaxHealth, Shield: WeaponMaxShield, Alive: true}
+				p.sinceDamage = 1e9
 				p.syncEntity()
 			} else {
-				w.spawn(p)
+				w.resetLife(p)
 			}
-			w.players = append(w.players, p)
 		}
 	case cmdLeave:
 		for i, p := range w.players {
@@ -341,7 +380,7 @@ func (w *World) apply(c command) {
 	case cmdRespawn:
 		for _, p := range w.players {
 			if p.ID == c.id {
-				w.spawn(p)
+				w.resetLife(p) // a dev shortcut: instant new life at a spawn point
 				return
 			}
 		}
@@ -360,7 +399,10 @@ func (w *World) sendSnapshots() {
 		s.AckSeq = p.ackSeq
 		s.Queued = uint8(p.qLen)
 		s.You = p.State
+		s.Health = p.Health
+		s.Weapon = p.Weapon
 		s.Entities = w.entitiesFor(p, s.Entities[:0])
+		s.Events = p.recentEvents(s.Events[:0], w.tick)
 		select {
 		case p.Out <- s:
 		default:

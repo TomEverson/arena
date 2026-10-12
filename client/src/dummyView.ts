@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 import { type Dummy, DUMMY_HALF_WIDTH, DUMMY_HEIGHT } from "./dummies";
-import { WEAPON as W } from "./sim/params";
+import { COMBAT } from "./sim/params";
 
 const FLASH_SECONDS = 0.09;
 
@@ -16,25 +16,30 @@ export class DummyViews {
   private readonly views: View[] = [];
 
   constructor(scene: THREE.Scene, dummies: readonly Dummy[]) {
-    const headSize = DUMMY_HEIGHT - W.headMinHeight;
+    const headSize = COMBAT.headSize;
+    const bodyHeight = DUMMY_HEIGHT - headSize;
     for (const _ of dummies) {
       const body = new THREE.MeshLambertMaterial({ color: 0xd08030 });
       const head = new THREE.MeshLambertMaterial({ color: 0xc03030 });
       const group = new THREE.Group();
       const bodyMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(DUMMY_HALF_WIDTH * 2, W.headMinHeight, DUMMY_HALF_WIDTH * 2),
+        new THREE.BoxGeometry(DUMMY_HALF_WIDTH * 2, bodyHeight, DUMMY_HALF_WIDTH * 2),
         body,
       );
-      bodyMesh.position.y = W.headMinHeight / 2;
+      bodyMesh.position.y = bodyHeight / 2;
       const headMesh = new THREE.Mesh(
         new THREE.BoxGeometry(DUMMY_HALF_WIDTH * 2, headSize, DUMMY_HALF_WIDTH * 2),
         head,
       );
-      headMesh.position.y = W.headMinHeight + headSize / 2;
+      headMesh.position.y = bodyHeight + headSize / 2;
       group.add(bodyMesh, headMesh);
       scene.add(group);
       this.views.push({ group, materials: [body, head], flash: 0 });
     }
+  }
+
+  hideAll(): void {
+    for (const v of this.views) v.group.visible = false;
   }
 
   flash(id: number): void {

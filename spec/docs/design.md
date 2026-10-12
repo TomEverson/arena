@@ -18,12 +18,12 @@ Control-point war, PvPvE and team modes stay in the brainstorm backlog.
 FFA is teams of one: every player's `teamId` is unique. This keeps the data model ready for team modes.
 
 ### Death and respawn
-- Respawn after 3 seconds at the spawn point farthest from enemies and out of their line of sight.
+- Respawn after 3 seconds at the spawn point farthest from enemies, strongly preferring ones no enemy can see.
 - 2 seconds of spawn protection, ended by firing.
 - Nobody is ever eliminated from the match.
 
 ### Health
-- 100 health + 50 shield. The shield recharges after a short time out of combat.
+- 100 health + 50 shield. The shield recharges after 3 s without taking damage, at 20 per second.
 - **A kill restores health and shield to full** (Ultrakill-style "blood is health").
   Watch for snowballing: the leader keeps winning fights. Tune later (partial heal, leader marker) if playtests show it.
 - Health and shield pickups sit at fixed spots on a respawn timer. They give players a reason to contest certain locations.
@@ -34,7 +34,7 @@ FFA is teams of one: every player's `teamId` is unique. This keeps the data mode
 - First numbers (M2): 600 rpm, 9 damage (x1.5 head), 30-round magazine, 1.8 s reload; full tuning in `client/src/sim/params.ts` (`WEAPON`).
 - ADS: zoomed (0.7x FOV), 0.65x ground speed, tight spread. Hipfire spread grows with movement, air time and sustained fire.
 - Recoil: a fixed 30-entry pattern kicks the player's view; the player counters it with the mouse.
-- Server-side hit detection with lag compensation.
+- Server-side hit detection with lag compensation: shots are traced against other players as the shooter's screen showed them (capped at 333 ms of rewind). A headshot is the top 0.3 m of the target, so crouched players have a head too.
 - Deferred: secondary weapon, power-weapon pickup, any loadout choice.
 
 ### Movement

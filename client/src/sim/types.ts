@@ -28,10 +28,10 @@ export interface CollisionWorld {
 }
 
 /**
- * One tick of player intent: the wire Input without the sequence number and
- * pitch (movement does not use them). Edge buttons are "pressed this tick".
+ * One tick of player intent: the wire Input without the sequence number, pitch
+ * and view tick (those are filled in when the input is sent). Edge buttons are "pressed this tick".
  */
-export type PlayerInput = Omit<Input, "seq" | "pitch">;
+export type PlayerInput = Omit<Input, "seq" | "pitch" | "viewTick">;
 
 /**
  * Complete movement state. Defined once in /protocol/messages.json and generated
@@ -49,4 +49,6 @@ export const emptyInput = (): PlayerInput => ({
   dash: false,
   slide: false,
   ads: false,
+  fire: false,
+  reload: false,
 });

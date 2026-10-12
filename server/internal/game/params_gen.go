@@ -56,7 +56,6 @@ const (
 const (
 	WeaponDamage          = 9
 	WeaponHeadshotMult    = 1.5
-	WeaponHeadMinHeight   = 1.5
 	WeaponMaxHealth       = 100
 	WeaponMaxShield       = 50
 	WeaponRpm             = 600
@@ -80,3 +79,15 @@ const (
 
 var WeaponRecoilPitch = [...]float64{0.5, 0.48, 0.46, 0.44, 0.42, 0.4, 0.38, 0.36, 0.34, 0.32, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22}
 var WeaponRecoilYaw = [...]float64{0, 0.05, 0.1, 0.12, 0.1, 0.05, -0.05, -0.12, -0.2, -0.22, -0.15, -0.05, 0.08, 0.18, 0.25, 0.28, 0.2, 0.1, -0.05, -0.15, -0.25, -0.3, -0.2, -0.05, 0.1, 0.2, 0.3, 0.25, 0.1, -0.1}
+
+// Combat tuning (shared/params.json "combat"), prefixed with Combat.
+const (
+	CombatHeadSize             = 0.3
+	CombatShieldRechargeDelay  = 3
+	CombatShieldRechargeRate   = 20
+	CombatRespawnTime          = 3
+	CombatSpawnProtection      = 2
+	CombatMaxRewindTicks       = 20
+	CombatHistoryTicks         = 32
+	CombatEventRedundancyTicks = 6
+)

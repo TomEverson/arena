@@ -8,23 +8,13 @@
  * the mouse the other way to counter it. Spread is random within a cone around
  * the view direction and does not move the view.
  */
+import type { WeaponState } from "../net/protocol.gen";
 import { PARAMS, WEAPON as W } from "./params";
+
+export type { WeaponState };
 
 const DEG = Math.PI / 180;
 const SHOT_INTERVAL = 60 / W.rpm;
-
-export interface WeaponState {
-  ammo: number;
-  /** Seconds of reload remaining; 0 when not reloading. */
-  reloadT: number;
-  /** Seconds until the next shot is allowed. */
-  cooldown: number;
-  /** Consecutive shots fired (indexes the recoil pattern). */
-  burst: number;
-  sinceShot: number;
-  /** Seeded PRNG state (uint32). */
-  rng: number;
-}
 
 export interface WeaponInput {
   /** Fire button held. */

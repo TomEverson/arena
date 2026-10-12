@@ -214,7 +214,7 @@ describe("time to kill", () => {
 describe("hitscan", () => {
   const dummy = (id: number, x: number, z: number): Hitbox => ({
     id,
-    feetY: 0,
+    headMinY: 1.5,
     minX: x - 0.3,
     maxX: x + 0.3,
     minY: 0,

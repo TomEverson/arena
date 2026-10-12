@@ -49,7 +49,6 @@
   "weapon": {
     "damage": 9,
     "headshotMult": 1.5,
-    "headMinHeight": 1.5,
     "maxHealth": 100,
     "maxShield": 50,
     "rpm": 600,
@@ -133,5 +132,15 @@
     ],
     "adsFovScale": 0.7,
     "adsSensitivity": 0.7
+  },
+  "combat": {
+    "headSize": 0.3,
+    "shieldRechargeDelay": 3,
+    "shieldRechargeRate": 20,
+    "respawnTime": 3,
+    "spawnProtection": 2,
+    "maxRewindTicks": 20,
+    "historyTicks": 32,
+    "eventRedundancyTicks": 6
   }
 }

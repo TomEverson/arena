@@ -5,8 +5,8 @@ import type { Aabb, CollisionWorld } from "./types";
 
 export interface Hitbox extends Aabb {
   id: number;
-  /** Feet height of the target, used to classify headshots. */
-  feetY: number;
+  /** Hits at or above this height are headshots (the top of the target). */
+  headMinY: number;
 }
 
 export interface RayHit {
@@ -118,7 +118,7 @@ export function castRay(
       y,
       z: 0,
       targetId: tg.id,
-      headshot: y - tg.feetY >= W.headMinHeight,
+      headshot: y >= tg.headMinY,
     };
   }
   hit.t = bestT;

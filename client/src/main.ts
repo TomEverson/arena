@@ -4,19 +4,22 @@ import greybox from "../../levels/greybox.json";
 import { aliveHitboxes, type Dummy, killDummy, makeDummies, stepDummies } from "./dummies";
 import { DummyViews } from "./dummyView";
 import { Fx } from "./fx";
+import { CombatHud } from "./hud";
 import { buildLevelMeshes } from "./levelRender";
 import { FixedTimestep, TICK_RATE } from "./loop";
 import { NetClient } from "./net/client";
 import { ServerClock } from "./net/clock";
+import { EventTracker } from "./net/events";
 import { INTERP_TICKS, RemoteTracks } from "./net/interpolation";
 import { Predictor } from "./net/prediction";
+import { EntityFlags, type PlayerHealth } from "./net/protocol.gen";
 import { CorrectionSmoother } from "./net/smoothing";
 import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
-import { castRay } from "./sim/hitscan";
+import { castRay, type Hitbox } from "./sim/hitscan";
 import { buildCollisionWorld, parseLevel } from "./sim/level";
 import { bodyHeight, eyeHeight, hSpeed, spawnState, stepPlayer } from "./sim/movement";
-import { PARAMS, WEAPON } from "./sim/params";
+import { COMBAT, PARAMS, WEAPON } from "./sim/params";
 import { emptyInput, type PlayerState } from "./sim/types";
 import {
   applyDamage,
@@ -125,12 +128,16 @@ const smoother = new CorrectionSmoother();
 const clock = new ServerClock();
 const remotes = new RemoteTracks();
 const remoteViews = new RemoteViews(scene);
+const events = new EventTracker();
+const combatHud = new CombatHud((kind) => fx.hitMarker(kind));
+let health: PlayerHealth | null = null;
 
 function goOffline(note: string): void {
   netMode = "offline";
   netNote = note;
   net = null;
   predictor = null;
+  health = null;
 }
 
 if (new URLSearchParams(location.search).has("offline")) {
@@ -140,20 +147,24 @@ if (new URLSearchParams(location.search).has("offline")) {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   net = new NetClient(`${proto}//${location.host}/ws`, {
     onWelcome(w) {
+      combatHud.setPlayerId(w.playerId);
       if (w.level !== level.name)
         netNote = `WARNING: server runs "${w.level}", client has "${level.name}"`;
     },
     onSnapshot(s) {
       clock.onSnapshot(s.tick, performance.now());
       remotes.push(s.tick, s.entities);
+      health = s.health;
+      for (const e of events.fresh(s.events)) combatHud.onEvent(e);
       if (!predictor) {
         // First snapshot: start from wherever the server put us.
-        predictor = new Predictor(world, s.you, s.ackSeq, DT);
+        predictor = new Predictor(world, s.you, s.ackSeq, DT, s.weapon);
+        predictor.alive = s.health.alive;
         player = prevPlayer = predictor.state;
         netMode = "online";
         return;
       }
-      const correction = predictor.reconcile(s.ackSeq, s.you);
+      const correction = predictor.reconcile(s.ackSeq, s.you, s.weapon, s.health.alive);
       if (correction) smoother.onCorrection(correction);
       player = predictor.state;
     },
@@ -170,6 +181,46 @@ let shotsFired = 0;
 let hitstopTicks = 0;
 let killLog = "no kills yet";
 let targetInfoUntil = 0;
+
+/** Other players as the local screen currently draws them (effects only: the server decides hits). */
+function remoteHitboxes(renderTick: number): Hitbox[] {
+  const boxes: Hitbox[] = [];
+  for (const id of remotes.ids()) {
+    const pose = remotes.sample(id, renderTick);
+    if (!pose || (pose.flags & EntityFlags.dead) !== 0) continue;
+    const height =
+      pose.flags & EntityFlags.sliding
+        ? PARAMS.slideHeight
+        : pose.flags & EntityFlags.crouching
+          ? PARAMS.crouchHeight
+          : PARAMS.standHeight;
+    boxes.push({
+      id,
+      headMinY: pose.y + height - COMBAT.headSize,
+      minX: pose.x - PARAMS.halfWidth,
+      maxX: pose.x + PARAMS.halfWidth,
+      minY: pose.y,
+      maxY: pose.y + height,
+      minZ: pose.z - PARAMS.halfWidth,
+      maxZ: pose.z + PARAMS.halfWidth,
+    });
+  }
+  return boxes;
+}
+
+/**
+ * Online: the shot itself (spread, recoil, ammo) is predicted, so the tracer, muzzle flash and
+ * view kick are immediate. Whether it hit someone is the server's call: hit markers come from events.
+ */
+function fireShotOnline(shot: ShotResult, ads: boolean): void {
+  const origin: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
+  const dir = viewDirection(look.yaw + shot.spreadYaw, look.pitch + shot.spreadPitch);
+  const targets = remoteHitboxes(clock.tickAt(performance.now()) - INTERP_TICKS);
+  const hit = castRay(world, targets, origin, dir);
+  fx.shot(new THREE.Vector3(hit.x, hit.y, hit.z), hit.kind === "world", ads);
+  look.yaw += shot.kickYaw;
+  look.pitch = clampPitch(look.pitch + shot.kickPitch);
+}
 
 function fireShot(shot: ShotResult, ads: boolean): void {
   shotsFired++;
@@ -220,33 +271,37 @@ const sim = new FixedTimestep(() => {
     dash: pressed.dash,
     slide: held.has("KeyC"),
     ads,
+    fire: held.has("Mouse0"),
+    reload: pressed.reload,
   };
   prevPlayer = player;
   if (predictor) {
-    // Online: predict now, tell the server (the last few inputs, so a lost message loses nothing).
-    predictor.step(input, look.pitch);
+    // Online: predict now (movement and weapon), tell the server (the last few inputs, so a lost
+    // message loses nothing). viewTick says which moment of the world our screen is showing.
+    const viewTick = clock.ready ? clock.tickAt(performance.now()) - INTERP_TICKS : 0;
+    predictor.step(input, look.pitch, viewTick);
     player = predictor.state;
     net?.sendInputs(predictor.recent());
+    if (predictor.lastShot?.fired) fireShotOnline(predictor.lastShot, ads);
   } else if (netMode === "offline") {
+    // Offline practice: local movement, local weapon, local dummies.
     player = stepPlayer(player, input, world, DT);
+    stepDummies(dummies, DT, hitstopTicks > 0);
+    if (hitstopTicks > 0) hitstopTicks--;
+    const res = stepWeapon(
+      weapon,
+      input,
+      {
+        hSpeed: hSpeed(player),
+        onGround: player.onGround,
+        crouching: player.crouching,
+        sliding: player.sliding,
+      },
+      DT,
+    );
+    weapon = res.state;
+    if (res.shot.fired) fireShot(res.shot, ads);
   } // else: still connecting, wait for the first snapshot
-
-  stepDummies(dummies, DT, hitstopTicks > 0);
-  if (hitstopTicks > 0) hitstopTicks--;
-
-  const res = stepWeapon(
-    weapon,
-    { fire: held.has("Mouse0"), reload: pressed.reload, ads },
-    {
-      hSpeed: hSpeed(player),
-      onGround: player.onGround,
-      crouching: player.crouching,
-      sliding: player.sliding,
-    },
-    DT,
-  );
-  weapon = res.state;
-  if (res.shot.fired) fireShot(res.shot, ads);
 
   pressed.jump = false;
   pressed.dash = false;
@@ -287,7 +342,8 @@ function frame(nowMs: number): void {
   }
 
   // Smooth the eye height so slide transitions don't pop.
-  eye += (eyeHeight(player) - eye) * (1 - Math.exp(-frameDt * 18));
+  const dead = health !== null && !health.alive;
+  eye += ((dead ? 0.35 : eyeHeight(player)) - eye) * (1 - Math.exp(-frameDt * 18));
   smoother.update(frameDt);
   cam.position.set(
     lerp(prevPlayer.x, player.x, alpha) + smoother.x,
@@ -305,7 +361,8 @@ function frame(nowMs: number): void {
         })
       : [],
   );
-  const spread = spreadDegrees(weapon.burst, adsHeld, {
+  const activeWeapon = predictor ? predictor.weapon : weapon;
+  const spread = spreadDegrees(activeWeapon.burst, adsHeld, {
     hSpeed: hSpeed(player),
     onGround: player.onGround,
     crouching: player.crouching,
@@ -313,18 +370,21 @@ function frame(nowMs: number): void {
   });
   const shake = fx.update(frameDt, adsT, spread, fov);
   cam.rotation.set(look.pitch + shake.pitch, look.yaw + shake.yaw, 0);
-  dummyViews.update(dummies, frameDt);
+  if (netMode === "offline") dummyViews.update(dummies, frameDt);
+  else dummyViews.hideAll(); // online, the targets are other players
+  combatHud.update(netMode === "online" ? health : null);
   if (targetInfoUntil < nowMs) targetInfo.classList.remove("on");
-  ammoEl.innerHTML = `${weapon.ammo} / ${WEAPON.magSize}<small>${
-    weapon.reloadT > 0
-      ? `RELOADING ${weapon.reloadT.toFixed(1)}s`
-      : weapon.ammo === 0
+  ammoEl.innerHTML = `${activeWeapon.ammo} / ${WEAPON.magSize}<small>${
+    activeWeapon.reloadT > 0
+      ? `RELOADING ${activeWeapon.reloadT.toFixed(1)}s`
+      : activeWeapon.ammo === 0
         ? "RELOAD (R)"
         : ""
   }</small>`;
   view.render();
 
   const state = [
+    dead ? "DEAD" : "",
     player.onGround ? "ground" : "air",
     player.sliding ? "slide" : "",
     player.crouching ? "crouch" : "",

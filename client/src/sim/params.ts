@@ -13,3 +13,6 @@ export const PARAMS = params.movement;
  * to the Go server in M5. Angles are degrees.
  */
 export const WEAPON = params.weapon;
+
+/** Health, respawn and lag-compensation numbers (server-authoritative; the client shows them). */
+export const COMBAT = params.combat;

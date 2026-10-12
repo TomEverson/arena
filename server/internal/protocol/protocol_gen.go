@@ -21,6 +21,21 @@ const (
 	EntityFlagDashing   uint8 = 8
 	EntityFlagOnGround  uint8 = 16
 	EntityFlagMantling  uint8 = 32
+	EntityFlagDead      uint8 = 64
+	EntityFlagProtected uint8 = 128
+)
+
+// EventKinds bits.
+const (
+	EventKindHit  uint8 = 1
+	EventKindHurt uint8 = 2
+	EventKindKill uint8 = 3
+)
+
+// GameEventFlags bits.
+const (
+	GameEventFlagHeadshot uint8 = 1
+	GameEventFlagKilled   uint8 = 2
 )
 
 // Input: One client command for one tick. jump and dash are "pressed this tick" edges; the rest are held states.
@@ -43,6 +58,12 @@ type Input struct {
 	Slide bool `json:"slide"`
 	// Aiming down sights (held): slows ground movement.
 	ADS bool `json:"ads"`
+	// Fire button held.
+	Fire bool `json:"fire"`
+	// Reload pressed this tick.
+	Reload bool `json:"reload"`
+	// The server tick (fractional) at which this player's screen was showing other players, for lag compensation. 0 means the current tick (no rewind).
+	ViewTick float64 `json:"viewTick"`
 }
 
 // PlayerState: Complete movement state. (x, y, z) is the centre of the player's feet. Metres and seconds, Y up.
@@ -93,6 +114,47 @@ type Entity struct {
 	Flags uint8 `json:"flags"`
 }
 
+// WeaponState: Weapon fire-control state. Simulated identically on client and server from the inputs.
+type WeaponState struct {
+	Ammo uint8 `json:"ammo"`
+	// Seconds of reload remaining; 0 when not reloading.
+	ReloadT float64 `json:"reloadT"`
+	// Seconds until the next shot is allowed.
+	Cooldown float64 `json:"cooldown"`
+	// Consecutive shots (indexes the recoil pattern).
+	Burst     uint8   `json:"burst"`
+	SinceShot float64 `json:"sinceShot"`
+	// Seeded random generator state (bullet spread).
+	Rng uint32 `json:"rng"`
+}
+
+// PlayerHealth: Health, shield and life state. Server-authoritative.
+type PlayerHealth struct {
+	Health float64 `json:"health"`
+	Shield float64 `json:"shield"`
+	Alive  bool    `json:"alive"`
+	// Seconds until respawn while dead.
+	RespawnIn float64 `json:"respawnIn"`
+	// Seconds of spawn protection left (ends early when you fire).
+	ProtectedFor float64 `json:"protectedFor"`
+}
+
+// GameEvent: Something that happened that a player should see. Resent in several snapshots; `seq` is per recipient so the client skips ones it has handled.
+type GameEvent struct {
+	Seq  uint32 `json:"seq"`
+	Tick uint32 `json:"tick"`
+	// One of EventKinds.
+	Kind uint8 `json:"kind"`
+	// hit: you (the shooter); hurt: who shot you; kill: the killer.
+	Actor uint32 `json:"actor"`
+	// hit: who you hit; hurt: you; kill: the victim.
+	Other uint32 `json:"other"`
+	// Damage dealt (hit, hurt).
+	Amount float64 `json:"amount"`
+	// Bit set of GameEventFlags.
+	Flags uint8 `json:"flags"`
+}
+
 // Welcome: Sent once on connect.
 type Welcome struct {
 	Type         string `json:"type"`
@@ -114,7 +176,11 @@ type Snapshot struct {
 	Queued uint8       `json:"queued"`
 	You    PlayerState `json:"you"`
 	// Everyone else you can see (see entitiesFor).
-	Entities []Entity `json:"entities"`
+	Entities []Entity     `json:"entities"`
+	Health   PlayerHealth `json:"health"`
+	Weapon   WeaponState  `json:"weapon"`
+	// Recent events for you (hits you landed, hits you took, kills anyone made).
+	Events []GameEvent `json:"events"`
 }
 
 // Pong: Reply to ping.

@@ -1,10 +1,16 @@
 /**
- * Records every scenario into /testvectors/movement/<name>.json from the live TypeScript sim.
+ * Records every scenario (movement, weapon, hitscan) into /testvectors from the live TypeScript sim.
  * Run with `pnpm vectors`. A scenario whose `verify` fails aborts the recording.
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 
-import { loadWorld, VECTOR_DIR } from "../src/sim/vectors/node";
+import {
+  hitscanScenarios,
+  recordHitscan,
+  recordWeapon,
+  weaponScenarios,
+} from "../src/sim/vectors/combat-scenarios";
+import { HITSCAN_DIR, loadWorld, VECTOR_DIR, WEAPON_DIR } from "../src/sim/vectors/node";
 import { recordScenario } from "../src/sim/vectors/record";
 import { scenarios } from "../src/sim/vectors/scenarios";
 
@@ -33,5 +39,27 @@ for (const sc of scenarios) {
   totalTicks += trace.length - 1;
 }
 
+// --- Weapon and hitscan vectors -------------------------------------------
+for (const dir of [WEAPON_DIR, HITSCAN_DIR]) {
+  mkdirSync(dir, { recursive: true });
+  for (const f of readdirSync(dir)) if (f.endsWith(".json")) rmSync(`${dir}/${f}`);
+}
+for (const sc of weaponScenarios) {
+  const { vector, trace } = recordWeapon(sc);
+  try {
+    sc.verify(trace, vector.events);
+  } catch (e) {
+    throw new Error(`weapon scenario "${sc.name}": ${(e as Error).message}`, { cause: e });
+  }
+  writeFileSync(`${WEAPON_DIR}/${sc.name}.json`, `${JSON.stringify(vector)}\n`);
+}
+for (const sc of hitscanScenarios) {
+  const vector = recordHitscan(sc); // verifies as it records
+  writeFileSync(`${HITSCAN_DIR}/${sc.name}.json`, `${JSON.stringify(vector)}\n`);
+}
+
 console.log(`recorded ${scenarios.length} vectors, ${totalTicks} ticks into ${VECTOR_DIR}`);
 console.log("ticks exercised:", coverage);
+console.log(
+  `recorded ${weaponScenarios.length} weapon and ${hitscanScenarios.length} hitscan vectors`,
+);

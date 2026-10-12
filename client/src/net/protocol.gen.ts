@@ -9,6 +9,21 @@ export const EntityFlags = {
   dashing: 8,
   onGround: 16,
   mantling: 32,
+  dead: 64,
+  protected: 128,
+} as const;
+
+/** EventKinds bits. */
+export const EventKinds = {
+  hit: 1,
+  hurt: 2,
+  kill: 3,
+} as const;
+
+/** GameEventFlags bits. */
+export const GameEventFlags = {
+  headshot: 1,
+  killed: 2,
 } as const;
 
 /** One client command for one tick. jump and dash are "pressed this tick" edges; the rest are held states. */
@@ -31,6 +46,12 @@ export interface Input {
   slide: boolean;
   /** Aiming down sights (held): slows ground movement. */
   ads: boolean;
+  /** Fire button held. */
+  fire: boolean;
+  /** Reload pressed this tick. */
+  reload: boolean;
+  /** The server tick (fractional) at which this player's screen was showing other players, for lag compensation. 0 means the current tick (no rewind). */
+  viewTick: number;
 }
 
 /** Complete movement state. (x, y, z) is the centre of the player's feet. Metres and seconds, Y up. */
@@ -81,6 +102,47 @@ export interface Entity {
   flags: number;
 }
 
+/** Weapon fire-control state. Simulated identically on client and server from the inputs. */
+export interface WeaponState {
+  ammo: number;
+  /** Seconds of reload remaining; 0 when not reloading. */
+  reloadT: number;
+  /** Seconds until the next shot is allowed. */
+  cooldown: number;
+  /** Consecutive shots (indexes the recoil pattern). */
+  burst: number;
+  sinceShot: number;
+  /** Seeded random generator state (bullet spread). */
+  rng: number;
+}
+
+/** Health, shield and life state. Server-authoritative. */
+export interface PlayerHealth {
+  health: number;
+  shield: number;
+  alive: boolean;
+  /** Seconds until respawn while dead. */
+  respawnIn: number;
+  /** Seconds of spawn protection left (ends early when you fire). */
+  protectedFor: number;
+}
+
+/** Something that happened that a player should see. Resent in several snapshots; `seq` is per recipient so the client skips ones it has handled. */
+export interface GameEvent {
+  seq: number;
+  tick: number;
+  /** One of EventKinds. */
+  kind: number;
+  /** hit: you (the shooter); hurt: who shot you; kill: the killer. */
+  actor: number;
+  /** hit: who you hit; hurt: you; kill: the victim. */
+  other: number;
+  /** Damage dealt (hit, hurt). */
+  amount: number;
+  /** Bit set of GameEventFlags. */
+  flags: number;
+}
+
 /** The latest few inputs, oldest first. Resent redundantly so a lost message does not lose inputs; the server skips sequence numbers it already has. */
 export interface InputMessage {
   type: "input";
@@ -121,6 +183,10 @@ export interface SnapshotMessage {
   you: PlayerState;
   /** Everyone else you can see (see entitiesFor). */
   entities: Entity[];
+  health: PlayerHealth;
+  weapon: WeaponState;
+  /** Recent events for you (hits you landed, hits you took, kills anyone made). */
+  events: GameEvent[];
 }
 
 /** Reply to ping. */

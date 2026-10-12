@@ -1,6 +1,6 @@
 # testvectors
 
-Shared movement test vectors. They keep client prediction and the authoritative
+Shared test vectors for movement (`movement/`), the weapon (`weapon/`) and hitscan (`hitscan/`). They keep client prediction and the authoritative
 server in lockstep: the **same JSON files** are replayed by the TypeScript tests
 (`client/src/sim/vectors/vectors.test.ts`) and the Go tests
 (`server/internal/game/vectors_test.go`).
@@ -29,7 +29,12 @@ no longer demonstrates what the scenario claims (for example, a mantle that
 doesn't happen). Read any scenario that fails verify before re-recording: the
 vectors freeze whatever the TS sim does.
 
-## What is covered (38 vectors, about 8,000 ticks)
+## Weapon and hitscan vectors
+- `weapon/*.json`: an initial weapon state, run-length encoded inputs and movement context per tick, every event (shot, reload start or end, dry fire, with the exact spread and recoil kick) and checkpoints of the full weapon state.
+- `hitscan/*.json`: a world, target hitboxes and a list of rays with the expected result (kind, distance, point, target, headshot).
+- The Go tests are `server/internal/game/combat_vectors_test.go`; the TypeScript ones are `client/src/sim/vectors/combat-vectors.test.ts`. Same rule: change combat math, then `pnpm vectors`.
+
+## What is covered by the movement vectors (38 vectors, about 8,000 ticks)
 Run, diagonal, friction, jump, buffer, coyote, double jump, slide (boost, jump, to-crouch),
 crouch and crawling under a ceiling, dash (ground, air, charges, thin wall), outer and inner
 corners, step-up, ceiling bonk, ramps (up, down, tall side), mantle, climb, ADS, five routes
@@ -41,4 +46,4 @@ through the real greybox level, and three seeded pseudo-random runs of 900 ticks
 - JavaScript and Go can differ in the last bit of `sin`/`cos`/`hypot`, and Go on ARM can fuse
   multiply-adds. The 1e-6 tolerance absorbs this unless a run sits on a knife-edge; the fuzz
   runs are the likeliest place for a false alarm.
-- Weapons are not covered yet (M5).
+- Lag compensation and health/respawn rules are server logic with Go unit tests, not vectors; `pnpm combatcheck` exercises them end to end.

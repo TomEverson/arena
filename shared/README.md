@@ -24,6 +24,12 @@ Changing any movement number changes movement: re-record the vectors (`pnpm vect
 | `mantle*` | Mantle reach, duration, inset, exit speed |
 
 ## Weapon parameters (`weapon`)
-Damage, health, fire rate (`rpm`), magazine, reload, spread cone values, the 30-entry `recoilPitch`/`recoilYaw`
+Damage, health (`maxHealth`, `maxShield`), fire rate (`rpm`), magazine, reload, spread cone values, the 30-entry `recoilPitch`/`recoilYaw`
 tables, ADS zoom and sensitivity. Angles are degrees. Used by `client/src/sim/weapon.ts` now and by the Go
 port in M5.
+
+## Combat parameters (`combat`)
+Server-authoritative numbers: `headSize` (the top 0.3 m of a target is its head), shield recharge delay and rate,
+`respawnTime`, `spawnProtection`, `maxRewindTicks` (lag-compensation cap, 20 ticks = 333 ms), `historyTicks`
+(position history kept), `eventRedundancyTicks` (how long events are resent in snapshots). Go constants are
+prefixed `Combat`.

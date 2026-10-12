@@ -28,3 +28,4 @@ Living notes for the browser multiplayer FPS. This is where ideas, decisions and
 | 2026-10-12 | PvPvE, team-based (4-6+ per team), first mode: control-point war |
 | 2026-10-12 | Build and test with 2 players (two teams of one); design for 32 |
 | 2026-10-12 | pnpm workspaces + Turborepo instead of Makefile |
+| 2026-10-12 | Client lint and format with ESLint + Prettier (type-aware lint needs TypeScript 6); see 06-repo-and-setup.md |

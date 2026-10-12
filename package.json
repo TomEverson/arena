@@ -13,7 +13,8 @@
     "vectors": "pnpm --filter @arena/client vectors",
     "dev:lag": "turbo run dev:lag --ui=stream",
     "netcheck": "pnpm --filter @arena/client netcheck",
-    "format": "pnpm --filter @arena/client format"
+    "format": "pnpm --filter @arena/client format",
+    "combatcheck": "pnpm --filter @arena/client combatcheck"
   },
   "devDependencies": {
     "turbo": "^2.11.7"
