@@ -40,6 +40,7 @@ import {
   roomLink,
 } from "./net/rooms";
 import { CorrectionSmoother } from "./net/smoothing";
+import { PALETTE } from "./palette";
 import { PracticeStats } from "./practiceStats";
 import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
@@ -67,11 +68,11 @@ const level = parseLevel(greybox);
 const world = buildCollisionWorld(level);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x101820);
-scene.fog = new THREE.Fog(0x101820, 30, 90);
+scene.background = PALETTE.HAZE;
+scene.fog = new THREE.Fog(PALETTE.HAZE, 30, 90);
 scene.add(buildLevelMeshes(level));
-scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.6));
-const sun = new THREE.DirectionalLight(0xffffff, 2);
+scene.add(new THREE.HemisphereLight(PALETTE.BONE, PALETTE.GRAPHITE, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5);
 sun.position.set(20, 40, 10);
 scene.add(sun);
 
@@ -581,9 +582,9 @@ function frame(nowMs: number): void {
     crouching: player.crouching,
     sliding: player.sliding,
   });
-  const shake = fx.update(frameDt, adsT, spread, fov);
+  const shake = fx.update(frameDt, adsT, spread, fov, activeWeapon.reloadT);
   cam.rotation.set(look.pitch + shake.pitch, look.yaw + shake.yaw, 0);
-  if (netMode === "offline") dummyViews.update(dummies, frameDt);
+  if (netMode === "offline") dummyViews.update(dummies, frameDt, cam.position);
   else dummyViews.hideAll(); // online, the targets are other players
   const inMatch = match !== null && canAct(match.phase);
   combatHud.update(netMode === "online" ? health : null, inMatch);

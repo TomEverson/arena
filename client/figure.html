@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arena character viewer</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #help {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        color: #2de2e6;
+        font: 12px/1.5 monospace;
+        white-space: pre;
+        pointer-events: none;
+        text-shadow: 1px 1px 0 #000;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="help"></div>
+    <script type="module" src="/src/figureViewer.ts"></script>
+  </body>
+</html>

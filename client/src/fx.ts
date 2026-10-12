@@ -1,5 +1,10 @@
 import * as THREE from "three";
 
+import { buildHands } from "./hands";
+import { PALETTE } from "./palette";
+import { type ReloadPose, reloadPose } from "./reloadAnim";
+import { WEAPON } from "./sim/params";
+
 /** Visual and audio-free feedback for shooting: crosshair, hit markers, shake, viewmodel, tracers. */
 
 const HIP = new THREE.Vector3(0.2, -0.2, -0.45);
@@ -8,6 +13,8 @@ const MUZZLE_LOCAL = new THREE.Vector3(0, 0.0, -0.58);
 const TRACER_SECONDS = 0.07;
 const IMPACT_SECONDS = 0.12;
 const POOL = 8;
+/** Where the left hand grips the magazine during a reload (gun space). */
+const MAG_GRIP = new THREE.Vector3(-0.01, -0.17, -0.28);
 
 export type HitKind = "body" | "head" | "kill";
 
@@ -16,6 +23,10 @@ export class Fx {
   private readonly marker = document.getElementById("hitmarker") as HTMLDivElement;
   private readonly gun = new THREE.Group();
   private readonly flashMesh: THREE.Mesh;
+  private readonly mag: THREE.Mesh;
+  private readonly leftHand: THREE.Group;
+  private readonly leftHandHome = new THREE.Vector3();
+  private readonly reload: ReloadPose = { roll: 0, pitch: 0, drop: 0, mag: 0, hand: 0 };
   private readonly tracers: { line: THREE.Line; life: number }[] = [];
   private readonly impacts: { mesh: THREE.Mesh; life: number }[] = [];
   private flashLife = 0;
@@ -27,8 +38,8 @@ export class Fx {
     private readonly camera: THREE.PerspectiveCamera,
   ) {
     // Placeholder rifle: a few boxes, parented to the camera.
-    const dark = new THREE.MeshLambertMaterial({ color: 0x2c323a });
-    const light = new THREE.MeshLambertMaterial({ color: 0x59636e });
+    const dark = new THREE.MeshLambertMaterial({ color: PALETTE.GRAPHITE });
+    const light = new THREE.MeshLambertMaterial({ color: PALETTE.CONCRETE });
     const part = (
       w: number,
       h: number,
@@ -41,19 +52,22 @@ export class Fx {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
       mesh.position.set(x, y, z);
       this.gun.add(mesh);
+      return mesh;
     };
     part(0.07, 0.09, 0.4, 0, 0, -0.3, dark); // receiver
     part(0.035, 0.035, 0.24, 0, 0.012, -0.55, light); // barrel
-    part(0.05, 0.12, 0.06, 0, -0.1, -0.28, dark); // magazine
+    this.mag = part(0.05, 0.12, 0.06, 0, -0.1, -0.28, dark); // magazine
     part(0.06, 0.1, 0.07, 0, -0.08, -0.1, dark); // grip
     part(0.015, 0.03, 0.03, 0, 0.06, -0.4, light); // sight
     this.flashMesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.09, 0.09, 0.05),
-      new THREE.MeshBasicMaterial({ color: 0xffe08a }),
+      new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
     );
     this.flashMesh.position.copy(MUZZLE_LOCAL);
     this.flashMesh.visible = false;
     this.gun.add(this.flashMesh);
+    this.leftHand = buildHands(this.gun).left;
+    this.leftHandHome.copy(this.leftHand.position);
     this.gun.position.copy(HIP);
     camera.add(this.gun);
     scene.add(camera);
@@ -63,14 +77,14 @@ export class Fx {
         new THREE.Vector3(),
         new THREE.Vector3(0, 0, -1),
       ]);
-      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffe9a0 }));
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: PALETTE.HAZARD }));
       line.visible = false;
       line.frustumCulled = false;
       scene.add(line);
       this.tracers.push({ line, life: 0 });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, 0.12, 0.12),
-        new THREE.MeshBasicMaterial({ color: 0xfff2c0 }),
+        new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
       );
       mesh.visible = false;
       scene.add(mesh);
@@ -112,16 +126,28 @@ export class Fx {
     if (kind === "kill") this.shake = Math.min(1, this.shake + 0.6);
   }
 
-  /** Per-frame: animate viewmodel, effects and crosshair. Returns a camera shake offset (radians). */
+  /**
+   * Per-frame: animate viewmodel, effects and crosshair. Returns a camera shake offset (radians).
+   * `reloadT` is the weapon's remaining reload time in seconds (0 when not reloading).
+   */
   update(
     frameDt: number,
     adsT: number,
     spreadDeg: number,
     fovDeg: number,
+    reloadT: number,
   ): { yaw: number; pitch: number } {
     this.gun.position.lerpVectors(HIP, ADS, adsT);
     this.kickBack = Math.max(0, this.kickBack - frameDt * 0.5);
     this.gun.position.z += this.kickBack;
+
+    // Reload: follow the keyframe timeline in reloadAnim.ts.
+    const r = reloadPose(reloadT > 0 ? 1 - reloadT / WEAPON.reloadTime : 0, this.reload);
+    this.gun.rotation.set(r.pitch, 0, r.roll);
+    this.gun.position.y += r.drop;
+    this.mag.position.y = -0.1 + r.mag;
+    this.leftHand.position.copy(this.leftHandHome).lerp(MAG_GRIP, r.hand);
+    this.leftHand.position.y += r.mag * r.hand;
     this.flashLife = Math.max(0, this.flashLife - frameDt);
     this.flashMesh.visible = this.flashLife > 0;
 
