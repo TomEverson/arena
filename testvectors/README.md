@@ -37,7 +37,7 @@ vectors freeze whatever the TS sim does.
 ## What is covered by the movement vectors (38 vectors, about 8,000 ticks)
 Run, diagonal, friction, jump, buffer, coyote, double jump, slide (boost, jump, to-crouch),
 crouch and crawling under a ceiling, dash (ground, air, charges, thin wall), outer and inner
-corners, step-up, ceiling bonk, ramps (up, down, tall side), mantle, climb, ADS, five routes
+corners, step-up, ceiling bonk, ramps (up, down, tall side), mantle, ADS, five routes
 through the real greybox level, and three seeded pseudo-random runs of 900 ticks.
 
 ## Known limits

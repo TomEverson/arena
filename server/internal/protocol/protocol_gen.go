@@ -19,7 +19,6 @@ const (
 const (
 	EntityFlagCrouching     uint16 = 1
 	EntityFlagSliding       uint16 = 2
-	EntityFlagClimbing      uint16 = 4
 	EntityFlagDashing       uint16 = 8
 	EntityFlagOnGround      uint16 = 16
 	EntityFlagMantling      uint16 = 32
@@ -72,9 +71,7 @@ type Input struct {
 	// Look pitch in radians; positive looks up. Not used by movement.
 	Pitch float64 `json:"pitch"`
 	Jump  bool    `json:"jump"`
-	// Jump button held (climbing).
-	JumpHeld bool `json:"jumpHeld"`
-	Dash     bool `json:"dash"`
+	Dash  bool    `json:"dash"`
 	// Crouch/slide key held.
 	Slide bool `json:"slide"`
 	// Aiming down sights (held): slows ground movement.
@@ -104,7 +101,6 @@ type PlayerState struct {
 	VY       float64 `json:"vy"`
 	VZ       float64 `json:"vz"`
 	OnGround bool    `json:"onGround"`
-	Climbing bool    `json:"climbing"`
 	// Crouched (hold the slide key without enough speed to slide).
 	Crouching     bool    `json:"crouching"`
 	Sliding       bool    `json:"sliding"`

@@ -15,18 +15,6 @@ describe("level loading", () => {
     }
   });
 
-  it("carries the climbable flag into collision", () => {
-    const level = parseLevel(greybox);
-    expect(level.boxes.some((b) => b.climbable)).toBe(true);
-    const world = buildCollisionWorld(level);
-    expect(world.boxes.filter((b) => b.climbable).length).toBe(
-      level.boxes.filter((b) => b.climbable).length,
-    );
-    expect(() =>
-      parseLevel({ boxes: [{ id: "a", pos: [0, 0, 0], size: [1, 1, 1], climbable: "yes" }] }),
-    ).toThrow(/climbable/);
-  });
-
   it("parses practice targets and rejects bad ones", () => {
     const level = parseLevel(greybox);
     expect(level.targets.length).toBeGreaterThan(0);

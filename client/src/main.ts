@@ -84,7 +84,9 @@ let world = buildCollisionWorld(level);
 
 const scene = new THREE.Scene();
 scene.background = PALETTE.HAZE;
-scene.fog = new THREE.Fog(PALETTE.HAZE, 30, 90);
+// Haze, not a wall: clear out to 100 m, then thickening slowly, so a player across the 200 m map
+// (283 m corner to corner, inside the sniper's 250 m range) is still plainly visible.
+scene.fog = new THREE.Fog(PALETTE.HAZE, 100, 500);
 let levelMeshes = buildLevelMeshes(level);
 scene.add(levelMeshes);
 scene.add(new THREE.HemisphereLight(PALETTE.BONE, PALETTE.GRAPHITE, 1.2));
@@ -649,7 +651,6 @@ const sim = new FixedTimestep(() => {
     moveZ: axis("KeyW", "KeyS"),
     yaw: look.yaw,
     jump: pressed.jump,
-    jumpHeld: held.has("Space"),
     dash: pressed.dash,
     slide: held.has("KeyC"),
     ads,
@@ -918,7 +919,6 @@ function frame(nowMs: number): void {
     player.onGround ? "ground" : "air",
     player.sliding ? "slide" : "",
     player.crouching ? "crouch" : "",
-    player.climbing ? "climb" : "",
     player.dashTime > 0 ? "dash" : "",
     player.mantling ? "mantle" : "",
     player.wallRunning ? "wallrun" : "",
@@ -930,7 +930,7 @@ function frame(nowMs: number): void {
     `jumps ${"●".repeat(player.airJumps)}${"○".repeat(PARAMS.maxAirJumps - player.airJumps)}  dash ${"●".repeat(Math.floor(player.dashCharges))}${"○".repeat(PARAMS.dashCharges - Math.floor(player.dashCharges))}  ` +
     `(${(player.dashCharges % 1).toFixed(2)})\n` +
     `${killLog}\n` +
-    `WASD move · Space jump (hold at green walls to climb; beside any other wall at speed you run along it, jump again to kick off) · V melee (or left click with empty hands) · 1 2 3 weapons · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
+    `WASD move · Space jump (beside a wall at speed you run along it, jump again to kick off) · V melee (or left click with empty hands) · 1 2 3 weapons · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
     `${fps.toFixed(0)} fps (${fps > 0 ? (1000 / fps).toFixed(1) : "-"} ms) | render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks}\n` +
     netHud();
   requestAnimationFrame(frame);

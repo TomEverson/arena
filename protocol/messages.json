@@ -24,10 +24,6 @@
           "doc": "Look pitch in radians; positive looks up. Not used by movement."
         },
         "jump": "bool",
-        "jumpHeld": {
-          "type": "bool",
-          "doc": "Jump button held (climbing)."
-        },
         "dash": "bool",
         "slide": {
           "type": "bool",
@@ -77,7 +73,6 @@
         "vy": "f64",
         "vz": "f64",
         "onGround": "bool",
-        "climbing": "bool",
         "crouching": {
           "type": "bool",
           "doc": "Crouched (hold the slide key without enough speed to slide)."
@@ -323,7 +318,6 @@
     "EntityFlags": {
       "crouching": 1,
       "sliding": 2,
-      "climbing": 4,
       "dashing": 8,
       "onGround": 16,
       "mantling": 32,

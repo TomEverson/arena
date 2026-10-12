@@ -10,8 +10,6 @@ export interface Aabb {
   maxX: number;
   maxY: number;
   maxZ: number;
-  /** Hold jump while facing this surface to climb it. */
-  climbable?: boolean;
 }
 
 /** Direction the ramp surface rises toward. */
@@ -46,7 +44,6 @@ export const emptyInput = (): PlayerInput => ({
   moveZ: 0,
   yaw: 0,
   jump: false,
-  jumpHeld: false,
   dash: false,
   slide: false,
   ads: false,

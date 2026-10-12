@@ -26,7 +26,7 @@ import { scenarios } from "../src/sim/vectors/scenarios";
 mkdirSync(VECTOR_DIR, { recursive: true });
 for (const f of readdirSync(VECTOR_DIR)) if (f.endsWith(".json")) rmSync(`${VECTOR_DIR}/${f}`);
 
-const coverage = { sliding: 0, crouching: 0, climbing: 0, mantling: 0, dashing: 0, airborne: 0 };
+const coverage = { sliding: 0, crouching: 0, mantling: 0, dashing: 0, airborne: 0 };
 let totalTicks = 0;
 
 for (const sc of scenarios) {
@@ -40,7 +40,6 @@ for (const sc of scenarios) {
   for (const s of trace) {
     if (s.sliding) coverage.sliding++;
     if (s.crouching) coverage.crouching++;
-    if (s.climbing) coverage.climbing++;
     if (s.mantling) coverage.mantling++;
     if (s.dashTime > 0) coverage.dashing++;
     if (!s.onGround) coverage.airborne++;

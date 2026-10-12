@@ -29,7 +29,7 @@ func bodyHeight(s *PlayerState) float64 {
 	return StandHeight
 }
 
-// wallHit describes a wall the player ran into (or is climbing). ok is false for "no wall".
+// wallHit describes a wall the player ran into. ok is false for "no wall".
 type wallHit struct {
 	ok    bool
 	box   *Aabb
@@ -115,12 +115,6 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 		}
 	}
 
-	var wall wallHit
-	if !(s.DashTime > 0 || s.Sliding || s.Crouching || !in.JumpHeld) {
-		wall = findClimbWall(w, s, in.Yaw)
-	}
-	s.Climbing = wall.ok
-
 	switch {
 	case s.DashTime > 0:
 		// Dash overrides everything: constant velocity, no gravity.
@@ -129,13 +123,6 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 		s.VZ = s.DashDirZ * DashSpeed
 		s.VY = 0
 		s.DashTime = math.Max(0, s.DashTime-dt)
-	case wall.ok:
-		// Climbing: stuck to the wall, moving straight up, no gravity.
-		endWallRun(s)
-		s.VX = 0
-		s.VZ = 0
-		s.VY = ClimbSpeed
-		s.JumpBuffer = 0
 	default:
 		updateWallRun(s, in, &wi, w)
 		if s.WallRunning {
@@ -171,16 +158,6 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 
 	if hit.ok && !s.OnGround {
 		tryStartMantle(s, w, &wi, &hit)
-	} else if wall.ok && s.Climbing && !s.OnGround {
-		// Near the top of a climbable wall: pull over the edge.
-		rise := wall.box.MaxY - s.Y
-		if rise <= ClimbTopOut {
-			facing := wish{x: -math.Sin(in.Yaw), z: -math.Cos(in.Yaw), mag: 1, speed: 1}
-			tryStartMantle(s, w, &facing, &wall)
-		}
-	}
-	if s.Mantling {
-		s.Climbing = false
 	}
 }
 
@@ -467,42 +444,6 @@ func probeGround(s *PlayerState, w *CollisionWorld, wasGround bool) {
 	}
 }
 
-// --- Climb -----------------------------------------------------------------
-
-// findClimbWall returns the climbable surface the player is touching and
-// facing, if any.
-func findClimbWall(w *CollisionWorld, s *PlayerState, yaw float64) wallHit {
-	fx := -math.Sin(yaw)
-	fz := -math.Cos(yaw)
-	height := bodyHeight(s)
-	axisX := math.Abs(fx) >= math.Abs(fz)
-	facing := fz
-	if axisX {
-		facing = fx
-	}
-	if math.Abs(facing) < ClimbFacing {
-		return wallHit{}
-	}
-	sign := -1.0
-	if facing > 0 {
-		sign = 1
-	}
-	px, pz := s.X, s.Z
-	if axisX {
-		px += sign * ClimbReach
-	} else {
-		pz += sign * ClimbReach
-	}
-	probe := playerBox(px, s.Y, pz, height)
-	for i := range w.Boxes {
-		b := &w.Boxes[i]
-		if b.Climbable && overlaps(&probe, b) && b.MaxY > s.Y+1e-6 {
-			return wallHit{ok: true, box: b, axisX: axisX, sign: sign}
-		}
-	}
-	return wallHit{}
-}
-
 // --- Wall run and wall jump ------------------------------------------------
 
 // wallContact is a wall found beside the player: the unit XZ direction pointing out of it,
@@ -516,9 +457,8 @@ type wallContact struct {
 var wallDirs = [4][2]float64{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
 // findWall returns a wall beside (or in front of, or behind) the player that can be run on or
-// jumped off: a solid box face within WallRunReach, tall enough to matter, not climbable (those
-// are for climbing), and not the wall we just left (see WallCooldown). When several qualify,
-// the one we are moving along fastest wins.
+// jumped off: a solid box face within WallRunReach, tall enough to matter, and not the wall we
+// just left (see WallCooldown). When several qualify, the one we are moving along fastest wins.
 func findWall(w *CollisionWorld, s *PlayerState) wallContact {
 	height := bodyHeight(s)
 	var best wallContact
@@ -533,7 +473,7 @@ func findWall(w *CollisionWorld, s *PlayerState) wallContact {
 		found := false
 		for i := range w.Boxes {
 			b := &w.Boxes[i]
-			if !b.Climbable && b.MaxY > s.Y+WallRunMinHeight && overlaps(&probe, b) {
+			if b.MaxY > s.Y+WallRunMinHeight && overlaps(&probe, b) {
 				found = true
 				break
 			}

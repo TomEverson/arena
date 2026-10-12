@@ -38,9 +38,9 @@ export class MoveSoundTracker {
     const p = this.prev;
     this.prev = s;
     if (!p) return;
-    const grounded = s.onGround && !s.sliding && !s.climbing && !s.mantling;
+    const grounded = s.onGround && !s.sliding && !s.mantling;
 
-    if (p.onGround && !s.onGround && s.vy > 0 && !s.climbing && !s.mantling) out.push("jump");
+    if (p.onGround && !s.onGround && s.vy > 0 && !s.mantling) out.push("jump");
     else if (s.airJumps < p.airJumps && !s.onGround) out.push("airJump");
     if (p.dashTime <= 0 && s.dashTime > 0) out.push("dash");
     if (!p.sliding && s.sliding) out.push("slide");

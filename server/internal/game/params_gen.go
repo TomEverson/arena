@@ -42,10 +42,6 @@ const (
 	DashDuration        = 0.22
 	DashExitSpeed       = 13
 	DashRegenTime       = 1.2
-	ClimbSpeed          = 5
-	ClimbReach          = 0.1
-	ClimbFacing         = 0.5
-	ClimbTopOut         = 1
 	MantleReach         = 2.3
 	MantleDuration      = 0.25
 	MantleInset         = 0.15

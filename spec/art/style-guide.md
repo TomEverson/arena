@@ -35,7 +35,7 @@ Defined in `client/src/palette.ts`. **Every color in the game comes from this li
 
 | Name | Hex | Meaning | Examples |
 |---|---|---|---|
-| ACID | `#c6ff1a` | **Traversal: "you can go here"** | Climbable walls, jump pads, routes |
+| ACID | `#c6ff1a` | **Traversal: "you can go here"** | Jump pads, routes (climbable walls used it until climbing was removed) |
 | HAZARD | `#ff4b1f` | **Danger** | Gunfire, tracers, hit sparks, low health, enemy markers |
 | SIGNAL | `#2de2e6` | **Technology** | Light strips, screens, HUD |
 
@@ -65,16 +65,14 @@ Controls:
 
 `client/src/levelRender.ts`:
 - Walls and floors: BONE, brightness varied slightly per box (`0.7 + shade * 0.4`) so boxes stay distinguishable.
-- Climbable surfaces: ACID (previously green).
 
 `client/src/main.ts`:
-- Background and fog: HAZE (fog from 30 m to 90 m).
+- Background and fog: HAZE (fog from 100 m to 500 m: a light haze for depth, not a draw-distance limit. It was 30 m to 90 m while the map was 60 m across; on the 200 m map that hid everything past 90 m).
 - Hemisphere light: BONE from above, GRAPHITE from below, intensity 1.2.
 - Directional "sun": white, intensity 1.5.
 
 Readability fixes from the screen-effect review (2026-10-12):
 - Practice dummies (`dummyView.ts`): HAZARD body with a small HAZARD glow, INK head, BONE flash on hit. Their old orange snapped to grey and vanished.
-- Climbable surfaces get a small ACID glow (emissive) so their shadowed sides still read as ACID.
 - Gun (`fx.ts`): GRAPHITE and CONCRETE. Muzzle flash, tracers and impacts: HAZARD.
 - Rule of thumb: any accent that must stay readable in shadow needs a little emissive, because lighting pushes it toward a neutral when snapped.
 
@@ -86,7 +84,6 @@ Implemented in `client/src/surfaces.ts` (textures) and `client/src/levelRender.t
 - **World-space UVs** (`applyWorldUvs`): textures tile by world position, so seams line up across boxes and nothing stretches.
 - **Wall panels** (box sides): BONE, INK seams on a 2 m grid, a HAZE split line, CONCRETE rivets and vent slats.
 - **Floor plates** (box tops, ramps): HAZE, GRAPHITE seams, CONCRETE centre cross.
-- **Climbable**: diagonal ACID/INK warning stripes, 0.5 m bands (8 px bands broke up into noise at 240p), with a small glow.
 - **Painted numbers**: two-digit sector numbers (01, 02, …) in INK, from a 3×5 pixel font, on the inner face of tall long walls (height ≥ 6 m, length ≥ 20 m). For callouts.
 - Warning stripes stay neutral or ACID: HAZARD stripes only where something is actually dangerous (rule 2).
 
@@ -131,7 +128,7 @@ Owner: Luke. Add rows here before building them. **Who** is either the first-per
 
 Body animations live in `client/src/character.ts` (one `CharacterBody` per character; poses are blended by weights that fade in about 0.1 s). It only needs a position each frame plus "on the ground?" and "sliding?", so other players will use it unchanged once they arrive over the network (not rendered yet). Test every body animation in the character viewer (`/figure.html`): 1 idle, 2 walk, 3 run, Space jump, C slide.
 
-States the game has that may also need animations: dash (`dashTime` > 0), wall climb (`climbing`), mantle (`mantling`), air jump (`airJumps` decreases), aim down sights (`ads`), fire, idle.
+States the game has that may also need animations: dash (`dashTime` > 0), mantle (`mantling`), air jump (`airJumps` decreases), aim down sights (`ads`), fire, idle.
 
 ## Roadmap for the look (M8)
 

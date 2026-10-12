@@ -14,18 +14,9 @@ function shade(id: string): number {
 /**
  * Surface material: the texture carries the palette colors (wall panels, floor plates),
  * the material color only varies brightness per box (0.7..1.1) so boxes stay distinguishable.
- * Climbable surfaces use ACID/INK warning stripes instead (traversal).
  */
-function surfaceMaterial(id: string, kind: "wall" | "floor" | "climb"): THREE.MeshLambertMaterial {
+function surfaceMaterial(id: string, kind: "wall" | "floor"): THREE.MeshLambertMaterial {
   const tex = surfaceTextures()[kind];
-  if (kind === "climb")
-    // A little glow (through the stripe texture) so shadowed sides still read as ACID.
-    return new THREE.MeshLambertMaterial({
-      map: tex,
-      emissive: new THREE.Color(0.4, 0.4, 0.4),
-      emissiveMap: tex,
-      flatShading: true,
-    });
   const g = 0.7 + shade(id) * 0.4;
   return new THREE.MeshLambertMaterial({
     map: tex,
@@ -36,10 +27,6 @@ function surfaceMaterial(id: string, kind: "wall" | "floor" | "climb"): THREE.Me
 
 /** One material per box face, in BoxGeometry's group order: +X, -X, +Y (top), -Y, +Z, -Z. */
 function boxMaterials(b: LevelBox): THREE.Material[] {
-  if (b.climbable) {
-    const climb = surfaceMaterial(b.id, "climb");
-    return [climb, climb, climb, climb, climb, climb];
-  }
   const wall = surfaceMaterial(b.id, "wall");
   const floor = surfaceMaterial(b.id, "floor");
   return [wall, wall, floor, floor, wall, wall];

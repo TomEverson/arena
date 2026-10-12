@@ -14,7 +14,7 @@ describe("movement test vectors (shared with the Go server)", () => {
 
   it("covers every movement feature", () => {
     const states = vectors.flatMap((v) => v.checkpoints.map((c) => c.state));
-    for (const key of ["sliding", "crouching", "climbing", "mantling"] as const) {
+    for (const key of ["sliding", "crouching", "mantling"] as const) {
       expect(
         states.some((s) => s[key]),
         key,

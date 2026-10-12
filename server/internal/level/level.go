@@ -13,11 +13,10 @@ import (
 )
 
 type rawBox struct {
-	ID        string     `json:"id"`
-	Pos       [3]float64 `json:"pos"`
-	Size      [3]float64 `json:"size"`
-	Climbable bool       `json:"climbable"`
-	Rises     *string    `json:"rises"`
+	ID    string     `json:"id"`
+	Pos   [3]float64 `json:"pos"`
+	Size  [3]float64 `json:"size"`
+	Rises *string    `json:"rises"`
 }
 
 type rawTarget struct {
@@ -52,7 +51,6 @@ func toAabb(b rawBox) game.Aabb {
 		MinX: x - w/2, MaxX: x + w/2,
 		MinY: y - h/2, MaxY: y + h/2,
 		MinZ: z - d/2, MaxZ: z + d/2,
-		Climbable: b.Climbable,
 	}
 }
 

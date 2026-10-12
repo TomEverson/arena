@@ -20,7 +20,6 @@ Changing any movement number changes movement: re-record the vectors (`pnpm vect
 | `stepHeight`, `rampStep`, `snapDown`, `groundEps`, `maxSubstep` | Collision: step-up, ramp step, ground snap, sub-step size (anti-tunnelling) |
 | `slide*`, `crouchSpeed` | Slide boost/decay/limits, crouch-walk speed |
 | `dash*` | Dash charges, speed, duration, exit speed, seconds per charge |
-| `climb*` | Climb speed, wall reach, facing cone, top-out distance |
 | `mantle*` | Mantle reach, duration, inset, exit speed |
 | `wallRun*`, `wallJump*` | Wall run speed, time, gravity, grab rules; wall jump kick, height, limit |
 

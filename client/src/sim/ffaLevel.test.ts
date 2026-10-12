@@ -17,6 +17,8 @@ const level = parseLevel(raw);
 const world = loadWorld({ level: "ffa" });
 // Forward is (-sin yaw, -cos yaw): yaw 0 faces north (-Z).
 const WEST = Math.PI / 2;
+/** The arena is the square |x|, |z| <= HALF. */
+const HALF = 100;
 const EAST = -Math.PI / 2;
 
 describe("the FFA map", () => {
@@ -25,8 +27,17 @@ describe("the FFA map", () => {
     expect(level.targets).toHaveLength(0);
   });
 
-  it("has a spawn pad for every player", () => {
-    expect(level.spawnZones).toHaveLength(8);
+  it("has spawn pads all over the map, more than there are players", () => {
+    expect(level.spawnZones.length).toBeGreaterThanOrEqual(16);
+    // Every third of the map (a 3 x 3 grid of districts) has at least one.
+    for (const cx of [-66, 0, 66])
+      for (const cz of [-66, 0, 66])
+        expect(
+          level.spawnZones.some(
+            (p) => Math.abs(p.pos[0] - cx) < 33 && Math.abs(p.pos[2] - cz) < 33,
+          ),
+          `district at ${cx}, ${cz}`,
+        ).toBe(true);
   });
 
   it("keeps every piece of geometry inside the arena bounds", () => {
@@ -34,8 +45,8 @@ describe("the FFA map", () => {
       const [w, h, d] = b.size;
       const [x, y, z] = b.pos;
       if (b.id.startsWith("floor-") || b.id.startsWith("wall-")) continue; // the shell goes out to the edge
-      expect(Math.abs(x) + w / 2, `${b.id} x`).toBeLessThanOrEqual(30);
-      expect(Math.abs(z) + d / 2, `${b.id} z`).toBeLessThanOrEqual(30);
+      expect(Math.abs(x) + w / 2, `${b.id} x`).toBeLessThanOrEqual(HALF);
+      expect(Math.abs(z) + d / 2, `${b.id} z`).toBeLessThanOrEqual(HALF);
       expect(y - h / 2, `${b.id} is not below the pit floor`).toBeGreaterThanOrEqual(-3);
     }
   });
@@ -87,15 +98,24 @@ describe("the FFA map", () => {
     expect(ran).toBe(true);
   });
 
-  it("has a room whose wall can be climbed to the roof (south-west)", () => {
-    let s = spawnState(-12, 0, 17.5);
-    let top = 0;
-    for (let i = 0; i < 240; i++) {
-      const input = { ...emptyInput(), moveZ: 1, yaw: WEST, jumpHeld: i > 15, jump: i === 15 };
-      s = stepPlayer(s, input, world, DT);
-      top = Math.max(top, s.y);
-    }
-    expect(top).toBeGreaterThan(6.9);
+  it("has steps up to the west catwalk and the south gantry (jump and mantle)", () => {
+    // Run at the step and jump (mantle onto it), then run on and jump again (mantle onto the walkway).
+    const climbTo = (x: number, z: number, yaw: number) => {
+      let s = spawnState(x, 0, z);
+      let top = 0;
+      for (let i = 0; i < 200; i++) {
+        s = stepPlayer(
+          s,
+          { ...emptyInput(), moveZ: 1, yaw, jump: s.onGround && i > 10 },
+          world,
+          DT,
+        );
+        if (s.onGround) top = Math.max(top, s.y);
+      }
+      return top;
+    };
+    expect(climbTo(-21, -4, WEST), "catwalk").toBeCloseTo(5);
+    expect(climbTo(-7.5, 29, 0), "gantry").toBeCloseTo(5.5);
   });
 
   it("has a pit you can walk into by the tunnel and mantle out of", () => {
@@ -131,10 +151,10 @@ describe("the FFA map", () => {
     // Flood fill over half-metre cells of ground-level standing room: a cell is open when there
     // is ground under it (top at 0) and nothing solid in the player's height above it.
     const CELL = 0.5;
-    const N = 120;
+    const N = (2 * HALF) / CELL;
     const open = (i: number, j: number): boolean => {
-      const x = -30 + (i + 0.5) * CELL;
-      const z = -30 + (j + 0.5) * CELL;
+      const x = -HALF + (i + 0.5) * CELL;
+      const z = -HALF + (j + 0.5) * CELL;
       let ground = false;
       for (const b of world.boxes) {
         if (x + P.halfWidth <= b.minX || x - P.halfWidth >= b.maxX) continue;
@@ -145,7 +165,7 @@ describe("the FFA map", () => {
       }
       return ground;
     };
-    const cell = (v: number) => Math.floor((v + 30) / CELL);
+    const cell = (v: number) => Math.floor((v + HALF) / CELL);
     const seen = new Uint8Array(N * N);
     const queue = [cell(0) + cell(5) * N]; // on the north-south bridge, south of the column
     seen[queue[0] as number] = 1;

@@ -292,13 +292,6 @@ describe("crouch", () => {
     const s = run(spawnState(0, 5, 0), world, 3, { slide: true });
     expect(s.crouching).toBe(false);
   });
-
-  it("is not climbing or mantling while crouched", () => {
-    const wall = flatWorld({ boxes: [{ ...box(0, 5, -12, 6, 10, 20), climbable: true }] });
-    let s = run(grounded(wall, 0, 3), wall, 60, { moveZ: 1, slide: true });
-    s = run(s, wall, 30, { moveZ: 1, slide: true, jumpHeld: true });
-    expect(s.climbing).toBe(false);
-  });
 });
 
 describe("dash", () => {
@@ -436,89 +429,6 @@ describe("mantle", () => {
   });
 });
 
-describe("climb", () => {
-  const wallBox = (h: number, climbable: boolean) => ({
-    ...box(0, h / 2, -12, 6, h, 20), // near face at z = -2
-    ...(climbable ? { climbable: true } : {}),
-  });
-  /** Walk up to the wall (facing -Z), then hold jump. */
-  const climbRun = (
-    w: ReturnType<typeof flatWorld>,
-    holdFrom: number,
-    holdTo: number,
-    ticks: number,
-  ) => {
-    let maxY = 0;
-    let everClimbing = false;
-    const end = run(grounded(w, 0, 3), w, ticks, (i, st) => {
-      maxY = Math.max(maxY, st.y);
-      if (st.climbing) everClimbing = true;
-      return { moveZ: i < holdFrom ? 1 : 0, jumpHeld: i >= holdFrom && i < holdTo, yaw: 0 };
-    });
-    return { end, maxY, everClimbing };
-  };
-
-  it("climbs a climbable wall while jump is held", () => {
-    const w = flatWorld({ boxes: [wallBox(10, true)] });
-    const { end, maxY, everClimbing } = climbRun(w, 40, 40 + 60, 100);
-    expect(everClimbing).toBe(true);
-    expect(maxY).toBeGreaterThan(P.climbSpeed * 0.9 * 1.0); // about a second of climbing
-    expect(end.y).toBeGreaterThan(3);
-  });
-
-  it("climbs at the climb speed, with no gravity", () => {
-    const w = flatWorld({ boxes: [wallBox(30, true)] });
-    const s = run(grounded(w, 0, 3), w, 40, { moveZ: 1 });
-    const start = s.y;
-    const climbing = run(s, w, 30, { jumpHeld: true });
-    expect(climbing.climbing).toBe(true);
-    expect(climbing.y - start).toBeCloseTo(P.climbSpeed * 0.5, 0);
-  });
-
-  it("falls when jump is released", () => {
-    const w = flatWorld({ boxes: [wallBox(30, true)] });
-    const { end } = climbRun(w, 40, 70, 400);
-    expect(end.onGround).toBe(true);
-    expect(end.y).toBe(0);
-  });
-
-  it("does nothing on a wall that is not climbable", () => {
-    const w = flatWorld({ boxes: [wallBox(10, false)] });
-    const { maxY, everClimbing } = climbRun(w, 40, 100, 100);
-    expect(everClimbing).toBe(false);
-    expect(maxY).toBe(0);
-  });
-
-  it("needs the player to face the wall", () => {
-    const w = flatWorld({ boxes: [wallBox(10, true)] });
-    let everClimbing = false;
-    run(grounded(w, 0, 3), w, 80, (i, st) => {
-      if (st.climbing) everClimbing = true;
-      return { moveZ: i < 40 ? 1 : 0, jumpHeld: i >= 40, yaw: i >= 40 ? Math.PI / 2 : 0 };
-    });
-    expect(everClimbing).toBe(false);
-  });
-
-  it("pulls over the top onto the ledge", () => {
-    const w = flatWorld({ boxes: [wallBox(3, true)] });
-    const { end } = climbRun(w, 40, 200, 200);
-    expect(end.y).toBeCloseTo(3, 6);
-    expect(end.onGround).toBe(true);
-    expect(end.z).toBeLessThan(-1.9);
-    expect(end.airJumps).toBe(P.maxAirJumps);
-  });
-
-  it("is cancelled by a dash", () => {
-    const w = flatWorld({ boxes: [wallBox(30, true)] });
-    let s = run(grounded(w, 0, 3), w, 40, { moveZ: 1 });
-    s = run(s, w, 20, { jumpHeld: true });
-    expect(s.climbing).toBe(true);
-    s = run(s, w, 1, { jumpHeld: true, dash: true, moveZ: -1 });
-    expect(s.climbing).toBe(false);
-    expect(s.dashTime).toBeGreaterThan(0);
-  });
-});
-
 describe("determinism and purity", () => {
   const world = flatWorld({ boxes: [box(5, 1, -5, 4, 2, 4)] });
   const script = (i: number) => ({
@@ -526,7 +436,6 @@ describe("determinism and purity", () => {
     moveZ: Math.cos(i / 11) > -0.5 ? 1 : 0,
     yaw: i / 60,
     jump: i % 47 === 0,
-    jumpHeld: i % 200 < 60,
     dash: i % 83 === 0,
     slide: i % 120 > 100,
   });

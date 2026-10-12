@@ -9,7 +9,7 @@ import (
 )
 
 // HARD RULE: the tick loop must not allocate, including while players run, slide,
-// dash, climb and mantle through the real level with every button in play.
+// dash and mantle through the real level with every button in play.
 func TestStepDoesNotAllocateWithMovingPlayers(t *testing.T) {
 	lv, err := level.Load("../../../levels/greybox.json")
 	if err != nil {
@@ -32,18 +32,17 @@ func TestStepDoesNotAllocateWithMovingPlayers(t *testing.T) {
 		for i, p := range players {
 			k := tick + i*7
 			w.SubmitInput(p.ID, game.Input{
-				Seq:      uint32(tick),
-				MoveX:    moves[(k/20)%len(moves)],
-				MoveZ:    moves[(k/13+1)%len(moves)],
-				Yaw:      float64(k) * 0.05,
-				Jump:     k%37 == 0,
-				JumpHeld: k%120 < 40,
-				Dash:     k%53 == 0,
-				Slide:    k%90 < 30,
-				ADS:      k%70 < 10,
-				Fire:     k%2 == 0,
-				Melee:    k%61 == 0,
-				Slot:     uint8(k%97/30) % 4,
+				Seq:   uint32(tick),
+				MoveX: moves[(k/20)%len(moves)],
+				MoveZ: moves[(k/13+1)%len(moves)],
+				Yaw:   float64(k) * 0.05,
+				Jump:  k%37 == 0,
+				Dash:  k%53 == 0,
+				Slide: k%90 < 30,
+				ADS:   k%70 < 10,
+				Fire:  k%2 == 0,
+				Melee: k%61 == 0,
+				Slot:  uint8(k%97/30) % 4,
 			})
 		}
 		w.Step()

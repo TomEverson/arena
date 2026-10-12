@@ -10,15 +10,15 @@ import (
 func TestDecodeInputMessage(t *testing.T) {
 	var m protocol.ClientMessage
 	data := `{"type":"input","inputs":[` +
-		`{"seq":41,"moveX":-1,"moveZ":0.5,"yaw":1.25,"pitch":-0.3,"jump":false,"jumpHeld":false,"dash":false,"slide":false,"ads":false},` +
-		`{"seq":42,"moveX":-1,"moveZ":0.5,"yaw":1.25,"pitch":-0.3,"jump":true,"jumpHeld":true,"dash":true,"slide":true,"ads":true}]}`
+		`{"seq":41,"moveX":-1,"moveZ":0.5,"yaw":1.25,"pitch":-0.3,"jump":false,"dash":false,"slide":false,"ads":false},` +
+		`{"seq":42,"moveX":-1,"moveZ":0.5,"yaw":1.25,"pitch":-0.3,"jump":true,"dash":true,"slide":true,"ads":true}]}`
 	if err := (JSON{}).DecodeClient([]byte(data), &m); err != nil {
 		t.Fatal(err)
 	}
 	if m.Type != protocol.ClientTypeInput || len(m.Inputs) != 2 {
 		t.Fatalf("decoded %+v", m)
 	}
-	want := protocol.Input{Seq: 42, MoveX: -1, MoveZ: 0.5, Yaw: 1.25, Pitch: -0.3, Jump: true, JumpHeld: true, Dash: true, Slide: true, ADS: true}
+	want := protocol.Input{Seq: 42, MoveX: -1, MoveZ: 0.5, Yaw: 1.25, Pitch: -0.3, Jump: true, Dash: true, Slide: true, ADS: true}
 	if m.Inputs[1] != want {
 		t.Fatalf("second input = %+v, want %+v", m.Inputs[1], want)
 	}

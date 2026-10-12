@@ -7,15 +7,14 @@ import (
 	"arena/server/internal/protocol"
 )
 
-// Aabb is an axis-aligned box. Climbable surfaces can be climbed by holding jump.
+// Aabb is an axis-aligned box.
 type Aabb struct {
-	MinX      float64 `json:"minX"`
-	MinY      float64 `json:"minY"`
-	MinZ      float64 `json:"minZ"`
-	MaxX      float64 `json:"maxX"`
-	MaxY      float64 `json:"maxY"`
-	MaxZ      float64 `json:"maxZ"`
-	Climbable bool    `json:"climbable,omitempty"`
+	MinX float64 `json:"minX"`
+	MinY float64 `json:"minY"`
+	MinZ float64 `json:"minZ"`
+	MaxX float64 `json:"maxX"`
+	MaxY float64 `json:"maxY"`
+	MaxZ float64 `json:"maxZ"`
 }
 
 // Rise is the direction a ramp surface rises toward.

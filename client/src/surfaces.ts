@@ -67,15 +67,6 @@ function floorPlate(ctx: CanvasRenderingContext2D): void {
   rect(ctx, CONCRETE, 32, 29, 1, 5);
 }
 
-/** Warning stripes for climbable surfaces: diagonal ACID and INK bands (traversal). */
-function climbStripes(ctx: CanvasRenderingContext2D): void {
-  const { ACID, INK } = PALETTE_HEX;
-  const band = 16; // pixels (0.5 m); 64 / band must be even for the stripes to tile
-  for (let y = 0; y < SIZE; y++)
-    for (let x = 0; x < SIZE; x++)
-      rect(ctx, Math.floor((x + y) / band) % 2 === 0 ? ACID : INK, x, y, 1, 1);
-}
-
 /** 3x5 pixel digits, one string per row ("#" = filled). */
 const DIGITS: Record<string, readonly string[]> = {
   "0": ["###", "#.#", "#.#", "#.#", "###"],
@@ -109,12 +100,11 @@ function paintedNumber(n: number): (ctx: CanvasRenderingContext2D) => void {
 }
 
 /** Shared textures, created once on first use. */
-let cache: { wall: THREE.Texture; floor: THREE.Texture; climb: THREE.Texture } | null = null;
+let cache: { wall: THREE.Texture; floor: THREE.Texture } | null = null;
 export function surfaceTextures() {
   cache ??= {
     wall: canvasTexture(wallPanel),
     floor: canvasTexture(floorPlate),
-    climb: canvasTexture(climbStripes),
   };
   return cache;
 }

@@ -142,8 +142,7 @@
         6,
         4,
         1
-      ],
-      "climbable": true
+      ]
     },
     {
       "id": "pillar-4m",
@@ -156,8 +155,7 @@
         3,
         4,
         3
-      ],
-      "climbable": true
+      ]
     },
     {
       "id": "stair-1m",
@@ -290,7 +288,7 @@
       ]
     },
     {
-      "id": "climb-tower",
+      "id": "tower",
       "pos": [
         -30,
         5,
@@ -300,8 +298,7 @@
         4,
         10,
         4
-      ],
-      "climbable": true
+      ]
     },
     {
       "id": "wallrun-wall",

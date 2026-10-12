@@ -18,15 +18,6 @@ func TestLoadGreybox(t *testing.T) {
 	if floor.MaxY != 0 {
 		t.Fatalf("floor top = %v, want 0", floor.MaxY)
 	}
-	climbable := 0
-	for _, b := range lv.Collision.Boxes {
-		if b.Climbable {
-			climbable++
-		}
-	}
-	if climbable != 3 {
-		t.Fatalf("climbable boxes = %d, want 3", climbable)
-	}
 }
 
 func TestLoadsPracticeTargets(t *testing.T) {
@@ -94,8 +85,8 @@ func TestLoadFFA(t *testing.T) {
 	if lv.Name != "ffa" {
 		t.Fatalf("name = %q, want ffa", lv.Name)
 	}
-	if len(lv.Spawns) != 8 {
-		t.Fatalf("spawns = %d, want 8 (one per player)", len(lv.Spawns))
+	if len(lv.Spawns) < 16 {
+		t.Fatalf("spawns = %d, want at least 16 (spread over the whole map)", len(lv.Spawns))
 	}
 	// Every spawn point must be standing room: nothing solid in a player-sized box above it.
 	for i, sp := range lv.Spawns {

@@ -368,9 +368,6 @@ func (p *Player) syncEntity() {
 	if s.Sliding {
 		f |= protocol.EntityFlagSliding
 	}
-	if s.Climbing {
-		f |= protocol.EntityFlagClimbing
-	}
 	if s.DashTime > 0 {
 		f |= protocol.EntityFlagDashing
 	}

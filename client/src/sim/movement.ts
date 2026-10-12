@@ -22,7 +22,6 @@ export function spawnState(x: number, y: number, z: number): PlayerState {
     vy: 0,
     vz: 0,
     onGround: false,
-    climbing: false,
     crouching: false,
     sliding: false,
     slideTime: 0,
@@ -136,12 +135,6 @@ export function stepPlayer(
     }
   }
 
-  const wall =
-    s.dashTime > 0 || s.sliding || s.crouching || !input.jumpHeld
-      ? null
-      : findClimbWall(world, s, input.yaw);
-  s.climbing = wall !== null;
-
   if (s.dashTime > 0) {
     // Dash overrides everything: constant velocity, no gravity.
     endWallRun(s);
@@ -149,13 +142,6 @@ export function stepPlayer(
     s.vz = s.dashDirZ * P.dashSpeed;
     s.vy = 0;
     s.dashTime = Math.max(0, s.dashTime - dt);
-  } else if (wall) {
-    // Climbing: stuck to the wall, moving straight up, no gravity.
-    endWallRun(s);
-    s.vx = 0;
-    s.vz = 0;
-    s.vy = P.climbSpeed;
-    s.jumpBuffer = 0;
   } else {
     updateWallRun(s, input, wish, world);
     if (s.wallRunning) {
@@ -182,18 +168,6 @@ export function stepPlayer(
   probeGround(s, world, wasGround);
 
   if (hit && !s.onGround) tryStartMantle(s, world, wish, hit);
-  else if (wall && s.climbing && !s.onGround) {
-    // Near the top of a climbable wall: pull over the edge.
-    const rise = wall.box.maxY - s.y;
-    if (rise <= P.climbTopOut)
-      tryStartMantle(
-        s,
-        world,
-        { x: -Math.sin(input.yaw), z: -Math.cos(input.yaw), mag: 1, speed: 1, run: 1 },
-        wall,
-      );
-  }
-  if (s.mantling) s.climbing = false;
 
   return s;
 }
@@ -435,32 +409,6 @@ function probeGround(s: PlayerState, world: CollisionWorld, wasGround: boolean):
   }
 }
 
-// --- Climb -----------------------------------------------------------------
-
-/**
- * The climbable surface the player is touching and facing, if any. Looks for a
- * climbable box just beyond the player's side along the facing direction.
- */
-function findClimbWall(world: CollisionWorld, s: PlayerState, yaw: number): WallHit | null {
-  const fx = -Math.sin(yaw);
-  const fz = -Math.cos(yaw);
-  const height = bodyHeight(s);
-  const axis: "x" | "z" = Math.abs(fx) >= Math.abs(fz) ? "x" : "z";
-  const facing = axis === "x" ? fx : fz;
-  if (Math.abs(facing) < P.climbFacing) return null;
-  const sign: 1 | -1 = facing > 0 ? 1 : -1;
-  const probe = playerBox(
-    s.x + (axis === "x" ? sign * P.climbReach : 0),
-    s.y,
-    s.z + (axis === "z" ? sign * P.climbReach : 0),
-    height,
-  );
-  for (const b of world.boxes) {
-    if (b.climbable && overlaps(probe, b) && b.maxY > s.y + 1e-6) return { box: b, axis, sign };
-  }
-  return null;
-}
-
 // --- Wall run and wall jump -------------------------------------------------
 
 interface WallContact {
@@ -479,9 +427,8 @@ const WALL_DIRS: readonly (readonly [number, number])[] = [
 
 /**
  * A wall beside (or in front of, or behind) the player that can be run on or jumped off: a
- * solid box face within `wallRunReach`, tall enough to matter, not climbable (those are for
- * climbing), and not the wall we just left (see wallCooldown). When several qualify, the one
- * we are moving along fastest wins.
+ * solid box face within `wallRunReach`, tall enough to matter, and not the wall we just left
+ * (see wallCooldown). When several qualify, the one we are moving along fastest wins.
  */
 function findWall(world: CollisionWorld, s: PlayerState): WallContact | null {
   const height = bodyHeight(s);
@@ -494,7 +441,7 @@ function findWall(world: CollisionWorld, s: PlayerState): WallContact | null {
     const probe = playerBox(s.x + dx * P.wallRunReach, s.y, s.z + dz * P.wallRunReach, height);
     let found = false;
     for (const b of world.boxes) {
-      if (!b.climbable && b.maxY > s.y + P.wallRunMinHeight && overlaps(probe, b)) {
+      if (b.maxY > s.y + P.wallRunMinHeight && overlaps(probe, b)) {
         found = true;
         break;
       }

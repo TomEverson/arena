@@ -15,8 +15,6 @@ export interface LevelBox {
   /** Centre of the box. */
   pos: [number, number, number];
   size: [number, number, number];
-  /** Hold jump while facing it to climb. */
-  climbable?: boolean;
 }
 
 export interface LevelRamp extends LevelBox {
@@ -71,15 +69,11 @@ function list(v: unknown, path: string): unknown[] {
 function parseBox(v: unknown, path: string): LevelBox {
   const o = record(v, path);
   if (typeof o.id !== "string") fail(`${path}.id`, "expected a string");
-  if (o.climbable !== undefined && typeof o.climbable !== "boolean") {
-    fail(`${path}.climbable`, "expected true or false");
-  }
   const box: LevelBox = {
     id: o.id,
     pos: vec3(o.pos, `${path}.pos`),
     size: vec3(o.size, `${path}.size`, true),
   };
-  if (o.climbable) box.climbable = true;
   return box;
 }
 
@@ -127,7 +121,6 @@ export function toAabb(b: LevelBox): Aabb {
     minZ: z - d / 2,
     maxZ: z + d / 2,
   };
-  if (b.climbable) aabb.climbable = true;
   return aabb;
 }
 

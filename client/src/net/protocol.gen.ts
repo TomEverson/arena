@@ -5,7 +5,6 @@
 export const EntityFlags = {
   crouching: 1,
   sliding: 2,
-  climbing: 4,
   dashing: 8,
   onGround: 16,
   mantling: 32,
@@ -58,8 +57,6 @@ export interface Input {
   /** Look pitch in radians; positive looks up. Not used by movement. */
   pitch: number;
   jump: boolean;
-  /** Jump button held (climbing). */
-  jumpHeld: boolean;
   dash: boolean;
   /** Crouch/slide key held. */
   slide: boolean;
@@ -90,7 +87,6 @@ export interface PlayerState {
   vy: number;
   vz: number;
   onGround: boolean;
-  climbing: boolean;
   /** Crouched (hold the slide key without enough speed to slide). */
   crouching: boolean;
   sliding: boolean;

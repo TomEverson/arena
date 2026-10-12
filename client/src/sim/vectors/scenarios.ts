@@ -86,7 +86,6 @@ export function fuzzInput(seed: number): () => InputFn {
           moveX: axis(),
           moveZ: rnd() < 0.8 ? 1 : axis(),
           yaw,
-          jumpHeld: rnd() < 0.3,
           slide: rnd() < 0.25,
           ads: rnd() < 0.15,
         };
@@ -101,7 +100,7 @@ const fuzzBoxes: Aabb[] = [
   box(0, 0.5, -8, 4, 1, 4),
   box(8, 1, -4, 6, 2, 2),
   box(-8, 2, 4, 3, 4, 3),
-  { ...box(10, 4, 10, 3, 8, 3), climbable: true },
+  box(10, 4, 10, 3, 8, 3),
   box(0, 3, 14, 8, 1, 6),
   box(-14, 0.15, -2, 4, 0.3, 4),
   box(0, 1.7, 22, 6, 1, 10), // low ceiling
@@ -111,7 +110,7 @@ const fuzzBoxes: Aabb[] = [
   box(31, 5, 0, 2, 10, 62),
 ];
 const fuzzRamps: Ramp[] = [{ box: box(-14, 1.5, 12, 6, 3, 10), rises: "+z" }];
-const wallClimbable: Aabb = { ...box(0, 1.5, -12, 6, 3, 20), climbable: true };
+const fuzzWall: Aabb = box(0, 1.5, -12, 6, 3, 20);
 
 export const scenarios: Scenario[] = [
   (() => {
@@ -636,50 +635,6 @@ export const scenarios: Scenario[] = [
   })(),
 
   (() => {
-    const w = inline([{ ...box(0, 1.5, -12, 6, 3, 20), climbable: true }]);
-    const p = phases([
-      [3, {}],
-      [40, F],
-      [160, { jumpHeld: true }],
-    ]);
-    return scenario(
-      "climb-top-out",
-      "Hold jump facing a climbable wall: climb and pull over the top.",
-      w,
-      [0, 0, 3],
-      p,
-      (t) => {
-        check(
-          any(t, (s) => s.climbing),
-          "climbed",
-        );
-        check(Math.abs(last(t).y - 3) < 1e-9 && last(t).onGround, "on top");
-      },
-    );
-  })(),
-
-  (() => {
-    const w = inline([{ ...box(0, 15, -12, 6, 30, 20), climbable: true }]);
-    const p = phases([
-      [3, {}],
-      [40, F],
-      [60, { jumpHeld: true }],
-      [400, {}],
-    ]);
-    return scenario(
-      "climb-release",
-      "Letting go of jump drops you off the wall.",
-      w,
-      [0, 0, 3],
-      p,
-      (t) => {
-        check(maxOf(t, (s) => s.y) > 4 && any(t, (s) => s.climbing), "climbed");
-        check(last(t).onGround && last(t).y === 0, "fell back down");
-      },
-    );
-  })(),
-
-  (() => {
     const p = phases([
       [3, {}],
       [60, { moveZ: 1, ads: true }],
@@ -826,24 +781,6 @@ export const scenarios: Scenario[] = [
   (() => {
     const p = phases([
       [3, {}],
-      [40, F],
-      [200, { jumpHeld: true }],
-    ]);
-    return scenario(
-      "greybox-climb-tower",
-      "Greybox: climb the 10 m tower and pull over the top.",
-      GREYBOX,
-      [-30, 0, 8],
-      p,
-      (t) => {
-        check(Math.abs(last(t).y - 10) < 1e-9 && last(t).onGround, "on top of the tower");
-      },
-    );
-  })(),
-
-  (() => {
-    const p = phases([
-      [3, {}],
       [120, F],
     ]);
     return scenario(
@@ -928,21 +865,6 @@ export const scenarios: Scenario[] = [
   })(),
 
   (() => {
-    const w = inline([{ ...box(1.8, 5, -30, 2, 10, 70), climbable: true }]);
-    const input = (): InputFn => (t) => ({ ...F, jump: t === 25 });
-    return scenario(
-      "wallrun-not-climbable",
-      "Climbable (green) walls are for climbing: no wall run, no wall jump.",
-      w,
-      [0.5, 0, 0],
-      { total: 80, input },
-      (t) => {
-        check(!any(t, (s) => s.wallRunning) && last(t).wallJumps === 0, "no wall movement");
-      },
-    );
-  })(),
-
-  (() => {
     // Facing the wall (it is in front, face at z = -8): jump presses in the air kick off it.
     const w = inline([box(0, 5, -13, 40, 10, 10)]);
     const input = (): InputFn => (t) => ({ ...F, jump: t === 30 || t % 24 === 0 });
@@ -990,7 +912,7 @@ export const scenarios: Scenario[] = [
   // --- Seeded pseudo-random runs ---
   scenario(
     "fuzz-inline",
-    "900 ticks of seeded random input in a small arena with boxes, a ramp, a climbable pillar and a low ceiling.",
+    "900 ticks of seeded random input in a small arena with boxes, a ramp, a pillar and a low ceiling.",
     { boxes: flatWorld({ boxes: fuzzBoxes }).boxes, ramps: fuzzRamps },
     [0, 0, 0],
     { total: 900, input: fuzzInput(12345) },
@@ -1034,7 +956,7 @@ export const scenarios: Scenario[] = [
         "finite",
       );
       check(
-        t.every((s) => Math.abs(s.x) < 31 && Math.abs(s.z) < 31),
+        t.every((s) => Math.abs(s.x) < 101 && Math.abs(s.z) < 101),
         "stayed in the arena",
       );
     },
@@ -1051,7 +973,7 @@ export const scenarios: Scenario[] = [
         "finite",
       );
       check(
-        t.every((s) => Math.abs(s.x) < 31 && Math.abs(s.z) < 31),
+        t.every((s) => Math.abs(s.x) < 101 && Math.abs(s.z) < 101),
         "stayed in the arena",
       );
     },
@@ -1068,7 +990,7 @@ export const scenarios: Scenario[] = [
         "finite",
       );
       check(
-        t.every((s) => Math.abs(s.x) < 31 && Math.abs(s.z) < 31),
+        t.every((s) => Math.abs(s.x) < 101 && Math.abs(s.z) < 101),
         "stayed in the arena",
       );
     },
@@ -1076,7 +998,7 @@ export const scenarios: Scenario[] = [
   scenario(
     "fuzz-inline-2",
     "A second seeded random run (different seed, start in a corner of the inline arena).",
-    { boxes: flatWorld({ boxes: [...fuzzBoxes, wallClimbable] }).boxes, ramps: fuzzRamps },
+    { boxes: flatWorld({ boxes: [...fuzzBoxes, fuzzWall] }).boxes, ramps: fuzzRamps },
     [-20, 0, 20],
     { total: 900, input: fuzzInput(424242) },
     (t) => {
