@@ -69,7 +69,7 @@ export class Predictor {
   weapon: WeaponState;
   /** False while dead: inputs are still numbered and sent, but nothing is simulated. */
   alive = true;
-  /** What the weapon did on the latest `step` (a shot, a reload), or null. For effects only. */
+  /** What the weapon did on the latest `step` (a shot, a reload, a switch), or null. For effects only. */
   lastShot: ShotResult | null = null;
   /** Corrections applied so far, and the largest one. */
   corrections = 0;
@@ -118,7 +118,8 @@ export class Predictor {
         s.reloadFinished ||
         s.dryFire ||
         s.meleeStarted ||
-        s.meleeStrike
+        s.meleeStrike ||
+        s.switched
       )
         this.lastShot = s;
     }

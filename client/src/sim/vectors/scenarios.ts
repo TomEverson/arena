@@ -1024,10 +1024,44 @@ export const scenarios: Scenario[] = [
   ),
   scenario(
     "fuzz-ffa",
-    "900 ticks of seeded random input through the FFA map (wall runs, tower, tunnel, platforms).",
+    "900 ticks of seeded random input through the FFA map (pit, bridges, decks, buildings).",
     { level: "ffa" },
     [0, 0, 26],
     { total: 900, input: fuzzInput(424242) },
+    (t) => {
+      check(
+        t.every((s) => [s.x, s.y, s.z, s.vx, s.vy, s.vz].every(Number.isFinite)),
+        "finite",
+      );
+      check(
+        t.every((s) => Math.abs(s.x) < 31 && Math.abs(s.z) < 31),
+        "stayed in the arena",
+      );
+    },
+  ),
+  scenario(
+    "fuzz-ffa-pit",
+    "900 ticks of seeded random input starting in the pit of the FFA map (ramps, tunnel, pillars).",
+    { level: "ffa" },
+    [7, -3, 2],
+    { total: 900, input: fuzzInput(515151) },
+    (t) => {
+      check(
+        t.every((s) => [s.x, s.y, s.z, s.vx, s.vy, s.vz].every(Number.isFinite)),
+        "finite",
+      );
+      check(
+        t.every((s) => Math.abs(s.x) < 31 && Math.abs(s.z) < 31),
+        "stayed in the arena",
+      );
+    },
+  ),
+  scenario(
+    "fuzz-ffa-high",
+    "900 ticks of seeded random input starting on the north deck of the FFA map (decks, roofs, catwalks).",
+    { level: "ffa" },
+    [10, 4, -27],
+    { total: 900, input: fuzzInput(626262) },
     (t) => {
       check(
         t.every((s) => [s.x, s.y, s.z, s.vx, s.vy, s.vz].every(Number.isFinite)),

@@ -45,6 +45,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// Levels are read once, here: a changed level file takes effect only after the server restarts.
 	lv, err := level.Load(*levelPath)
 	if err != nil {
 		log.Fatalf("loading level %q: %v (pass --level=<path>)", *levelPath, err)
