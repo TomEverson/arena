@@ -6,6 +6,7 @@ import { Fx } from "./fx";
 import { buildLevelMeshes } from "./levelRender";
 import { FixedTimestep, TICK_RATE } from "./loop";
 import { connect, type NetStatus } from "./net";
+import { PALETTE } from "./palette";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
 import { castRay } from "./sim/hitscan";
 import { buildCollisionWorld, parseLevel } from "./sim/level";
@@ -31,11 +32,11 @@ const level = parseLevel(greybox);
 const world = buildCollisionWorld(level);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x101820);
-scene.fog = new THREE.Fog(0x101820, 30, 90);
+scene.background = PALETTE.HAZE;
+scene.fog = new THREE.Fog(PALETTE.HAZE, 30, 90);
 scene.add(buildLevelMeshes(level));
-scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.6));
-const sun = new THREE.DirectionalLight(0xffffff, 2);
+scene.add(new THREE.HemisphereLight(PALETTE.BONE, PALETTE.GRAPHITE, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5);
 sun.position.set(20, 40, 10);
 scene.add(sun);
 
@@ -219,9 +220,9 @@ function frame(nowMs: number): void {
     hSpeed: hSpeed(player),
     onGround: player.onGround,
   });
-  const shake = fx.update(frameDt, adsT, spread, fov);
+  const shake = fx.update(frameDt, adsT, spread, fov, weapon.reloadT);
   cam.rotation.set(look.pitch + shake.pitch, look.yaw + shake.yaw, 0);
-  dummyViews.update(dummies, frameDt);
+  dummyViews.update(dummies, frameDt, cam.position);
   if (targetInfoUntil < nowMs) targetInfo.classList.remove("on");
   ammoEl.innerHTML = `${weapon.ammo} / ${WEAPON.magSize}<small>${
     weapon.reloadT > 0
