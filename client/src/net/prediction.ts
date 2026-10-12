@@ -10,7 +10,13 @@
  */
 import { hSpeed, stepPlayer } from "../sim/movement";
 import type { CollisionWorld, PlayerInput, PlayerState } from "../sim/types";
-import { type ShotResult, spawnWeapon, stepWeapon, type WeaponContext } from "../sim/weapon";
+import {
+  movementMods,
+  type ShotResult,
+  spawnWeapon,
+  stepWeapon,
+  type WeaponContext,
+} from "../sim/weapon";
 import type { Input, WeaponState } from "./protocol.gen";
 
 /** Numbers closer than this count as equal. Go and JS agree to about 1e-12, so this is generous. */
@@ -97,11 +103,13 @@ export class Predictor {
 
   /** Simulate one tick now. Returns the sequenced input to send. */
   step(input: PlayerInput, pitch = 0, viewTick = 0): Input {
-    const full: Input = { ...input, seq: this.nextSeq++, pitch, viewTick };
+    // The weapon in hand sets run speed and aim-down-sights slowdown: put them on the input.
+    const moving: PlayerInput = { ...input, ...movementMods(this.weapon) };
+    const full: Input = { ...moving, seq: this.nextSeq++, pitch, viewTick };
     this.lastShot = null;
     if (this.alive) {
-      this.state = stepPlayer(this.state, input, this.world, this.dt);
-      const r = stepWeapon(this.weapon, input, weaponContext(this.state), this.dt);
+      this.state = stepPlayer(this.state, moving, this.world, this.dt);
+      const r = stepWeapon(this.weapon, moving, weaponContext(this.state), this.dt);
       this.weapon = r.state;
       const s = r.shot;
       if (
@@ -169,8 +177,9 @@ export class Predictor {
     let w = weaponAtAck;
     for (const e of this.history) {
       if (alive) {
-        s = stepPlayer(s, e.input, this.world, this.dt);
-        w = stepWeapon(w, e.input, weaponContext(s), this.dt).state;
+        const inp = { ...e.input, ...movementMods(w) }; // from the weapon as replayed, like the server
+        s = stepPlayer(s, inp, this.world, this.dt);
+        w = stepWeapon(w, inp, weaponContext(s), this.dt).state;
       }
       e.after = s;
       e.weaponAfter = w;

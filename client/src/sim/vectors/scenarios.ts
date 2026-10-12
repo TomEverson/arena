@@ -696,6 +696,47 @@ export const scenarios: Scenario[] = [
     );
   })(),
 
+  (() => {
+    const p = phases([
+      [3, {}],
+      [60, { moveZ: 1, ads: true, adsSpeedMult: 0.35 }],
+    ]);
+    return scenario(
+      "ads-run-sniper",
+      "Aiming a sniper slows ground movement much more than the rifle (0.35 of run speed).",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(Math.abs(speed(last(t)) - P.runSpeed * 0.35) < 1e-9, "sniper ads speed");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [60, { moveZ: 1, runSpeedMult: 1.15 }],
+      [1, { moveZ: 1, runSpeedMult: 1.15, jump: true }],
+      [40, { moveZ: 1, runSpeedMult: 1.15 }],
+    ]);
+    return scenario(
+      "run-empty-hands",
+      "Empty hands run faster (1.15 of run speed), on the ground and through a jump.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        const onGroundRun = t[63] as PlayerState;
+        check(Math.abs(speed(onGroundRun) - P.runSpeed * 1.15) < 1e-9, "faster on the ground");
+        check(
+          t.slice(65).every((s) => speed(s) >= P.runSpeed * 1.15 - 1e-9),
+          "keeps the speed through the jump",
+        );
+      },
+    );
+  })(),
+
   // --- Routes through the real greybox level ---
   (() => {
     const p = phases([

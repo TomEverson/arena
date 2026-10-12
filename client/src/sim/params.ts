@@ -14,6 +14,9 @@ export const PARAMS = params.movement;
  */
 export const WEAPON = params.weapon;
 
+/** The sniper (weapon slot 2): same keys as the rifle where they apply. */
+export const SNIPER = params.sniper;
+
 /** Health, respawn and lag-compensation numbers (server-authoritative; the client shows them). */
 export const COMBAT = params.combat;
 

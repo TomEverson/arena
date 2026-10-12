@@ -13,6 +13,8 @@ export const EntityFlags = {
   protected: 128,
   wallRunning: 256,
   meleeing: 512,
+  holdingSniper: 1024,
+  emptyHanded: 2048,
 } as const;
 
 /** EventKinds bits. */
@@ -69,6 +71,12 @@ export interface Input {
   reload: boolean;
   /** Melee pressed this tick. */
   melee: boolean;
+  /** Weapon slot pressed this tick: 0 none, 1 rifle, 2 sniper, 3 empty hands. */
+  slot: number;
+  /** Run speed multiplier from the weapon in hand (empty hands run faster). Set by whoever simulates from their weapon state; the server recomputes it and ignores what a client sends. */
+  runSpeedMult: number;
+  /** Ground speed multiplier while aiming down sights, for the gun in hand (the sniper is much slower). The server recomputes it. */
+  adsSpeedMult: number;
   /** The server tick (fractional) at which this player's screen was showing other players, for lag compensation. 0 means the current tick (no rewind). */
   viewTick: number;
 }
@@ -136,7 +144,16 @@ export interface Entity {
 
 /** Weapon fire-control state. Simulated identically on client and server from the inputs. */
 export interface WeaponState {
+  /** The weapon in hand: 0 rifle, 1 sniper, 2 empty hands. */
+  slot: number;
+  /** Which gun `ammo` belongs to (0 rifle, 1 sniper): the last gun held, so empty hands keep it. */
+  gun: number;
+  /** Rounds left in the gun `gun`. */
   ammo: number;
+  /** Rounds left in the other gun. */
+  stash: number;
+  /** Seconds until the weapon just switched to is ready; 0 when ready. */
+  switchT: number;
   /** Seconds of reload remaining; 0 when not reloading. */
   reloadT: number;
   /** Seconds until the next shot is allowed. */
@@ -190,6 +207,8 @@ export interface Shot {
   tick: number;
   /** Who fired it. */
   actor: number;
+  /** Which gun: 0 rifle (a bullet to fly), 1 sniper (hitscan: draw a near-instant tracer). */
+  gun: number;
   x: number;
   y: number;
   z: number;

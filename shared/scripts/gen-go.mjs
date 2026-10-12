@@ -41,6 +41,8 @@ package game
 ${emit("", params.movement)}
 // Weapon tuning (shared/params.json "weapon"), prefixed with Weapon.
 ${emit("Weapon", params.weapon)}
+// Sniper tuning (shared/params.json "sniper"), prefixed with Sniper.
+${emit("Sniper", params.sniper)}
 // Combat tuning (shared/params.json "combat"), prefixed with Combat.
 ${emit("Combat", params.combat)}
 // Match flow (shared/params.json "match"), prefixed with Match.

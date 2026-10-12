@@ -717,3 +717,170 @@ func TestNoKnockbackWithoutADamagingHit(t *testing.T) {
 		t.Fatalf("a protected player was shoved: z %v", p.b.State.Z)
 	}
 }
+
+// --- Weapon slots and the sniper -------------------------------------------
+
+func slotInput(slot uint8) *Input { return &Input{Slot: slot} }
+
+// drawn runs ticks of empty input from the shooter until a switch's draw time is over.
+func (d *duel) drawn() { d.idle(int(math.Ceil(WeaponSwitchTime*TickRate)) + 2) }
+
+func sniperShot(pitch float64) *Input { return &Input{Fire: true, ADS: true, Pitch: pitch} }
+
+func TestSniperHitsInstantlyForMoreDamage(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -60}) // 60 m: a rifle bullet would take 12 ticks
+	d.step(slotInput(2), nil)
+	d.drawn()
+	d.step(sniperShot(0), nil) // level at eye height: the head, no drop
+	hit := eventsOf(d.a, protocol.EventKindHit)
+	if len(hit) != 1 {
+		t.Fatalf("a hitscan shot should land on the tick it is fired, got %d hits", len(hit))
+	}
+	if hit[0].Amount != SniperDamage*SniperHeadshotMult || hit[0].Flags&protocol.GameEventFlagHeadshot == 0 {
+		t.Fatalf("sniper headshot = %+v, want %v damage and the headshot flag", hit[0], float64(SniperDamage*SniperHeadshotMult))
+	}
+	if d.b.Health.Alive {
+		t.Fatal("a sniper headshot (150) on a full health and shield (150) player should kill")
+	}
+}
+
+func TestSniperBodyShotAndTheBoltCycle(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -30})
+	d.step(slotInput(2), nil)
+	d.drawn()
+	d.step(sniperShot(bodyPitch*0.3), nil)
+	d.step(sniperShot(bodyPitch*0.3), nil) // held fire: the bolt is cycling, no second shot
+	hits := eventsOf(d.a, protocol.EventKindHit)
+	if len(hits) != 1 || hits[0].Amount != SniperDamage || hits[0].Flags&protocol.GameEventFlagHeadshot != 0 {
+		t.Fatalf("sniper body shot hits = %+v, want one for %v", hits, float64(SniperDamage))
+	}
+	d.idle(int(math.Ceil(60/SniperRpm*TickRate)) - 2)
+	d.step(sniperShot(bodyPitch*0.3), nil)
+	if n := len(eventsOf(d.a, protocol.EventKindHit)); n != 2 {
+		t.Fatalf("hits after the bolt cycle = %d, want 2", n)
+	}
+}
+
+func TestSwitchingNeedsADrawAndKeepsEachGunsRounds(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
+	for i := 0; i < 5; i++ {
+		d.step(aimedShot(bodyPitch), nil)
+	}
+	rifleLeft := d.a.Weapon.Ammo
+	if rifleLeft >= WeaponMagSize {
+		t.Fatal("the rifle should have fired")
+	}
+	d.step(slotInput(2), nil)
+	if d.a.Weapon.Slot != 1 || d.a.Weapon.Ammo != SniperMagSize || d.a.Weapon.Stash != rifleLeft {
+		t.Fatalf("after switching: slot %d ammo %d stash %d, want sniper with %d and the rifle's %d kept", d.a.Weapon.Slot, d.a.Weapon.Ammo, d.a.Weapon.Stash, SniperMagSize, rifleLeft)
+	}
+	before := len(d.w.shots.recent(nil, d.w.tick))
+	d.step(sniperShot(0), nil) // still drawing
+	if len(d.w.shots.recent(nil, d.w.tick)) != before {
+		t.Fatal("a gun fired during its draw")
+	}
+	d.drawn()
+	d.step(slotInput(1), nil)
+	if d.a.Weapon.Slot != 0 || d.a.Weapon.Ammo != rifleLeft {
+		t.Fatalf("back to the rifle: slot %d ammo %d, want its %d rounds back", d.a.Weapon.Slot, d.a.Weapon.Ammo, rifleLeft)
+	}
+}
+
+func TestEmptyHandsCannotShootButCanPunch(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -1.8})
+	d.step(slotInput(3), nil)
+	d.idle(int(math.Ceil(WeaponSwitchQuickTime*TickRate)) + 2) // the quick draw out of empty hands is 0.2 s
+	if d.a.Weapon.Slot != emptyHands || d.a.Entity.Flags&protocol.EntityFlagEmptyHanded == 0 {
+		t.Fatalf("slot %d flags %b, want empty hands flagged", d.a.Weapon.Slot, d.a.Entity.Flags)
+	}
+	for i := 0; i < 10; i++ {
+		d.step(aimedShot(bodyPitch), nil)
+	}
+	if got := d.w.shots.recent(nil, d.w.tick); len(got) != 0 {
+		t.Fatal("empty hands fired a gun")
+	}
+	d.step(meleeInput(), nil)
+	d.idleBoth(12)
+	if len(eventsOf(d.a, protocol.EventKindHit)) != 1 {
+		t.Fatal("empty hands should still be able to punch")
+	}
+}
+
+func TestWeaponInHandIsShownToOthers(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
+	if d.a.Entity.Flags&(protocol.EntityFlagHoldingSniper|protocol.EntityFlagEmptyHanded) != 0 {
+		t.Fatal("the rifle is the default: no weapon flag")
+	}
+	d.step(slotInput(2), nil)
+	if d.a.Entity.Flags&protocol.EntityFlagHoldingSniper == 0 {
+		t.Fatal("holding the sniper should be flagged")
+	}
+}
+
+func TestSniperLagCompensation(t *testing.T) {
+	// A target at 30 m sprints sideways. The sniper's hit is judged where the shooter's screen
+	// showed it, like any hitscan: aiming at where it was seen hits it.
+	d := newDuel(t, nil, Vec3{}, Vec3{X: -4, Z: -30})
+	d.step(slotInput(2), &Input{MoveX: 1})
+	for i := 0; i < int(math.Ceil(WeaponSwitchTime*TickRate))+2; i++ {
+		d.step(&Input{}, &Input{MoveX: 1})
+	}
+	// Where the shooter saw the target 5 ticks ago:
+	view := float64(d.w.tick) - 5
+	box, _ := d.w.hitboxAt(d.b, view)
+	cx := (box.MinX + box.MaxX) / 2
+	yaw := math.Atan2(-cx, 30)
+	shot := sniperShot(0)
+	shot.Yaw = yaw
+	shot.ViewTick = view
+	d.step(shot, &Input{MoveX: 1})
+	if len(eventsOf(d.a, protocol.EventKindHit)) != 1 {
+		t.Fatal("a sniper shot aimed at where the screen showed the target should hit it")
+	}
+}
+
+// --- Weapon-dependent movement -----------------------------------------------
+
+// runSpeedAfter runs player a forward for a second and returns its speed.
+func (d *duel) runSpeedAfter(in Input) float64 {
+	for i := 0; i < 60; i++ {
+		x := in
+		x.MoveZ = 1
+		d.step(&x, nil)
+	}
+	return hSpeed(&d.a.State)
+}
+
+func TestEmptyHandsRunFasterAndSniperAimingIsSlow(t *testing.T) {
+	// The rifle: run speed, and 0.65 of it while aiming.
+	rifle := newDuel(t, nil, Vec3{Z: 30}, Vec3{X: 30, Z: 30})
+	if got := rifle.runSpeedAfter(Input{}); math.Abs(got-RunSpeed) > 1e-6 {
+		t.Fatalf("rifle run speed = %v, want %v", got, float64(RunSpeed))
+	}
+	rifleADS := newDuel(t, nil, Vec3{Z: 30}, Vec3{X: 30, Z: 30})
+	if got := rifleADS.runSpeedAfter(Input{ADS: true}); math.Abs(got-RunSpeed*WeaponAdsSpeedMult) > 1e-6 {
+		t.Fatalf("rifle ads speed = %v, want %v", got, RunSpeed*WeaponAdsSpeedMult)
+	}
+	// The sniper: much slower while aiming.
+	sniper := newDuel(t, nil, Vec3{Z: 30}, Vec3{X: 30, Z: 30})
+	sniper.step(slotInput(2), nil)
+	sniper.drawn()
+	if got := sniper.runSpeedAfter(Input{ADS: true}); math.Abs(got-RunSpeed*SniperAdsSpeedMult) > 1e-6 {
+		t.Fatalf("sniper ads speed = %v, want %v", got, RunSpeed*SniperAdsSpeedMult)
+	}
+	// Empty hands: faster than the run speed.
+	empty := newDuel(t, nil, Vec3{Z: 30}, Vec3{X: 30, Z: 30})
+	empty.step(slotInput(3), nil)
+	empty.idle(int(math.Ceil(WeaponSwitchQuickTime*TickRate)) + 2)
+	if got := empty.runSpeedAfter(Input{}); math.Abs(got-RunSpeed*WeaponEmptyRunMult) > 1e-6 {
+		t.Fatalf("empty-handed run speed = %v, want %v", got, RunSpeed*WeaponEmptyRunMult)
+	}
+}
+
+func TestClientsCannotChooseTheirOwnSpeed(t *testing.T) {
+	d := newDuel(t, nil, Vec3{Z: 30}, Vec3{X: 30, Z: 30})
+	// A tampered client claims a huge run multiplier: the server uses the weapon's own.
+	if got := d.runSpeedAfter(Input{RunSpeedMult: 5, ADSSpeedMult: 5}); math.Abs(got-RunSpeed) > 1e-6 {
+		t.Fatalf("run speed with a forged multiplier = %v, want the real %v", got, float64(RunSpeed))
+	}
+}

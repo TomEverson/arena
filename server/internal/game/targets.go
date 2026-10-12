@@ -260,7 +260,14 @@ func (w *World) applyPractice(p *Player, action PracticeAction) {
 	switch action {
 	case PracticeRefill:
 		p.Health = protocol.PlayerHealth{Health: WeaponMaxHealth, Shield: WeaponMaxShield, Alive: true}
+		// Full ammo for both guns, keeping the weapon in hand.
+		slot, gun := p.Weapon.Slot, p.Weapon.Gun
 		p.Weapon = SpawnWeapon(p.Weapon.Rng)
+		if gun == 1 {
+			p.Weapon.Gun = 1
+			p.Weapon.Ammo, p.Weapon.Stash = p.Weapon.Stash, p.Weapon.Ammo
+		}
+		p.Weapon.Slot = slot
 		p.sinceDamage = 1e9
 		p.syncEntity()
 	case PracticeStart:

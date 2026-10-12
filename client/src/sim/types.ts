@@ -1,4 +1,5 @@
 import type { Input, PlayerState } from "../net/protocol.gen";
+import { PARAMS as P } from "./params";
 
 /** Shared types for the movement simulation. Units are metres and seconds, Y is up. */
 
@@ -52,4 +53,7 @@ export const emptyInput = (): PlayerInput => ({
   fire: false,
   reload: false,
   melee: false,
+  slot: 0,
+  runSpeedMult: 1,
+  adsSpeedMult: P.adsSpeedMult,
 });

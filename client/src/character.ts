@@ -2,6 +2,7 @@ import * as THREE from "three";
 
 import { PALETTE } from "./palette";
 import { type Brick, buildBrick } from "./rifle";
+import { buildSniper } from "./sniper";
 
 /**
  * Third-person character body: chunky armored humanoid built from boxes and low-poly
@@ -45,6 +46,8 @@ export interface BodyState {
   aiming?: boolean;
   /** Carrying the Brick: arms hold it, in every animation. Turning this on plays the draw. */
   armed?: boolean;
+  /** Which gun it carries when armed: 0 the rifle, 1 the sniper. */
+  weapon?: number;
   /** In the middle of a melee swing (rising edge starts the animation). */
   meleeing?: boolean;
   /** Which way the body faces (radians, the figure's own yaw), instead of toward its movement. */
@@ -325,6 +328,8 @@ export class CharacterBody {
   private readonly gun = new THREE.Group();
   private readonly muzzleFlash: THREE.Mesh;
   private readonly brick: Brick;
+  private readonly sniper: Brick;
+  private lastWeapon = 0;
   /** Helmet, face, ears, neck and collar: hidden in first person, where the camera sits inside the head. */
   private readonly headParts: THREE.Mesh[] = [];
   private airTime = 0;
@@ -419,6 +424,11 @@ export class CharacterBody {
     this.brick.root.rotation.y = Math.PI;
     this.brick.root.position.z = -0.1;
     gun.add(this.brick.root);
+    this.sniper = buildSniper();
+    this.sniper.root.rotation.y = Math.PI;
+    this.sniper.root.position.z = -0.1;
+    this.sniper.root.visible = false;
+    gun.add(this.sniper.root);
     this.muzzleFlash = part(
       gun,
       new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
@@ -446,6 +456,7 @@ export class CharacterBody {
   shoot(): void {
     this.shootT = 1;
     this.brick.shoot();
+    this.sniper.shoot();
   }
 
   /** Got shot: flash BONE and flinch. */
@@ -533,6 +544,15 @@ export class CharacterBody {
       this.equipT = 1e-6;
       this.holdW = 0;
     }
+    // Taking out a different gun while armed draws it again.
+    const weapon = s.weapon === 1 ? 1 : 0;
+    if (armed && this.wasArmed && weapon !== this.lastWeapon) {
+      this.equipT = 1e-6;
+      this.holdW = 0;
+    }
+    this.lastWeapon = weapon;
+    this.brick.root.visible = weapon === 0;
+    this.sniper.root.visible = weapon === 1;
     this.wasArmed = armed;
     if (this.equipT > 0) {
       this.equipT += dt / EQUIP_SECONDS;
@@ -660,6 +680,7 @@ export class CharacterBody {
     }
     this.muzzleFlash.visible = this.shootT > 0.55;
     this.brick.update(dt, 1, this.time);
+    this.sniper.update(dt, 1, this.time);
 
     // Landing squash: dip and lean forward for a moment.
     p.upperY -= 0.08 * this.land;

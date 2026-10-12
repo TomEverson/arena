@@ -45,6 +45,8 @@ export class RemoteViews {
       s.sliding = (pose.flags & EntityFlags.sliding) !== 0;
       s.wallRunning = (pose.flags & EntityFlags.wallRunning) !== 0;
       s.meleeing = (pose.flags & EntityFlags.meleeing) !== 0;
+      s.armed = (pose.flags & EntityFlags.emptyHanded) === 0;
+      s.weapon = (pose.flags & EntityFlags.holdingSniper) !== 0 ? 1 : 0;
       s.crouching = (pose.flags & EntityFlags.crouching) !== 0;
       s.dashing = (pose.flags & EntityFlags.dashing) !== 0;
       s.alive = (pose.flags & EntityFlags.dead) === 0;

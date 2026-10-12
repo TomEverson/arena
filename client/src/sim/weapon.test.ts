@@ -7,6 +7,7 @@ import {
   applyDamage,
   damageFor,
   fullHealth,
+  movementMods,
   spawnWeapon,
   spreadDegrees,
   stepWeapon,
@@ -16,7 +17,7 @@ import {
 } from "./weapon";
 
 const DT = 1 / 60;
-const idle: WeaponInput = { fire: false, reload: false, melee: false, ads: false };
+const idle: WeaponInput = { fire: false, reload: false, melee: false, slot: 0, ads: false };
 const still = { hSpeed: 0, onGround: true, crouching: false, sliding: false };
 
 function fire(
@@ -283,5 +284,19 @@ describe("hitscan", () => {
   it("rayAabb handles an origin inside the box", () => {
     expect(rayAabb(0, 0, 0, 1, 0, 0, box(0, 0, 0, 2, 2, 2))).toBe(0);
     expect(rayAabb(5, 0, 0, 1, 0, 0, box(0, 0, 0, 2, 2, 2))).toBeNull();
+  });
+});
+
+describe("movementMods", () => {
+  it("empty hands run faster; each gun has its own aim-down-sights slowdown", () => {
+    const base = spawnWeapon();
+    const rifle = movementMods(base);
+    expect(rifle.runSpeedMult).toBe(1);
+    expect(rifle.adsSpeedMult).toBeCloseTo(0.65, 9);
+    const sniper = movementMods({ ...base, slot: 1, gun: 1 });
+    expect(sniper.runSpeedMult).toBe(1);
+    expect(sniper.adsSpeedMult).toBeLessThan(rifle.adsSpeedMult / 1.5); // much slower
+    const empty = movementMods({ ...base, slot: 2 });
+    expect(empty.runSpeedMult).toBeGreaterThan(1);
   });
 });

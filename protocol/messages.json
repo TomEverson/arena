@@ -49,6 +49,18 @@
           "type": "bool",
           "doc": "Melee pressed this tick."
         },
+        "slot": {
+          "type": "u8",
+          "doc": "Weapon slot pressed this tick: 0 none, 1 rifle, 2 sniper, 3 empty hands."
+        },
+        "runSpeedMult": {
+          "type": "f64",
+          "doc": "Run speed multiplier from the weapon in hand (empty hands run faster). Set by whoever simulates from their weapon state; the server recomputes it and ignores what a client sends."
+        },
+        "adsSpeedMult": {
+          "type": "f64",
+          "doc": "Ground speed multiplier while aiming down sights, for the gun in hand (the sniper is much slower). The server recomputes it."
+        },
         "viewTick": {
           "type": "f64",
           "doc": "The server tick (fractional) at which this player's screen was showing other players, for lag compensation. 0 means the current tick (no rewind)."
@@ -143,7 +155,26 @@
     "WeaponState": {
       "doc": "Weapon fire-control state. Simulated identically on client and server from the inputs.",
       "fields": {
-        "ammo": "u8",
+        "slot": {
+          "type": "u8",
+          "doc": "The weapon in hand: 0 rifle, 1 sniper, 2 empty hands."
+        },
+        "gun": {
+          "type": "u8",
+          "doc": "Which gun `ammo` belongs to (0 rifle, 1 sniper): the last gun held, so empty hands keep it."
+        },
+        "ammo": {
+          "type": "u8",
+          "doc": "Rounds left in the gun `gun`."
+        },
+        "stash": {
+          "type": "u8",
+          "doc": "Rounds left in the other gun."
+        },
+        "switchT": {
+          "type": "f64",
+          "doc": "Seconds until the weapon just switched to is ready; 0 when ready."
+        },
         "reloadT": {
           "type": "f64",
           "doc": "Seconds of reload remaining; 0 when not reloading."
@@ -234,6 +265,10 @@
           "type": "u32",
           "doc": "Who fired it."
         },
+        "gun": {
+          "type": "u8",
+          "doc": "Which gun: 0 rifle (a bullet to fly), 1 sniper (hitscan: draw a near-instant tracer)."
+        },
         "x": "f64",
         "y": "f64",
         "z": "f64",
@@ -295,7 +330,9 @@
       "dead": 64,
       "protected": 128,
       "wallRunning": 256,
-      "meleeing": 512
+      "meleeing": 512,
+      "holdingSniper": 1024,
+      "emptyHanded": 2048
     },
     "EventKinds": {
       "hit": 1,

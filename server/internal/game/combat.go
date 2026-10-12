@@ -188,22 +188,23 @@ func (w *World) rewindView(claimed float64) float64 {
 
 // --- Shots -----------------------------------------------------------------
 
-// resolveShot traces one hitscan shot from shooter against everyone else, as the shooter saw them.
-// (Projectile weapons use fireBullet in bullets.go; the Brick is one. Hitscan stays for weapons that need it.)
-func (w *World) resolveShot(shooter *Player, in *Input, shot *ShotResult) {
+// resolveShot traces one hitscan shot (the sniper's) from shooter against everyone else, as the
+// shooter saw them. Projectile weapons (the rifle) use fireBullet in bullets.go.
+func (w *World) resolveShot(shooter *Player, in *Input, shot *ShotResult, d *weaponDef) {
 	shooter.Health.ProtectedFor = 0 // firing ends spawn protection
 
 	s := &shooter.State
 	ox, oy, oz := s.X, s.Y+eyeHeight(s), s.Z
 	dx, dy, dz := ViewDirection(in.Yaw+shot.SpreadYaw, in.Pitch+shot.SpreadPitch)
+	w.shots.push(protocol.Shot{Tick: uint32(w.tick), Actor: shooter.ID, Gun: shooter.Weapon.Gun, X: ox, Y: oy, Z: oz, Dx: dx, Dy: dy, Dz: dz})
 
 	view := w.rewindView(in.ViewTick)
 	n := w.fillBoxes(shooter, view)
-	hit := CastRay(&w.level.Collision, w.boxes[:n], ox, oy, oz, dx, dy, dz, WeaponRange)
+	hit := CastRay(&w.level.Collision, w.boxes[:n], ox, oy, oz, dx, dy, dz, d.rng)
 	if hit.Kind != RayTarget {
 		return
 	}
-	w.applyHit(shooter, hit)
+	w.applyHit(shooter, hit, d)
 }
 
 // damage applies a hit: shield first, then health; handles death and the kill reward.

@@ -6,6 +6,7 @@ import { type ReloadPose, reloadPose } from "./reloadAnim";
 import { FX_MODES, type FxMode, RetroRenderer } from "./render";
 import { BRICK_MAG_HOME, BRICK_MUZZLE, buildBrick } from "./rifle";
 import { COMBAT, PARAMS as P, WEAPON } from "./sim/params";
+import { buildSniper, SNIPER_MUZZLE } from "./sniper";
 
 /**
  * Dev-only character viewer and animation test stage (open /figure.html while `pnpm dev`
@@ -34,6 +35,7 @@ const panel = document.getElementById("panel") as HTMLDivElement;
 const MODELS = [
   { id: "dummy", name: "Dummy", kind: "character" },
   { id: "brick", name: "Brick (rifle)", kind: "weapon" },
+  { id: "needle", name: "Needle (sniper)", kind: "weapon" },
 ] as const;
 
 const scene = new THREE.Scene();
@@ -70,17 +72,27 @@ const body = new CharacterBody(scene);
 
 // The weapon preview: the rifle floating at about chest height, muzzle to the right.
 const brick = buildBrick();
-brick.root.position.set(0, 1.0, 0);
-brick.root.rotation.y = -Math.PI / 2;
-brick.root.visible = false;
-const brickFlash = new THREE.Mesh(
-  new THREE.BoxGeometry(0.09, 0.09, 0.05),
-  new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
-);
-brickFlash.position.copy(BRICK_MUZZLE);
-brickFlash.visible = false;
-brick.root.add(brickFlash);
-scene.add(brick.root);
+const needle = buildSniper();
+/** The weapon preview models, each with a muzzle flash. */
+const previews = [
+  { id: "brick", model: brick, muzzle: BRICK_MUZZLE },
+  { id: "needle", model: needle, muzzle: SNIPER_MUZZLE },
+].map(({ id, model: m, muzzle }) => {
+  m.root.position.set(0, 1.0, 0);
+  m.root.rotation.y = -Math.PI / 2;
+  m.root.visible = false;
+  const flash = new THREE.Mesh(
+    new THREE.BoxGeometry(0.09, 0.09, 0.05),
+    new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
+  );
+  flash.position.copy(muzzle);
+  flash.visible = false;
+  m.root.add(flash);
+  scene.add(m.root);
+  return { id, model: m, flash };
+});
+/** The preview for the model chosen in the panel (the rifle if a character is chosen). */
+const shownPreview = () => previews.find((p) => p.id === model.id) ?? previews[0];
 const view = new RetroRenderer(canvas, scene);
 window.addEventListener("resize", () => view.resize());
 
@@ -153,10 +165,11 @@ fillAnimations();
 const WEAPONS = [
   ["none", "None (hands free)"],
   ["brick", "Brick (rifle)"],
+  ["needle", "Needle (sniper)"],
 ] as const;
 for (const [id, name] of WEAPONS) weaponSelect.add(new Option(name, id));
 weaponSelect.value = "brick";
-const weaponOn = () => weaponSelect.value === "brick";
+const weaponOn = () => weaponSelect.value !== "none";
 
 for (const m of FX_MODES) fxSelect.add(new Option(m.name, m.id));
 fxSelect.value = view.effect;
@@ -182,6 +195,7 @@ const state: BodyState = {
   dashing: false,
   aiming: false,
   armed: true,
+  weapon: 0,
   meleeing: false,
 };
 let gait: Gait = "walk";
@@ -289,11 +303,11 @@ function play(id: AnimId): void {
     equipAt = 0.35;
   } else if (id === "aim") {
     gait = "idle";
-    weaponSelect.value = "brick"; // aiming needs the rifle
+    if (!weaponOn()) weaponSelect.value = "brick"; // aiming needs a gun
     aimCheck.checked = true;
   } else if (id === "shoot") {
     gait = "idle";
-    weaponSelect.value = "brick";
+    if (!weaponOn()) weaponSelect.value = "brick";
     aimCheck.checked = true;
     fireCheck.checked = true;
   } else if (id === "hit") {
@@ -320,12 +334,12 @@ modelSelect.addEventListener("change", () => {
   resetStance();
   distance = model.kind === "weapon" ? 1.5 : 4; // a rifle is small: come closer
   body.root.visible = model.kind === "character";
-  brick.root.visible = model.kind === "weapon";
+  for (const p of previews) p.model.root.visible = model.kind === "weapon" && p.id === model.id;
   fillAnimations();
   play(animSelect.value as AnimId);
   modelSelect.blur();
 });
-weaponSelect.addEventListener("change", () => weaponSelect.blur()); // picking Brick plays the draw
+weaponSelect.addEventListener("change", () => weaponSelect.blur()); // picking a gun plays the draw
 fxSelect.addEventListener("change", () => {
   view.setEffect(fxSelect.value as FxMode);
   fxSelect.blur();
@@ -395,6 +409,10 @@ canvas.addEventListener(
 /** The weapon preview: fire, reload and ammo strip loops. */
 function stepWeapon(dt: number): void {
   weaponT += dt;
+  const pv = shownPreview();
+  if (!pv) return;
+  const brick = pv.model;
+  const brickFlash = pv.flash;
   brickFlash.visible = false;
   brick.mag.position.y = BRICK_MAG_HOME.y;
   if (weaponAnim === "w-fire") {
@@ -475,6 +493,7 @@ function stepFakePlayer(dt: number): void {
   } else {
     state.armed = weaponOn();
   }
+  state.weapon = weaponSelect.value === "needle" ? 1 : 0;
   state.aiming = aimCheck.checked;
   if (fireCheck.checked) {
     fireT -= dt;

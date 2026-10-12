@@ -70,15 +70,17 @@ interface Wish {
   z: number;
   /** Input magnitude, 0..1. */
   mag: number;
-  /** Ground speed multiplier (1, or less while aiming down sights). */
+  /** Ground speed multiplier (1, less while aiming down sights, more with empty hands). */
   speed: number;
+  /** The weapon's run speed multiplier alone (also applies in the air). */
+  run: number;
 }
 
 function wishOf(input: PlayerInput): Wish {
   let mx = input.moveX;
   let mz = input.moveZ;
   const len = Math.hypot(mx, mz);
-  if (len < 1e-9) return { x: 0, z: 0, mag: 0, speed: 1 };
+  if (len < 1e-9) return { x: 0, z: 0, mag: 0, speed: 1, run: 1 };
   const mag = Math.min(1, len);
   mx /= len;
   mz /= len;
@@ -89,7 +91,9 @@ function wishOf(input: PlayerInput): Wish {
     x: cos * mx - sin * mz,
     z: -sin * mx - cos * mz,
     mag,
-    speed: input.ads ? P.adsSpeedMult : 1,
+    // 0 (a field an old input lacks) means the default.
+    speed: (input.ads ? input.adsSpeedMult || P.adsSpeedMult : 1) * (input.runSpeedMult || 1),
+    run: input.runSpeedMult || 1,
   };
 }
 
@@ -185,7 +189,7 @@ export function stepPlayer(
       tryStartMantle(
         s,
         world,
-        { x: -Math.sin(input.yaw), z: -Math.cos(input.yaw), mag: 1, speed: 1 },
+        { x: -Math.sin(input.yaw), z: -Math.cos(input.yaw), mag: 1, speed: 1, run: 1 },
         wall,
       );
   }
@@ -294,8 +298,8 @@ function updateHorizontalVelocity(s: PlayerState, wish: Wish, dt: number): void 
   }
   // Air: steer freely but never gain speed beyond what we had (or run speed).
   const before = hSpeed(s);
-  if (wish.mag > 0) accelerate(s, wish, P.runSpeed * wish.mag, P.airAccel, dt);
-  const cap = Math.max(before, P.runSpeed);
+  if (wish.mag > 0) accelerate(s, wish, P.runSpeed * wish.run * wish.mag, P.airAccel, dt);
+  const cap = Math.max(before, P.runSpeed * wish.run);
   const after = hSpeed(s);
   if (after > cap) {
     s.vx *= cap / after;

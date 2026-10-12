@@ -17,16 +17,18 @@ const (
 
 // EntityFlags bits.
 const (
-	EntityFlagCrouching   uint16 = 1
-	EntityFlagSliding     uint16 = 2
-	EntityFlagClimbing    uint16 = 4
-	EntityFlagDashing     uint16 = 8
-	EntityFlagOnGround    uint16 = 16
-	EntityFlagMantling    uint16 = 32
-	EntityFlagDead        uint16 = 64
-	EntityFlagProtected   uint16 = 128
-	EntityFlagWallRunning uint16 = 256
-	EntityFlagMeleeing    uint16 = 512
+	EntityFlagCrouching     uint16 = 1
+	EntityFlagSliding       uint16 = 2
+	EntityFlagClimbing      uint16 = 4
+	EntityFlagDashing       uint16 = 8
+	EntityFlagOnGround      uint16 = 16
+	EntityFlagMantling      uint16 = 32
+	EntityFlagDead          uint16 = 64
+	EntityFlagProtected     uint16 = 128
+	EntityFlagWallRunning   uint16 = 256
+	EntityFlagMeleeing      uint16 = 512
+	EntityFlagHoldingSniper uint16 = 1024
+	EntityFlagEmptyHanded   uint16 = 2048
 )
 
 // EventKinds bits.
@@ -83,6 +85,12 @@ type Input struct {
 	Reload bool `json:"reload"`
 	// Melee pressed this tick.
 	Melee bool `json:"melee"`
+	// Weapon slot pressed this tick: 0 none, 1 rifle, 2 sniper, 3 empty hands.
+	Slot uint8 `json:"slot"`
+	// Run speed multiplier from the weapon in hand (empty hands run faster). Set by whoever simulates from their weapon state; the server recomputes it and ignores what a client sends.
+	RunSpeedMult float64 `json:"runSpeedMult"`
+	// Ground speed multiplier while aiming down sights, for the gun in hand (the sniper is much slower). The server recomputes it.
+	ADSSpeedMult float64 `json:"adsSpeedMult"`
 	// The server tick (fractional) at which this player's screen was showing other players, for lag compensation. 0 means the current tick (no rewind).
 	ViewTick float64 `json:"viewTick"`
 }
@@ -150,7 +158,16 @@ type Entity struct {
 
 // WeaponState: Weapon fire-control state. Simulated identically on client and server from the inputs.
 type WeaponState struct {
+	// The weapon in hand: 0 rifle, 1 sniper, 2 empty hands.
+	Slot uint8 `json:"slot"`
+	// Which gun `ammo` belongs to (0 rifle, 1 sniper): the last gun held, so empty hands keep it.
+	Gun uint8 `json:"gun"`
+	// Rounds left in the gun `gun`.
 	Ammo uint8 `json:"ammo"`
+	// Rounds left in the other gun.
+	Stash uint8 `json:"stash"`
+	// Seconds until the weapon just switched to is ready; 0 when ready.
+	SwitchT float64 `json:"switchT"`
 	// Seconds of reload remaining; 0 when not reloading.
 	ReloadT float64 `json:"reloadT"`
 	// Seconds until the next shot is allowed.
@@ -203,13 +220,15 @@ type Shot struct {
 	// Server tick the shot was fired.
 	Tick uint32 `json:"tick"`
 	// Who fired it.
-	Actor uint32  `json:"actor"`
-	X     float64 `json:"x"`
-	Y     float64 `json:"y"`
-	Z     float64 `json:"z"`
-	Dx    float64 `json:"dx"`
-	Dy    float64 `json:"dy"`
-	Dz    float64 `json:"dz"`
+	Actor uint32 `json:"actor"`
+	// Which gun: 0 rifle (a bullet to fly), 1 sniper (hitscan: draw a near-instant tracer).
+	Gun uint8   `json:"gun"`
+	X   float64 `json:"x"`
+	Y   float64 `json:"y"`
+	Z   float64 `json:"z"`
+	Dx  float64 `json:"dx"`
+	Dy  float64 `json:"dy"`
+	Dz  float64 `json:"dz"`
 }
 
 // MatchInfo: Where the room is in its match cycle.

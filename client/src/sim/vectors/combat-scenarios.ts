@@ -12,7 +12,7 @@ import { loadWorld } from "./node";
 
 const P_WINDUP = 0.12; // WEAPON.meleeWindup, for the check below
 const STILL: WeaponContext = { hSpeed: 0, onGround: true, crouching: false, sliding: false };
-const HOLD: WeaponInput = { fire: true, reload: false, melee: false, ads: false };
+const HOLD: WeaponInput = { fire: true, reload: false, melee: false, slot: 0, ads: false };
 const check = (cond: boolean, msg: string) => {
   if (!cond) throw new Error(`verify failed: ${msg}`);
 };
@@ -45,7 +45,13 @@ function fuzzSteps(seed: number, ticks: number): WeaponVector["steps"] {
     left -= n;
     steps.push({
       ticks: n,
-      input: { fire: rnd() < 0.7, reload: rnd() < 0.08, melee: rnd() < 0.06, ads: rnd() < 0.3 },
+      input: {
+        fire: rnd() < 0.7,
+        reload: rnd() < 0.08,
+        melee: rnd() < 0.06,
+        slot: 0,
+        ads: rnd() < 0.3,
+      },
       ctx: {
         hSpeed: rnd() < 0.4 ? 0 : rnd() * 15,
         onGround: rnd() < 0.8,
@@ -98,9 +104,17 @@ export const weaponScenarios: WeaponScenario[] = [
     seed: 5,
     steps: [
       { ticks: 30, input: HOLD, ctx: STILL },
-      { ticks: 1, input: { fire: false, reload: true, melee: false, ads: false }, ctx: STILL },
+      {
+        ticks: 1,
+        input: { fire: false, reload: true, melee: false, slot: 0, ads: false },
+        ctx: STILL,
+      },
       { ticks: 20, input: HOLD, ctx: STILL }, // held fire during reload does nothing
-      { ticks: 120, input: { fire: false, reload: false, melee: false, ads: false }, ctx: STILL },
+      {
+        ticks: 120,
+        input: { fire: false, reload: false, melee: false, slot: 0, ads: false },
+        ctx: STILL,
+      },
       { ticks: 30, input: HOLD, ctx: STILL },
     ],
     verify: (_t, ev) => {
@@ -120,11 +134,27 @@ export const weaponScenarios: WeaponScenario[] = [
       "A melee swing: it lands after the wind-up, firing is locked while it plays out, and the next swing waits for the cooldown.",
     seed: 3,
     steps: [
-      { ticks: 1, input: { fire: false, reload: false, melee: true, ads: false }, ctx: STILL },
+      {
+        ticks: 1,
+        input: { fire: false, reload: false, melee: true, slot: 0, ads: false },
+        ctx: STILL,
+      },
       { ticks: 10, input: HOLD, ctx: STILL }, // fire is held: locked out while swinging
-      { ticks: 1, input: { fire: false, reload: false, melee: true, ads: false }, ctx: STILL }, // too soon
-      { ticks: 60, input: { fire: false, reload: false, melee: false, ads: false }, ctx: STILL },
-      { ticks: 1, input: { fire: false, reload: false, melee: true, ads: false }, ctx: STILL }, // cooled down
+      {
+        ticks: 1,
+        input: { fire: false, reload: false, melee: true, slot: 0, ads: false },
+        ctx: STILL,
+      }, // too soon
+      {
+        ticks: 60,
+        input: { fire: false, reload: false, melee: false, slot: 0, ads: false },
+        ctx: STILL,
+      },
+      {
+        ticks: 1,
+        input: { fire: false, reload: false, melee: true, slot: 0, ads: false },
+        ctx: STILL,
+      }, // cooled down
       { ticks: 30, input: HOLD, ctx: STILL },
     ],
     verify: (_t, ev) => {
@@ -146,12 +176,125 @@ export const weaponScenarios: WeaponScenario[] = [
     },
   },
   {
+    name: "weapon-switch",
+    description:
+      "Switching guns: a draw time with no shooting, each gun keeps its own rounds, empty hands cannot shoot, and a reload is lost by switching.",
+    seed: 6,
+    steps: [
+      { ticks: 12, input: HOLD, ctx: STILL }, // rifle: some shots
+      {
+        ticks: 1,
+        input: { fire: false, reload: false, melee: false, slot: 2, ads: false },
+        ctx: STILL,
+      },
+      { ticks: 10, input: HOLD, ctx: STILL }, // switching: held fire does nothing yet
+      { ticks: 120, input: HOLD, ctx: STILL }, // the sniper fires, slowly
+      {
+        ticks: 1,
+        input: { fire: false, reload: false, melee: false, slot: 1, ads: false },
+        ctx: STILL,
+      }, // back to the rifle
+      { ticks: 30, input: HOLD, ctx: STILL },
+      {
+        ticks: 1,
+        input: { fire: false, reload: true, melee: false, slot: 0, ads: false },
+        ctx: STILL,
+      }, // start a reload...
+      {
+        ticks: 5,
+        input: { fire: false, reload: false, melee: false, slot: 0, ads: false },
+        ctx: STILL,
+      },
+      {
+        ticks: 1,
+        input: { fire: false, reload: false, melee: false, slot: 3, ads: false },
+        ctx: STILL,
+      }, // ...and drop to empty hands
+      { ticks: 60, input: HOLD, ctx: STILL }, // empty hands: no shots, no reload
+    ],
+    verify: (trace, ev) => {
+      const switches = ev.filter((e) => e.switched);
+      check(switches.length === 3, "three switches");
+      const first = switches[0];
+      const firstShotAfter = ev.find((e) => e.fired && first && e.tick > first.tick);
+      check(
+        !!first && !!firstShotAfter && firstShotAfter.tick - first.tick >= Math.floor(0.4 * 60),
+        "no shot until the draw is over",
+      );
+      const sniperShots = ev.filter(
+        (e) => e.fired && first && e.tick > first.tick && e.tick < first.tick + 140,
+      );
+      check(sniperShots.length >= 2, "the sniper fired");
+      const gap = (sniperShots[1]?.tick ?? 0) - (sniperShots[0]?.tick ?? 0);
+      check(gap >= 80 && gap <= 88, "sniper shots are about 1.4 s apart");
+      const last = trace[trace.length - 1];
+      check(!!last && last.slot === 2, "ended with empty hands");
+      check(!!last && last.reloadT === 0, "switching away lost the reload");
+      const lastSwitch = switches[2];
+      check(
+        !ev.some((e) => lastSwitch && e.fired && e.tick > lastSwitch.tick),
+        "empty hands cannot shoot",
+      );
+      check(
+        (!!last && last.stash === 5 - 0) || (last?.stash ?? 0) <= 5,
+        "the sniper's rounds were kept",
+      );
+    },
+  },
+  {
+    name: "weapon-sniper",
+    description:
+      "The sniper alone: a shot every 1.4 s, five rounds, then an automatic 2.6 s reload, with pinpoint aim while scoped.",
+    seed: 8,
+    steps: [
+      {
+        ticks: 1,
+        input: { fire: false, reload: false, melee: false, slot: 2, ads: true },
+        ctx: STILL,
+      },
+      {
+        ticks: 30,
+        input: { fire: false, reload: false, melee: false, slot: 0, ads: true },
+        ctx: STILL,
+      },
+      {
+        ticks: 700,
+        input: { fire: true, reload: false, melee: false, slot: 0, ads: true },
+        ctx: STILL,
+      },
+    ],
+    verify: (_t, ev) => {
+      const shots = ev.filter((e) => e.fired);
+      check(shots.length >= 6, "fired six shots in 12 seconds");
+      check(
+        shots
+          .slice(0, 5)
+          .every((e) => Math.abs(e.spreadYaw) < 1e-9 && Math.abs(e.spreadPitch) < 1e-9),
+        "no spread while scoped and still",
+      );
+      check(
+        ev.some((e) => e.dryFire && e.reloadStarted),
+        "the empty magazine reloads by itself",
+      );
+      const done = ev.find((e) => e.reloadFinished);
+      const start = ev.find((e) => e.reloadStarted);
+      check(
+        !!done && !!start && Math.abs(done.tick - start.tick - Math.ceil(2.6 * 60)) <= 1,
+        "the reload takes 2.6 s",
+      );
+    },
+  },
+  {
     name: "weapon-tap-fire-resets-recoil",
     description: "Taps separated by pauses restart the recoil pattern each time.",
     seed: 9,
     steps: [
       { ticks: 12, input: HOLD, ctx: STILL },
-      { ticks: 40, input: { fire: false, reload: false, melee: false, ads: false }, ctx: STILL },
+      {
+        ticks: 40,
+        input: { fire: false, reload: false, melee: false, slot: 0, ads: false },
+        ctx: STILL,
+      },
       { ticks: 12, input: HOLD, ctx: STILL },
     ],
     verify: (_t, ev) => {

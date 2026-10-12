@@ -156,7 +156,39 @@
       -0.1
     ],
     "adsFovScale": 0.7,
-    "adsSensitivity": 0.7
+    "adsSensitivity": 0.7,
+    "switchTime": 0.4,
+    "switchQuickTime": 0.2,
+    "adsSpeedMult": 0.65,
+    "emptyRunMult": 1.15
+  },
+  "sniper": {
+    "damage": 75,
+    "headshotMult": 2,
+    "rpm": 42.857142857142854,
+    "magSize": 5,
+    "reloadTime": 2.6,
+    "range": 500,
+    "hipSpread": 4,
+    "adsSpread": 0,
+    "moveBloom": 2.5,
+    "airBloom": 2,
+    "adsBloomScale": 0.2,
+    "crouchHipMult": 0.7,
+    "slideHipMult": 0.9,
+    "slideBloomScale": 0.5,
+    "shotBloom": 0,
+    "shotBloomMax": 0,
+    "recoilResetTime": 1,
+    "recoilPitch": [
+      2.5
+    ],
+    "recoilYaw": [
+      0
+    ],
+    "adsFovScale": 0.25,
+    "adsSensitivity": 0.3,
+    "adsSpeedMult": 0.35
   },
   "combat": {
     "headSize": 0.3,

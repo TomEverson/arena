@@ -14,7 +14,7 @@ import {
   stepDummies,
 } from "./dummies";
 import { DummyViews } from "./dummyView";
-import { Fx } from "./fx";
+import { Fx, HITSCAN_TRACER_SPEED } from "./fx";
 import { HitFeedback } from "./hitFeedback";
 import { CombatHud } from "./hud";
 import { buildLevelMeshes } from "./levelRender";
@@ -51,20 +51,25 @@ import { PracticeStats } from "./practiceStats";
 import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
 import { type Bullet, spawnBullet, stepBullet } from "./sim/bullet";
-import type { Hitbox } from "./sim/hitscan";
+import { castRay, type Hitbox } from "./sim/hitscan";
 import { buildCollisionWorld, type Level, parseLevel } from "./sim/level";
 import { findMeleeTarget } from "./sim/melee";
 import { bodyHeight, eyeHeight, hSpeed, spawnState, stepPlayer } from "./sim/movement";
 import { COMBAT, PARAMS, WEAPON } from "./sim/params";
 import { emptyInput, type PlayerState } from "./sim/types";
 import {
+  activeDef,
   applyDamage,
   damageFor,
+  EMPTY_HANDS,
+  movementMods,
   type ShotResult,
   spawnWeapon,
   spreadDegrees,
   stepWeapon,
   viewDirection,
+  WEAPON_DEFS,
+  type WeaponState,
 } from "./sim/weapon";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -127,9 +132,10 @@ const selfState: BodyState = {
   alive: true,
   armed: true,
 };
-const fx = new Fx(scene, view.camera);
+const fx = new Fx(scene, view.camera, view.viewScene, view.viewCamera);
 const hitFeedback = new HitFeedback();
 const ammoEl = document.getElementById("ammo") as HTMLDivElement;
+const slotsEl = document.getElementById("slots") as HTMLDivElement;
 
 const DT = 1 / TICK_RATE;
 
@@ -150,7 +156,16 @@ for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, () 
 
 /** The sounds for one weapon step: shot, dry click, reload start and finish. */
 function shotSounds(shot: ShotResult): void {
-  if (shot.fired) audio.shot();
+  if (shot.fired) {
+    if (currentDef()?.hitscan) audio.shotSniper();
+    else audio.shot();
+  }
+  if (shot.switched) {
+    const w = currentWeapon();
+    audio.draw();
+    fx.setWeapon(w.gun, w.slot !== EMPTY_HANDS, w.switchT);
+    syncedGun = w.gun * 10 + (w.slot !== EMPTY_HANDS ? 1 : 0);
+  }
   if (shot.dryFire) audio.dryFire();
   if (shot.reloadStarted) audio.reloadStart();
   if (shot.reloadFinished) audio.reloadDone();
@@ -160,9 +175,18 @@ function shotSounds(shot: ShotResult): void {
   }
 }
 
+/** The weapon state the player is using right now (predicted online, local offline). */
+function currentWeapon(): WeaponState {
+  return predictor ? predictor.weapon : weapon;
+}
+/** The gun in hand, or null for empty hands. */
+const currentDef = () => activeDef(currentWeapon());
+/** What the viewmodel is showing (gun * 10 + 1 if held): kept in step with the weapon state each frame. */
+let syncedGun = 1;
+
 // --- Input -----------------------------------------------------------------
 const held = new Set<string>();
-const pressed = { jump: false, dash: false, reload: false, melee: false };
+const pressed = { jump: false, dash: false, reload: false, melee: false, slot: 0 };
 
 window.addEventListener("keydown", (e) => {
   if (e.code === "Tab") e.preventDefault(); // Tab shows the scoreboard, not the browser's focus ring
@@ -172,6 +196,9 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") pressed.dash = true;
   if (e.code === "KeyR") pressed.reload = true;
   if (e.code === "KeyV") pressed.melee = true;
+  if (e.code === "Digit1") pressed.slot = 1;
+  if (e.code === "Digit2") pressed.slot = 2;
+  if (e.code === "Digit3") pressed.slot = 3;
   if (e.code === "Enter") net?.sendRematch(); // only counts while the results are showing
   if (e.code === "KeyL") copyInviteLink();
   if (e.code === "KeyM") audio.toggleMute();
@@ -194,12 +221,15 @@ const clampPitch = (p: number) => Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI
 let adsT = 0; // 0 = hip, 1 = fully aimed (smoothed per frame)
 document.addEventListener("mousemove", (e) => {
   if (document.pointerLockElement !== canvas) return;
-  const sens = MOUSE_SENS * (1 + (WEAPON.adsSensitivity - 1) * adsT);
+  const sens = MOUSE_SENS * (1 + ((currentDef()?.adsSensitivity ?? 1) - 1) * adsT);
   look.yaw -= e.movementX * sens;
   look.pitch = clampPitch(look.pitch - e.movementY * sens);
 });
 document.addEventListener("mousedown", (e) => {
-  if (document.pointerLockElement === canvas) held.add(`Mouse${e.button}`);
+  if (document.pointerLockElement !== canvas) return;
+  held.add(`Mouse${e.button}`);
+  // With empty hands there is no gun to fire: the left button punches.
+  if (e.button === 0 && currentWeapon().slot === EMPTY_HANDS) pressed.melee = true;
 });
 document.addEventListener("mouseup", (e) => held.delete(`Mouse${e.button}`));
 document.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -505,7 +535,8 @@ function fireShotOnline(shot: ShotResult, ads: boolean): void {
   const origin: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
   const dir = viewDirection(look.yaw + shot.spreadYaw, look.pitch + shot.spreadPitch);
   fx.shot(ads);
-  fx.fireOwn(origin, dir); // the picture of the bullet; the server flies the real one
+  // The picture of the shot (the server decides hits): a bullet to fly, or for the sniper a near-instant streak.
+  fx.fireOwn(origin, dir, currentDef()?.hitscan ? HITSCAN_TRACER_SPEED : undefined);
   look.yaw += shot.kickYaw;
   look.pitch = clampPitch(look.pitch + shot.kickPitch);
 }
@@ -519,8 +550,17 @@ function fireShot(shot: ShotResult, ads: boolean): void {
   const origin: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
   const dir = viewDirection(look.yaw + shot.spreadYaw, look.pitch + shot.spreadPitch);
   fx.shot(ads);
-  fx.fireOwn(origin, dir);
-  if (localBullets.length < 64) localBullets.push(spawnBullet(origin, dir));
+  const def = currentDef() ?? WEAPON_DEFS[0];
+  if (def.hitscan) {
+    // The sniper hits instantly along the aim line.
+    fx.fireOwn(origin, dir, HITSCAN_TRACER_SPEED);
+    const hit = castRay(world, aliveHitboxes(dummies), origin, dir, def.range);
+    if (hit.kind === "target")
+      onLocalBulletHit(hit.targetId, hit.headshot, damageFor(hit.headshot, def));
+  } else {
+    fx.fireOwn(origin, dir);
+    if (localBullets.length < 64) localBullets.push(spawnBullet(origin, dir));
+  }
 
   // View kick: the player counters it with the mouse.
   look.yaw += shot.kickYaw;
@@ -539,7 +579,7 @@ function stepLocalBullets(): void {
 }
 
 /** An offline bullet hit dummy `id`: damage, stats, hit marker, sound, health bar. */
-function onLocalBulletHit(id: number, headshot: boolean, amount?: number): void {
+function onLocalBulletHit(id: number, headshot: boolean, amount?: number, melee = false): void {
   const d = dummies[id];
   if (d?.alive) {
     if (d.firstHitAt === null) {
@@ -558,8 +598,8 @@ function onLocalBulletHit(id: number, headshot: boolean, amount?: number): void 
       tick: simTicks,
     });
     dummyViews.flash(d.id);
-    if (amount === undefined) audio.hit(headshot, result.killed);
-    else audio.meleeHit(result.killed);
+    if (melee) audio.meleeHit(result.killed);
+    else audio.hit(headshot, result.killed);
     hitFeedback.onHit(
       {
         targetId: d.id,
@@ -589,7 +629,7 @@ function localMelee(): void {
   const dir = viewDirection(look.yaw, look.pitch);
   const hit = findMeleeTarget(world, aliveHitboxes(dummies), eye, dir);
   if (hit.targetId >= 0) {
-    onLocalBulletHit(hit.targetId, false, WEAPON.meleeDamage);
+    onLocalBulletHit(hit.targetId, false, WEAPON.meleeDamage, true);
     const d = dummies[hit.targetId];
     if (d?.alive) {
       const ax = d.x - player.x;
@@ -602,7 +642,7 @@ function localMelee(): void {
 
 const sim = new FixedTimestep(() => {
   simTicks++;
-  const ads = held.has("Mouse2");
+  const ads = held.has("Mouse2") && currentWeapon().slot !== EMPTY_HANDS;
   const input = {
     ...emptyInput(),
     moveX: axis("KeyD", "KeyA"),
@@ -616,6 +656,7 @@ const sim = new FixedTimestep(() => {
     fire: held.has("Mouse0"),
     reload: pressed.reload,
     melee: pressed.melee,
+    slot: pressed.slot,
   };
   prevPlayer = player;
   if (predictor) {
@@ -632,7 +673,7 @@ const sim = new FixedTimestep(() => {
     }
   } else if (netMode === "offline") {
     // Offline practice: local movement, local weapon, local dummies.
-    player = stepPlayer(player, input, world, DT);
+    player = stepPlayer(player, { ...input, ...movementMods(weapon) }, world, DT);
     stepDummies(dummies, DT, hitstopTicks > 0);
     stepLocalBullets();
     if (hitstopTicks > 0) hitstopTicks--;
@@ -657,6 +698,7 @@ const sim = new FixedTimestep(() => {
   pressed.dash = false;
   pressed.reload = false;
   pressed.melee = false;
+  pressed.slot = 0;
 });
 
 function netHud(): string {
@@ -718,9 +760,9 @@ function frame(nowMs: number): void {
   const cam = view.camera;
 
   // Aim down sights: smooth zoom.
-  const adsHeld = held.has("Mouse2");
+  const adsHeld = held.has("Mouse2") && currentWeapon().slot !== EMPTY_HANDS;
   adsT += ((adsHeld ? 1 : 0) - adsT) * (1 - Math.exp(-frameDt * 14));
-  const fov = HIP_FOV * (1 + (WEAPON.adsFovScale - 1) * adsT);
+  const fov = HIP_FOV * (1 + ((currentDef()?.adsFovScale ?? 1) - 1) * adsT);
   if (Math.abs(cam.fov - fov) > 0.01) {
     cam.fov = fov;
     cam.updateProjectionMatrix();
@@ -753,6 +795,8 @@ function frame(nowMs: number): void {
   selfState.wallRunning = player.wallRunning;
   selfState.alive = !dead;
   selfState.aiming = adsHeld;
+  selfState.armed = currentWeapon().slot !== EMPTY_HANDS;
+  selfState.weapon = currentWeapon().gun;
   selfState.yaw = look.yaw + Math.PI; // the figure faces +Z, the camera looks down -Z at yaw 0
   selfBody.update(selfState, frameDt, cam.position);
   // Only show your body when you look down at it (or when dead): sliding, crouching, dashing
@@ -779,8 +823,13 @@ function frame(nowMs: number): void {
   // bullet on screen flies on (it ends at a wall or at a person, like the real one).
   while (clock.ready && pendingShots[0] && pendingShots[0].tick <= renderTick) {
     const sh = pendingShots.shift() as Shot;
-    fx.fireRemote([sh.x, sh.y, sh.z], [sh.dx, sh.dy, sh.dz]);
-    audio.shotAt({ x: sh.x, y: sh.y, z: sh.z });
+    const sniper = sh.gun === 1;
+    fx.fireRemote(
+      [sh.x, sh.y, sh.z],
+      [sh.dx, sh.dy, sh.dz],
+      sniper ? HITSCAN_TRACER_SPEED : undefined,
+    );
+    audio.shotAt({ x: sh.x, y: sh.y, z: sh.z }, sniper);
   }
   if (pendingShots.length > 64) pendingShots.splice(0, pendingShots.length - 64);
   fx.stepBullets(
@@ -790,19 +839,32 @@ function frame(nowMs: number): void {
   );
   updateSound(frameDt, renderTick, cam);
   const activeWeapon = predictor ? predictor.weapon : weapon;
-  const spread = spreadDegrees(activeWeapon.burst, adsHeld, {
-    hSpeed: hSpeed(player),
-    onGround: player.onGround,
-    crouching: player.crouching,
-    sliding: player.sliding,
-  });
+  const def = activeDef(activeWeapon);
+  // Keep the viewmodel showing the gun in hand (it also changes without a switch: respawn).
+  const heldNow = activeWeapon.slot !== EMPTY_HANDS;
+  if (syncedGun !== activeWeapon.gun * 10 + (heldNow ? 1 : 0)) {
+    fx.setWeapon(activeWeapon.gun, heldNow);
+    syncedGun = activeWeapon.gun * 10 + (heldNow ? 1 : 0);
+  }
+  const spread = spreadDegrees(
+    activeWeapon.burst,
+    adsHeld,
+    {
+      hSpeed: hSpeed(player),
+      onGround: player.onGround,
+      crouching: player.crouching,
+      sliding: player.sliding,
+    },
+    def ?? WEAPON_DEFS[0],
+  );
   const shake = fx.update(
     frameDt,
     adsT,
     spread,
     fov,
     activeWeapon.reloadT,
-    activeWeapon.ammo / WEAPON.magSize,
+    def ? activeWeapon.ammo / def.magSize : 1,
+    def?.reloadTime,
   );
   // Wall run: bank the camera away from the wall (positive roll tilts the head left).
   const wallOnRight =
@@ -831,13 +893,24 @@ function frame(nowMs: number): void {
   hitFeedback.update(nowMs, headAnchor);
   practiceEl.classList.toggle("on", inRange());
   if (inRange()) practiceEl.innerHTML = practiceHtml();
-  ammoEl.innerHTML = `${activeWeapon.ammo} / ${WEAPON.magSize}<small>${
-    activeWeapon.reloadT > 0
-      ? `RELOADING ${activeWeapon.reloadT.toFixed(1)}s`
-      : activeWeapon.ammo === 0
-        ? "RELOAD (R)"
-        : ""
-  }</small>`;
+  ammoEl.innerHTML = def
+    ? `${activeWeapon.ammo} / ${def.magSize}<small>${
+        activeWeapon.switchT > 0
+          ? "DRAWING"
+          : activeWeapon.reloadT > 0
+            ? `RELOADING ${activeWeapon.reloadT.toFixed(1)}s`
+            : activeWeapon.ammo === 0
+              ? "RELOAD (R)"
+              : ""
+      }</small>`
+    : "<small>EMPTY HANDS</small>";
+  const slotsHtml = ["1 Brick", "2 Needle", "3 Fists"]
+    .map((name, i) => {
+      const on = (i === 2 ? !heldNow : heldNow && activeWeapon.gun === i) ? ' class="on"' : "";
+      return `<span${on}>${name}</span>`;
+    })
+    .join("");
+  if (slotsEl.innerHTML !== slotsHtml) slotsEl.innerHTML = slotsHtml;
   view.render();
 
   const state = [
@@ -857,7 +930,7 @@ function frame(nowMs: number): void {
     `jumps ${"●".repeat(player.airJumps)}${"○".repeat(PARAMS.maxAirJumps - player.airJumps)}  dash ${"●".repeat(Math.floor(player.dashCharges))}${"○".repeat(PARAMS.dashCharges - Math.floor(player.dashCharges))}  ` +
     `(${(player.dashCharges % 1).toFixed(2)})\n` +
     `${killLog}\n` +
-    `WASD move · Space jump (hold at green walls to climb; beside any other wall at speed you run along it, jump again to kick off) · V melee · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
+    `WASD move · Space jump (hold at green walls to climb; beside any other wall at speed you run along it, jump again to kick off) · V melee (or left click with empty hands) · 1 2 3 weapons · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
     `${fps.toFixed(0)} fps (${fps > 0 ? (1000 / fps).toFixed(1) : "-"} ms) | render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks}\n` +
     netHud();
   requestAnimationFrame(frame);

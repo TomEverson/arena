@@ -8,13 +8,17 @@ import { type Bullet, spawnBullet, stepBullet } from "./sim/bullet";
 import type { Hitbox } from "./sim/hitscan";
 import { WEAPON } from "./sim/params";
 import type { CollisionWorld } from "./sim/types";
+import { buildSniper, SNIPER_MUZZLE, SNIPER_SIGHT_Y } from "./sniper";
 
 /** Visual and audio-free feedback for shooting: crosshair, hit markers, shake, viewmodel, tracers. */
 
 const HIP = new THREE.Vector3(0.2, -0.2, -0.45);
 /** Aiming down sights: the optic's reticle sits exactly at the middle of the screen. */
 const ADS = new THREE.Vector3(0, -BRICK_SIGHT_Y, -0.36);
-const MUZZLE_LOCAL = BRICK_MUZZLE;
+/** The sniper's scope axis is lined up with the middle of the screen when aiming. */
+const ADS_SNIPER = new THREE.Vector3(0, -SNIPER_SIGHT_Y, 0.1); // eye right up at the eyepiece, so the view through the scope is big
+/** A hitscan shot's tracer is drawn as a very fast bullet. */
+export const HITSCAN_TRACER_SPEED = 2000;
 /** How long the streak behind a flying bullet is, in seconds of flight. */
 const TRAIL_SECONDS = 0.025;
 const IMPACT_SECONDS = 0.12;
@@ -50,10 +54,21 @@ export class Fx {
   private readonly marker = document.getElementById("hitmarker") as HTMLDivElement;
   private readonly gun = new THREE.Group();
   private readonly flashMesh: THREE.Mesh;
-  private readonly brick: Brick;
+  private readonly models: [Brick, Brick];
+  /** Which gun's model is showing (0 rifle, 1 sniper), and whether any gun is in hand. */
+  private gunIdx = 0;
+  private held = true;
+  /** Seconds left of the draw (the gun rising into view after a switch). */
+  private drawLeft = 0;
+  private drawTotal = 0.4;
   private readonly leftHand: THREE.Group;
   private readonly leftHandHome = new THREE.Vector3();
   private readonly reload: ReloadPose = { roll: 0, pitch: 0, drop: 0, mag: 0, hand: 0 };
+  /** The model of the gun in hand. */
+  private get brick(): Brick {
+    return this.models[this.gunIdx] as Brick;
+  }
+
   private readonly bullets: { b: Bullet; line: THREE.Line; active: boolean }[] = [];
   private readonly impacts: { mesh: THREE.Mesh; life: number }[] = [];
   private flashLife = 0;
@@ -67,15 +82,18 @@ export class Fx {
   constructor(
     scene: THREE.Scene,
     private readonly camera: THREE.PerspectiveCamera,
+    viewScene: THREE.Scene,
+    viewCamera: THREE.PerspectiveCamera,
   ) {
-    // The rifle (rifle.ts), parented to the camera.
-    this.brick = buildBrick();
-    this.gun.add(this.brick.root);
+    // The guns (rifle.ts, sniper.ts), parented to the view camera.
+    this.models = [buildBrick(), buildSniper()];
+    for (const m of this.models) this.gun.add(m.root);
+    this.models[1].root.visible = false;
     this.flashMesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.09, 0.09, 0.05),
       new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
     );
-    this.flashMesh.position.copy(MUZZLE_LOCAL);
+    this.flashMesh.position.copy(BRICK_MUZZLE);
     this.flashMesh.visible = false;
     this.gun.add(this.flashMesh);
     this.leftHand = buildHands(this.gun).left;
@@ -103,8 +121,14 @@ export class Fx {
     box(sleeve, 0.1, 0.1, 0.5, 0, 0, 0.36); // the forearm, back toward the camera
     this.fist.rotation.set(0.15, -0.12, 0);
     this.fist.visible = false;
-    camera.add(this.fist);
-    camera.add(this.gun);
+    // The gun and fist live in the renderer's own view scene (fixed field of view), lit like the world.
+    viewScene.add(new THREE.HemisphereLight(PALETTE.BONE, PALETTE.GRAPHITE, 1.2));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    sun.position.set(0.5, 1, 0.4);
+    viewScene.add(sun);
+    viewCamera.add(this.fist);
+    viewCamera.add(this.gun);
+    viewScene.add(viewCamera);
     scene.add(camera);
 
     for (let i = 0; i < POOL; i++) {
@@ -140,29 +164,41 @@ export class Fx {
    * so it looks like it comes from the gun but flies the true path. `eye` and `dir` are what the
    * shot was fired with (the game simulates the real bullet; this is only the picture of it).
    */
-  fireOwn(eye: readonly [number, number, number], dir: readonly [number, number, number]): void {
+  fireOwn(
+    eye: readonly [number, number, number],
+    dir: readonly [number, number, number],
+    speed?: number,
+  ): void {
     this.camera.updateMatrixWorld();
-    const muzzle = this.camera.localToWorld(MUZZLE_LOCAL.clone().add(this.gun.position));
+    const muzzle = this.camera.localToWorld(
+      (this.gunIdx === 1 ? SNIPER_MUZZLE : BRICK_MUZZLE).clone().add(this.gun.position),
+    );
     const aim = new THREE.Vector3(eye[0] + dir[0] * 40, eye[1] + dir[1] * 40, eye[2] + dir[2] * 40);
     const d = aim.sub(muzzle).normalize();
-    this.spawnVisual([muzzle.x, muzzle.y, muzzle.z], [d.x, d.y, d.z]);
+    this.spawnVisual([muzzle.x, muzzle.y, muzzle.z], [d.x, d.y, d.z], speed);
   }
 
   /** Someone else's bullet, from their eye (the picture only; the server decides hits). */
-  fireRemote(eye: readonly [number, number, number], dir: readonly [number, number, number]): void {
+  fireRemote(
+    eye: readonly [number, number, number],
+    dir: readonly [number, number, number],
+    speed?: number,
+  ): void {
     this.spawnVisual(
       [eye[0] + dir[0] * 0.6, eye[1] - 0.2 + dir[1] * 0.6, eye[2] + dir[2] * 0.6],
       [dir[0], dir[1], dir[2]],
+      speed,
     );
   }
 
   private spawnVisual(
     origin: readonly [number, number, number],
     dir: readonly [number, number, number],
+    speed?: number,
   ): void {
     const slot = this.bullets.find((x) => !x.active);
     if (!slot) return;
-    slot.b = spawnBullet(origin, dir);
+    slot.b = spawnBullet(origin, dir, speed);
     slot.active = true;
     slot.line.visible = true;
     this.moveLine(slot);
@@ -207,6 +243,23 @@ export class Fx {
     }
   }
 
+  /**
+   * Which gun is in hand: 0 rifle, 1 sniper; `held` false means empty hands. Shows that model,
+   * moves the muzzle flash to its muzzle, and starts the draw (the gun rising into view over
+   * `drawSeconds`).
+   */
+  setWeapon(gun: number, held: boolean, drawSeconds = 0): void {
+    this.gunIdx = gun === 1 ? 1 : 0;
+    this.held = held;
+    this.models[0].root.visible = this.gunIdx === 0;
+    this.models[1].root.visible = this.gunIdx === 1;
+    this.flashMesh.position.copy(this.gunIdx === 1 ? SNIPER_MUZZLE : BRICK_MUZZLE);
+    if (drawSeconds > 0) {
+      this.drawTotal = drawSeconds;
+      this.drawLeft = drawSeconds;
+    }
+  }
+
   /** You swung: the rifle is thrust forward and twisted for a moment (the hands go with it). */
   melee(): void {
     this.meleeLeft = MELEE_SECONDS;
@@ -236,18 +289,28 @@ export class Fx {
     fovDeg: number,
     reloadT: number,
     ammoFraction = 1,
+    reloadTotal: number = WEAPON.reloadTime,
   ): { yaw: number; pitch: number } {
-    this.gun.position.lerpVectors(HIP, ADS, adsT);
+    this.gun.position.lerpVectors(HIP, this.gunIdx === 1 ? ADS_SNIPER : ADS, adsT);
     this.kickBack = Math.max(0, this.kickBack - frameDt * 0.5);
     this.gun.position.z += this.kickBack;
 
     // Reload: follow the keyframe timeline in reloadAnim.ts.
-    const r = reloadPose(reloadT > 0 ? 1 - reloadT / WEAPON.reloadTime : 0, this.reload);
+    const r = reloadPose(reloadT > 0 ? 1 - reloadT / reloadTotal : 0, this.reload);
     this.gun.rotation.set(r.pitch, 0, r.roll);
     this.gun.position.y += r.drop;
+    // Drawing a gun: it rises into view from below.
+    if (this.drawLeft > 0) {
+      this.drawLeft = Math.max(0, this.drawLeft - frameDt);
+      const rise = (this.drawLeft / this.drawTotal) ** 2;
+      this.gun.position.y -= 0.5 * rise;
+      this.gun.rotation.x += 0.7 * rise;
+    }
     // Melee: the rifle dips down and away while a gloved fist throws a punch (wind back, strike
     // toward the middle of the screen, return), then the rifle comes back up.
-    this.fist.visible = false;
+    // Empty hands show a resting fist; a punch moves it (and, with a gun, brings the fist in).
+    this.fist.visible = !this.held;
+    this.fist.position.set(FIST_REST[0], FIST_REST[1], FIST_REST[2]);
     if (this.meleeLeft > 0) {
       this.meleeLeft = Math.max(0, this.meleeLeft - frameDt);
       const u = 1 - this.meleeLeft / MELEE_SECONDS;
@@ -269,6 +332,7 @@ export class Fx {
     this.brick.mag.position.y = BRICK_MAG_HOME.y + r.mag;
     this.leftHand.position.copy(this.leftHandHome).lerp(MAG_GRIP, r.hand);
     this.leftHand.position.y += r.mag * r.hand;
+    this.brick.aim?.(adsT);
     this.brick.update(frameDt, ammoFraction, clockSeconds());
     this.flashLife = Math.max(0, this.flashLife - frameDt);
     this.flashMesh.visible = this.flashLife > 0;
@@ -285,6 +349,8 @@ export class Fx {
     this.crosshair.style.setProperty("--gap", `${Math.max(2, px).toFixed(1)}px`);
     // Aiming down sights, the optic's reticle is the crosshair: the HUD one is gone.
     this.crosshair.style.opacity = String(adsT > 0.2 ? 0 : 1 - adsT * 5);
+
+    this.gun.visible = this.held;
 
     this.shake = Math.max(0, this.shake - frameDt * 6);
     const a = this.shake * this.shake * 0.012;

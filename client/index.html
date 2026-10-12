@@ -495,6 +495,25 @@
         pointer-events: none;
         text-align: right;
       }
+      #slots {
+        position: fixed;
+        right: 24px;
+        bottom: 84px;
+        display: flex;
+        gap: 6px;
+        font: 700 12px monospace;
+        pointer-events: none;
+      }
+      #slots span {
+        padding: 3px 8px;
+        color: #9ab;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid #445;
+      }
+      #slots span.on {
+        color: #ffd24a;
+        border-color: #ffd24a;
+      }
       #ammo small {
         display: block;
         font-size: 13px;
@@ -528,6 +547,7 @@
     </div>
     <div id="hitmarker"></div>
     <div id="hitlayer"></div>
+    <div id="slots"></div>
     <div id="ammo"></div>
     <div id="vitals"></div>
     <div id="hurt"></div>

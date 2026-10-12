@@ -336,11 +336,17 @@ func (w *World) stepPlayer(p *Player) {
 		if !p.Health.Alive || !w.canAct() {
 			continue // dead, or in a countdown/results screen: frozen, but the input is acknowledged
 		}
+		// The weapon in hand sets run speed and the aim slowdown; the client's own values are ignored.
+		in.RunSpeedMult, in.ADSSpeedMult = movementMods(&p.Weapon)
 		StepPlayer(&p.State, &in, &w.level.Collision, TickDT)
 		ctx := WeaponContext{HSpeed: hSpeed(&p.State), OnGround: p.State.OnGround, Crouching: p.State.Crouching, Sliding: p.State.Sliding}
 		shot := StepWeapon(&p.Weapon, &in, &ctx, TickDT)
 		if shot.Fired {
-			w.fireBullet(p, &in, &shot)
+			if d := activeDef(&p.Weapon); d.hitscan {
+				w.resolveShot(p, &in, &shot, d)
+			} else {
+				w.fireBullet(p, &in, &shot)
+			}
 		}
 		if shot.MeleeStrike {
 			w.resolveMelee(p, &in)
@@ -379,6 +385,12 @@ func (p *Player) syncEntity() {
 	}
 	if p.Weapon.MeleeCooldown > WeaponMeleeCooldown-WeaponMeleeLock {
 		f |= protocol.EntityFlagMeleeing
+	}
+	switch p.Weapon.Slot {
+	case 1:
+		f |= protocol.EntityFlagHoldingSniper
+	case emptyHands:
+		f |= protocol.EntityFlagEmptyHanded
 	}
 	if !p.Health.Alive {
 		f |= protocol.EntityFlagDead

@@ -49,6 +49,8 @@ export interface Brick {
   readonly strips: readonly THREE.Mesh[];
   /** A shot was fired: the slide kicks back. */
   shoot(): void;
+  /** How far aimed down sights the gun is (0 hip, 1 aimed): lets a gun tidy its view (the sniper hides its scope's far end). */
+  aim?(t: number): void;
   /**
    * Per frame. `ammo` is the share of a full magazine left (0..1); `time` is seconds, for the
    * blink. Also settles the slide.

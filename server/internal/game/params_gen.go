@@ -100,10 +100,41 @@ const (
 	WeaponRecoilResetTime = 0.35
 	WeaponAdsFovScale     = 0.7
 	WeaponAdsSensitivity  = 0.7
+	WeaponSwitchTime      = 0.4
+	WeaponSwitchQuickTime = 0.2
+	WeaponAdsSpeedMult    = 0.65
+	WeaponEmptyRunMult    = 1.15
 )
 
 var WeaponRecoilPitch = [...]float64{0.5, 0.48, 0.46, 0.44, 0.42, 0.4, 0.38, 0.36, 0.34, 0.32, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22}
 var WeaponRecoilYaw = [...]float64{0, 0.05, 0.1, 0.12, 0.1, 0.05, -0.05, -0.12, -0.2, -0.22, -0.15, -0.05, 0.08, 0.18, 0.25, 0.28, 0.2, 0.1, -0.05, -0.15, -0.25, -0.3, -0.2, -0.05, 0.1, 0.2, 0.3, 0.25, 0.1, -0.1}
+
+// Sniper tuning (shared/params.json "sniper"), prefixed with Sniper.
+const (
+	SniperDamage          = 75
+	SniperHeadshotMult    = 2
+	SniperRpm             = 42.857142857142854
+	SniperMagSize         = 5
+	SniperReloadTime      = 2.6
+	SniperRange           = 500
+	SniperHipSpread       = 4
+	SniperAdsSpread       = 0
+	SniperMoveBloom       = 2.5
+	SniperAirBloom        = 2
+	SniperAdsBloomScale   = 0.2
+	SniperCrouchHipMult   = 0.7
+	SniperSlideHipMult    = 0.9
+	SniperSlideBloomScale = 0.5
+	SniperShotBloom       = 0
+	SniperShotBloomMax    = 0
+	SniperRecoilResetTime = 1
+	SniperAdsFovScale     = 0.25
+	SniperAdsSensitivity  = 0.3
+	SniperAdsSpeedMult    = 0.35
+)
+
+var SniperRecoilPitch = [...]float64{2.5}
+var SniperRecoilYaw = [...]float64{0}
 
 // Combat tuning (shared/params.json "combat"), prefixed with Combat.
 const (

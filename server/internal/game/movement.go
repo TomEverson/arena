@@ -41,27 +41,38 @@ type wallHit struct {
 type wish struct {
 	// Unit direction in world XZ ((0, 0) if no input) and input magnitude 0..1.
 	x, z, mag float64
-	// Ground speed multiplier (less than 1 while aiming down sights).
+	// Ground speed multiplier (less than 1 while aiming down sights, more with empty hands).
 	speed float64
+	// run is the weapon's run speed multiplier alone (it also applies in the air).
+	run float64
 }
 
 func wishOf(in *Input) wish {
 	mx, mz := in.MoveX, in.MoveZ
 	l := math.Hypot(mx, mz)
 	if l < 1e-9 {
-		return wish{speed: 1}
+		return wish{speed: 1, run: 1}
 	}
 	mag := math.Min(1, l)
 	mx /= l
 	mz /= l
 	sin := math.Sin(in.Yaw)
 	cos := math.Cos(in.Yaw)
-	speed := 1.0
+	// 0 (a field an old input lacks) means the default.
+	run := in.RunSpeedMult
+	if run == 0 {
+		run = 1
+	}
+	speed := run
 	if in.ADS {
-		speed = AdsSpeedMult
+		ads := in.ADSSpeedMult
+		if ads == 0 {
+			ads = AdsSpeedMult
+		}
+		speed *= ads
 	}
 	// forward = (-sin, -cos), right = (cos, -sin)
-	return wish{x: cos*mx - sin*mz, z: -sin*mx - cos*mz, mag: mag, speed: speed}
+	return wish{x: cos*mx - sin*mz, z: -sin*mx - cos*mz, mag: mag, speed: speed, run: run}
 }
 
 // StepPlayer advances the player by dt seconds, in place.
@@ -281,9 +292,9 @@ func updateHorizontalVelocity(s *PlayerState, wi *wish, dt float64) {
 	// Air: steer freely but never gain speed beyond what we had (or run speed).
 	before := hSpeed(s)
 	if wi.mag > 0 {
-		accelerate(s, wi, RunSpeed*wi.mag, AirAccel, dt)
+		accelerate(s, wi, RunSpeed*wi.run*wi.mag, AirAccel, dt)
 	}
-	limit := math.Max(before, RunSpeed)
+	limit := math.Max(before, RunSpeed*wi.run)
 	after := hSpeed(s)
 	if after > limit {
 		s.VX *= limit / after

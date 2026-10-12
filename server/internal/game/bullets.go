@@ -103,7 +103,7 @@ func (w *World) fireBullet(shooter *Player, in *Input, shot *ShotResult) {
 	s := &shooter.State
 	ox, oy, oz := s.X, s.Y+eyeHeight(s), s.Z
 	dx, dy, dz := ViewDirection(in.Yaw+shot.SpreadYaw, in.Pitch+shot.SpreadPitch)
-	w.shots.push(protocol.Shot{Tick: uint32(w.tick), Actor: shooter.ID, X: ox, Y: oy, Z: oz, Dx: dx, Dy: dy, Dz: dz})
+	w.shots.push(protocol.Shot{Tick: uint32(w.tick), Actor: shooter.ID, Gun: shooter.Weapon.Gun, X: ox, Y: oy, Z: oz, Dx: dx, Dy: dy, Dz: dz})
 
 	b := SpawnBullet(ox, oy, oz, dx, dy, dz, WeaponBulletSpeed)
 	view := w.rewindView(in.ViewTick)
@@ -112,7 +112,7 @@ func (w *World) fireBullet(shooter *Player, in *Input, shot *ShotResult) {
 		n := w.fillBoxes(shooter, view+float64(k))
 		hit := StepBullet(&b, TickDT, &w.level.Collision, w.boxes[:n], WeaponRange)
 		if hit.Kind == RayTarget {
-			w.applyHit(shooter, hit)
+			w.applyHit(shooter, hit, &weaponDefs[0])
 		}
 		if b.Done {
 			return
@@ -138,7 +138,7 @@ func (w *World) stepBullets() {
 		n := w.fillBoxes(owner, float64(w.tick))
 		hit := StepBullet(&lb.Bullet, TickDT, &w.level.Collision, w.boxes[:n], WeaponRange)
 		if hit.Kind == RayTarget && owner != nil {
-			w.applyHit(owner, hit)
+			w.applyHit(owner, hit, &weaponDefs[0])
 		}
 		if lb.Done {
 			lb.active = false
@@ -147,8 +147,8 @@ func (w *World) stepBullets() {
 }
 
 // applyHit applies a bullet that struck a player or a practice target.
-func (w *World) applyHit(shooter *Player, hit RayHit) {
-	w.dealDamage(shooter, uint32(hit.TargetID), Damage(hit.Headshot), hit.Headshot, 0)
+func (w *World) applyHit(shooter *Player, hit RayHit, d *weaponDef) {
+	w.dealDamage(shooter, uint32(hit.TargetID), d.damageOf(hit.Headshot), hit.Headshot, 0)
 }
 
 // dealDamage hurts the player or practice target with this id (extra adds event flags, e.g. melee).

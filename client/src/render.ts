@@ -122,6 +122,12 @@ function paletteMaterial(source: THREE.Texture, dither: number): THREE.ShaderMat
 export class RetroRenderer {
   readonly renderer: THREE.WebGLRenderer;
   readonly camera = new THREE.PerspectiveCamera(75, RENDER_WIDTH / RENDER_HEIGHT, 0.1, 500);
+  /**
+   * The first-person gun lives in its own scene with its own camera, drawn on top of the world
+   * with a fixed field of view: so when the world zooms in (a scope) the gun keeps its size.
+   */
+  readonly viewScene = new THREE.Scene();
+  readonly viewCamera = new THREE.PerspectiveCamera(75, RENDER_WIDTH / RENDER_HEIGHT, 0.02, 10);
   private readonly target: THREE.WebGLRenderTarget;
   private readonly blitScene = new THREE.Scene();
   private readonly blitCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -183,6 +189,12 @@ export class RetroRenderer {
     r.setRenderTarget(this.target);
     r.setViewport(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
     r.render(this.scene, this.camera);
+    if (this.viewScene.children.length > 0) {
+      r.autoClear = false;
+      r.clearDepth(); // the gun is never hidden by the world
+      r.render(this.viewScene, this.viewCamera);
+      r.autoClear = true;
+    }
 
     // Letterbox the low-res image into the full canvas.
     const cw = r.domElement.width;

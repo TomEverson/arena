@@ -129,7 +129,7 @@ func TestWeaponVectors(t *testing.T) {
 				for i := 0; i < s.Ticks; i++ {
 					shot := game.StepWeapon(&w, &in, &ctx, v.Dt)
 					tick++
-					if shot.Fired || shot.ReloadStarted || shot.ReloadFinished || shot.DryFire || shot.MeleeStarted || shot.MeleeStrike {
+					if shot.Fired || shot.ReloadStarted || shot.ReloadFinished || shot.DryFire || shot.MeleeStarted || shot.MeleeStrike || shot.Switched {
 						events = append(events, weaponEvent{Tick: tick, ShotResult: shot})
 					}
 					if tick%10 == 0 || tick == total {

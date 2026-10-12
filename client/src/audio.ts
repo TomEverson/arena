@@ -260,10 +260,16 @@ export class AudioEngine {
   }
 
   /** Someone else's rifle shot, placed where it was fired (quieter and duller with distance). */
-  shotAt(at: { x: number; y: number; z: number }): void {
+  shotAt(at: { x: number; y: number; z: number }, sniper = false): void {
     if (!this.room()) return;
     const o = this.dest(at);
     if (!o) return;
+    if (sniper) {
+      this.hiss(o, "bandpass", 1800, 250, 0.25, 1.1, 0, 0.6);
+      this.tone(o, "sine", 110, 30, 0.35, 1.2);
+      this.hiss(o, "lowpass", 700, 100, 0.7, 0.4, 0.02);
+      return;
+    }
     this.hiss(o, "bandpass", 2800, 450, 0.09, 0.9, 0, 0.8);
     this.tone(o, "sine", 160, 45, 0.12, 1.0);
     this.hiss(o, "lowpass", 800, 140, 0.2, 0.35, 0.01);
@@ -284,6 +290,25 @@ export class AudioEngine {
     this.tone(o, "sine", 150, 45, 0.16, 0.8);
     this.hiss(o, "lowpass", 1800, 200, 0.12, 0.5);
     if (killed) this.tone(o, "triangle", 880, 880, 0.2, 0.3, 0.05);
+  }
+
+  /** Your own sniper shot: a hard crack, a deep boom and a long tail, then the bolt. */
+  shotSniper(): void {
+    const o = this.dest();
+    if (!o) return;
+    this.hiss(o, "bandpass", 2200, 200, 0.22, 0.9, 0, 0.6);
+    this.tone(o, "sine", 120, 28, 0.32, 1.0);
+    this.hiss(o, "lowpass", 800, 90, 0.8, 0.3, 0.02);
+    this.hiss(o, "bandpass", 1900, 1300, 0.04, 0.35, 0.55, 3); // the bolt: up...
+    this.hiss(o, "bandpass", 1500, 900, 0.05, 0.4, 0.75, 3); // ...and home
+  }
+
+  /** Taking a gun out (or putting it away): a short mechanical click. */
+  draw(): void {
+    const o = this.dest();
+    if (!o) return;
+    this.hiss(o, "bandpass", 2000, 1400, 0.03, 0.35, 0, 3);
+    this.tone(o, "square", 320, 180, 0.06, 0.1, 0.02);
   }
 
   dryFire(): void {

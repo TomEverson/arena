@@ -148,7 +148,7 @@ func TestShotsOnlyHurtDuringALiveMatch(t *testing.T) {
 	a.Health.ProtectedFor, b.Health.ProtectedFor = 0, 0
 	shoot := func() { // the shot itself, as the world resolves it
 		in := Input{Pitch: -0.05, ADS: true}
-		r.w.resolveShot(a, &in, &ShotResult{})
+		r.w.resolveShot(a, &in, &ShotResult{}, &weaponDefs[0])
 	}
 	for _, phase := range []uint8{protocol.MatchPhaseWaiting, protocol.MatchPhaseCountdown, protocol.MatchPhaseEnded} {
 		r.w.match.phase = phase

@@ -25,6 +25,7 @@ Monorepo, Turborepo, Vite + Three.js client with fixed-timestep loop, Go server 
 | [M12](m12.md) | FFA map | M6, M10, M11 |
 | [M13](m13.md) | Projectile weapons | M2, M5 |
 | [M14](m14.md) | Melee | M2, M5, M13 |
+| [M15](m15.md) | Weapon slots and the sniper | M13, M14 |
 
 ## Main risks
 - **Prediction and reconciliation (M4)**: most likely place for subtly wrong code. Keep it small, test with vectors.
@@ -33,4 +34,4 @@ Monorepo, Turborepo, Vite + Three.js client with fixed-timestep loop, Go server 
 - **Scope creep**: no PvE, classes or second weapon until M9 playtests ask for them.
 
 ## Conventions
-Each milestone is one file (`m1.md` ... `m14.md`) with scope (checklist), a done-when, and notes. Add detail to the file, or a folder of notes, as the milestone is worked on. Tick the checklist as items land.
+Each milestone is one file (`m1.md` ... `m15.md`) with scope (checklist), a done-when, and notes. Add detail to the file, or a folder of notes, as the milestone is worked on. Tick the checklist as items land.

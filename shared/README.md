@@ -29,6 +29,9 @@ Damage, health (`maxHealth`, `maxShield`), fire rate (`rpm`), magazine, reload, 
 tables, ADS zoom and sensitivity, and the bullet (`bulletSpeed` m/s, `bulletGravity` m/s²; the `range` is how far it flies). Angles are degrees. Used by `client/src/sim/weapon.ts` now and by the Go
 port in M5.
 
+## Sniper parameters (`sniper`)
+The second gun (weapon slot 2, hitscan): the same keys as the rifle where they apply (damage, `headshotMult`, `rpm`, `magSize`, `reloadTime`, `range`, the spread cone values, recoil, ADS zoom and sensitivity). Go constants are prefixed `Sniper`. The draw times between weapons are `switchTime` and `switchQuickTime` in the `weapon` section.
+
 ## Combat parameters (`combat`)
 Server-authoritative numbers: `headSize` (the top 0.3 m of a target is its head), shield recharge delay and rate,
 `respawnTime`, `spawnProtection`, `maxRewindTicks` (lag-compensation cap, 20 ticks = 333 ms), `historyTicks`

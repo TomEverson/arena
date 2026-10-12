@@ -155,6 +155,15 @@ func TestMovementVectors(t *testing.T) {
 func TestMovementVectorsThroughWorld(t *testing.T) {
 	for _, v := range loadVectors(t) {
 		t.Run(v.Name, func(t *testing.T) {
+			// The world takes run speed and the aim slowdown from the weapon in hand, not from the
+			// input, so a vector that sets them (sniper aiming, empty hands) cannot go through it.
+			// It still runs through StepPlayer directly above.
+			for _, step := range v.Steps {
+				if (step.Input.RunSpeedMult != 0 && step.Input.RunSpeedMult != 1) ||
+					(step.Input.ADSSpeedMult != 0 && step.Input.ADSSpeedMult != game.AdsSpeedMult) {
+					t.Skip("sets weapon-dependent speeds: covered by the server's own tests")
+				}
+			}
 			lv := &game.Level{Collision: *v.world(t), Spawns: []game.Vec3{{}}}
 			w := game.NewWorld(lv)
 			p := game.NewPlayer(1)
