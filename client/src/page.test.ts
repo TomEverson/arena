@@ -50,7 +50,21 @@ function page(name: string) {
 }
 
 // Styled through a parent rule or by tag name, so they need no rule of their own.
-const STYLED_VIA_PARENT = new Set(["game", "hinttext", "play-ffa", "play-practice"]);
+const STYLED_VIA_PARENT = new Set([
+  "game",
+  "hinttext",
+  "play-ffa",
+  "play-practice",
+  // The viewer's controls, all inside #panel.
+  "model",
+  "anim",
+  "replay",
+  "hitbox",
+  "aim",
+  "fire",
+  "fx",
+  "panel",
+]);
 
 describe.each(["index.html", "figure.html"])("%s", (name) => {
   const { html, style, ids } = page(name);

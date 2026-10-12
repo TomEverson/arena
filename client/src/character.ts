@@ -36,9 +36,18 @@ export interface BodyState {
   alive: boolean;
   /** Running along a wall (airborne, but moving like a sprint). */
   wallRunning?: boolean;
+  /** Crouched (low and slow, feet planted). */
+  crouching?: boolean;
+  /** In the middle of a dash. */
+  dashing?: boolean;
+  /** Aiming down the sights: the rifle comes up to the shoulder. */
+  aiming?: boolean;
 }
 
 const FLASH_SECONDS = 0.09;
+const FLIP_SECONDS = 0.5; // the double-jump somersault
+const SHOT_SECONDS = 0.09; // recoil and muzzle flash after a shot
+const CENTER_Y = 0.9; // the somersault turns about the middle of the body
 const FLINCH_DECAY = 10; // per second
 const DEATH_SECONDS = 0.6;
 const SPAWN_SECONDS = 0.25;
@@ -77,6 +86,8 @@ interface Pose {
   armRX: number;
   armLZ: number;
   armRZ: number;
+  /** Leg length multiplier (1 = full; the crouch squashes the legs so the feet stay planted). */
+  legScale: number;
 }
 
 const zeroPose = (): Pose => ({
@@ -91,6 +102,7 @@ const zeroPose = (): Pose => ({
   armRX: 0,
   armLZ: 0,
   armRZ: 0,
+  legScale: 1,
 });
 
 /** out = a + (b - a) * t, for every joint. */
@@ -165,12 +177,23 @@ export class CharacterBody {
   private airW = 0;
   private slideW = 0;
   private wallW = 0;
+  private crouchW = 0;
+  private dashW = 0;
+  private aimW = 0;
+  /** 0 = no somersault; 0..1 = how far through it is. */
+  private flipT = 0;
+  private shootT = 0;
+  private prevRawVy = 0;
+  private readonly gun = new THREE.Group();
+  private readonly muzzleFlash: THREE.Mesh;
   private airTime = 0;
   private land = 0;
   private readonly ground = zeroPose();
   private readonly air = zeroPose();
   private readonly slide = zeroPose();
   private readonly wall = zeroPose();
+  private readonly crouch = zeroPose();
+  private readonly dash = zeroPose();
   private readonly pose = zeroPose();
 
   /** `seed` offsets the idle animation so several characters don't breathe in sync. */
@@ -233,7 +256,27 @@ export class CharacterBody {
       return shoulder;
     }) as [THREE.Group, THREE.Group];
 
+    // The rifle: slung at the hip while walking, up at the shoulder when aiming.
+    const gun = this.gun;
+    upper.add(gun);
+    part(gun, ink, box(0.07, 0.12, 0.46), [0, 0, 0.1]); // receiver
+    part(gun, metal, tube(0.022, 0.022, 0.34), [0, 0.02, 0.5], [Math.PI / 2, 0, 0]); // barrel
+    part(gun, suit, box(0.06, 0.1, 0.2), [0, -0.02, -0.2]); // stock
+    part(gun, ink, box(0.05, 0.16, 0.07), [0, -0.12, 0.08], [0.2, 0, 0]); // magazine
+    this.muzzleFlash = part(
+      gun,
+      new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
+      box(0.12, 0.12, 0.14),
+      [0, 0.02, 0.76],
+    );
+    this.muzzleFlash.visible = false;
+
     scene.add(this.root);
+  }
+
+  /** Fired a shot: recoil and a muzzle flash for a moment (raises the rifle too). */
+  shoot(): void {
+    this.shootT = 1;
   }
 
   /** Got shot: flash BONE and flinch. */
@@ -270,7 +313,8 @@ export class CharacterBody {
     const dz = s.z - this.lastZ;
     const dist = Math.hypot(dx, dz);
     this.speed += (dist / dt - this.speed) * follow(10, dt);
-    this.vy += ((s.y - this.lastY) / dt - this.vy) * follow(10, dt);
+    const rawVy = (s.y - this.lastY) / dt;
+    this.vy += (rawVy - this.vy) * follow(10, dt);
     this.lastX = s.x;
     this.lastY = s.y;
     this.lastZ = s.z;
@@ -295,6 +339,22 @@ export class CharacterBody {
     }
     this.land = Math.max(0, this.land - dt * 5);
 
+    // Double jump: a sudden upward kick while already in the air starts a somersault.
+    if (inAir && this.airTime > 0.12 && rawVy - this.prevRawVy > 5 && this.flipT === 0) {
+      this.flipT = 1e-6;
+    }
+    this.prevRawVy = rawVy;
+    if (!inAir || !s.alive) this.flipT = 0;
+    else if (this.flipT > 0)
+      this.flipT = this.flipT + dt / FLIP_SECONDS >= 1 ? 0 : this.flipT + dt / FLIP_SECONDS;
+
+    const crouching = s.alive && s.crouching === true && !s.sliding;
+    this.crouchW += ((crouching ? 1 : 0) - this.crouchW) * follow(BLEND_RATE, dt);
+    this.dashW += ((s.alive && s.dashing ? 1 : 0) - this.dashW) * follow(BLEND_RATE * 1.5, dt);
+    this.shootT = Math.max(0, this.shootT - dt / SHOT_SECONDS);
+    const aiming = s.alive && (s.aiming === true || this.shootT > 0);
+    this.aimW += ((aiming ? 1 : 0) - this.aimW) * follow(BLEND_RATE, dt);
+
     // Walk/run cycle advances with distance, so feet keep pace with the ground.
     const runW = clamp01((this.speed - RUN_START) / (RUN_FULL - RUN_START));
     if ((s.onGround && !s.sliding) || wallRun)
@@ -304,9 +364,46 @@ export class CharacterBody {
     this.airPose();
     this.slidePose();
     this.wallPose();
+    this.crouchPose();
+    this.dashPose();
     const p = blendPose(this.pose, this.ground, this.air, this.airW);
     blendPose(p, p, this.slide, this.slideW);
     blendPose(p, p, this.wall, this.wallW);
+    blendPose(p, p, this.crouch, this.crouchW);
+    blendPose(p, p, this.dash, this.dashW);
+
+    // Double-jump somersault about the middle of the body, tucked up while it spins.
+    if (this.flipT > 0) {
+      const phi = this.flipT * Math.PI * 2;
+      const tuck = Math.sin(this.flipT * Math.PI);
+      p.bodyPitch += phi;
+      p.bodyY += CENTER_Y * (1 - Math.cos(phi));
+      p.bodyZ -= CENTER_Y * Math.sin(phi);
+      p.legL = lerp(p.legL, -1.3, tuck);
+      p.legR = lerp(p.legR, -1.3, tuck);
+      p.armLX = lerp(p.armLX, -1.1, tuck);
+      p.armRX = lerp(p.armRX, -1.1, tuck);
+    }
+
+    // Aiming: both arms up on the rifle, whatever the legs are doing.
+    if (this.aimW > 0.001) {
+      const k = this.aimW;
+      const recoil = this.shootT;
+      p.upperPitch = lerp(p.upperPitch, 0.05 - 0.08 * recoil, k);
+      p.armLX = lerp(p.armLX, -1.35 + 0.18 * recoil, k);
+      p.armRX = lerp(p.armRX, -1.45 + 0.18 * recoil, k);
+      p.armLZ = lerp(p.armLZ, 0.28, k);
+      p.armRZ = lerp(p.armRZ, -0.12, k);
+    }
+    // The rifle follows: hip carry to shoulder aim, kicking back a little on each shot.
+    const g = this.gun;
+    g.position.set(
+      lerp(0.22, 0.03, this.aimW),
+      lerp(0.2, 0.4, this.aimW),
+      lerp(0.12, 0.28, this.aimW) - 0.04 * this.shootT,
+    );
+    g.rotation.set(lerp(1.0, 0, this.aimW) - 0.05 * this.shootT, 0, 0);
+    this.muzzleFlash.visible = this.shootT > 0.55;
 
     // Landing squash: dip and lean forward for a moment.
     p.upperY -= 0.08 * this.land;
@@ -412,11 +509,48 @@ export class CharacterBody {
     w.armRZ = 0.9;
   }
 
+  /** Crouch: hips dropped, legs squashed and planted in a low stance, leaning forward. */
+  private crouchPose(): void {
+    const c = this.crouch;
+    const walkW = clamp01(this.speed / WALK_FULL);
+    const swing = Math.sin(this.phase) * 0.18 * walkW;
+    c.bodyPitch = 0;
+    c.bodyY = -0.5;
+    c.bodyZ = 0;
+    c.upperPitch = 0.5;
+    c.upperY = 0;
+    c.legScale = 0.65;
+    c.legL = -0.8 + swing;
+    c.legR = 0.8 - swing;
+    c.armLX = -0.5;
+    c.armRX = -0.5;
+    c.armLZ = -0.15;
+    c.armRZ = 0.15;
+  }
+
+  /** Dash: stretched out forward, arms swept back, legs split. */
+  private dashPose(): void {
+    const d = this.dash;
+    d.bodyPitch = 0.35;
+    d.bodyY = 0;
+    d.bodyZ = 0;
+    d.upperPitch = 0.5;
+    d.upperY = 0;
+    d.legL = -1.0;
+    d.legR = 1.0;
+    d.armLX = 1.0;
+    d.armRX = 1.0;
+    d.armLZ = -0.25;
+    d.armRZ = 0.25;
+  }
+
   private apply(p: Pose): void {
     this.body.rotation.x = p.bodyPitch;
     this.body.position.set(0, p.bodyY, p.bodyZ);
     this.upper.rotation.x = p.upperPitch;
     this.upper.position.y = HIP_Y + p.upperY;
+    this.legs[0].scale.y = p.legScale;
+    this.legs[1].scale.y = p.legScale;
     this.legs[0].rotation.x = p.legL;
     this.legs[1].rotation.x = p.legR;
     this.arms[0].rotation.set(p.armLX, 0, p.armLZ);

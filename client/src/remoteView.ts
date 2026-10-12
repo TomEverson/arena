@@ -44,6 +44,8 @@ export class RemoteViews {
       s.z = pose.z;
       s.sliding = (pose.flags & EntityFlags.sliding) !== 0;
       s.wallRunning = (pose.flags & EntityFlags.wallRunning) !== 0;
+      s.crouching = (pose.flags & EntityFlags.crouching) !== 0;
+      s.dashing = (pose.flags & EntityFlags.dashing) !== 0;
       s.alive = (pose.flags & EntityFlags.dead) === 0;
       // Poses carry no on-ground flag: a body whose height is not changing is on the ground.
       s.onGround = Math.abs(pose.y - v.lastY) < 0.005;

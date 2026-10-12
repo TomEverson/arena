@@ -19,18 +19,36 @@ function requestedHeight(): number {
 export const RENDER_HEIGHT = requestedHeight();
 export const RENDER_WIDTH = Math.round((RENDER_HEIGHT * 16) / 9);
 
-/** The palette/dither screen effect is off by default; ?fx=on enables it. */
-const FX_ENABLED =
-  typeof location !== "undefined" && new URLSearchParams(location.search).get("fx") === "on";
+/**
+ * The palette screen effect. "off" is the plain image; the others snap every pixel to the
+ * palette, with no dither (flat bands), a soft dither or a strong one (a visible mesh).
+ */
+export type FxMode = "off" | "palette" | "soft" | "strong";
+
+export const FX_MODES: readonly { id: FxMode; name: string }[] = [
+  { id: "off", name: "Off (plain)" },
+  { id: "palette", name: "Palette only (flat)" },
+  { id: "soft", name: "Palette + soft dither" },
+  { id: "strong", name: "Palette + strong dither" },
+];
 
 /** How far the dither pattern nudges a color before snapping. 0 = flat bands, higher = noisier. */
-const DITHER_STRENGTH = 0.03;
+const FX_DITHER: Record<Exclude<FxMode, "off">, number> = { palette: 0, soft: 0.03, strong: 0.12 };
+
+/** ?fx= in the URL: a mode name, or "on" for the soft dither. Off when missing or unknown. */
+export function parseFx(value: string | null): FxMode {
+  if (value === "on") return "soft";
+  return FX_MODES.some((m) => m.id === value) ? (value as FxMode) : "off";
+}
+
+const FX_FROM_URL: FxMode =
+  typeof location === "undefined" ? "off" : parseFx(new URLSearchParams(location.search).get("fx"));
 
 /**
  * The screen effect (spec/art/style-guide.md): per low-res pixel, convert to sRGB,
  * add a 4x4 Bayer ordered-dither offset, then snap to the nearest palette color.
  */
-function paletteMaterial(source: THREE.Texture): THREE.ShaderMaterial {
+function paletteMaterial(source: THREE.Texture, dither: number): THREE.ShaderMaterial {
   const colors = Object.values(PALETTE).map((c) => {
     const srgb = { r: 0, g: 0, b: 0 };
     c.getRGB(srgb, THREE.SRGBColorSpace);
@@ -41,7 +59,7 @@ function paletteMaterial(source: THREE.Texture): THREE.ShaderMaterial {
       tScene: { value: source },
       uResolution: { value: new THREE.Vector2(RENDER_WIDTH, RENDER_HEIGHT) },
       uPalette: { value: colors },
-      uDither: { value: DITHER_STRENGTH },
+      uDither: { value: dither },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -99,7 +117,7 @@ function paletteMaterial(source: THREE.Texture): THREE.ShaderMaterial {
 /**
  * Renders the scene into a small render target, then blits it to the canvas
  * with NearestFilter, letterboxed to keep the aspect ratio. The blit applies
- * the palette/dither screen effect only with ?fx=on.
+ * the palette screen effect when one is chosen (`setEffect`, or ?fx= in the URL).
  */
 export class RetroRenderer {
   readonly renderer: THREE.WebGLRenderer;
@@ -107,6 +125,11 @@ export class RetroRenderer {
   private readonly target: THREE.WebGLRenderTarget;
   private readonly blitScene = new THREE.Scene();
   private readonly blitCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private readonly plain: THREE.MeshBasicMaterial;
+  private readonly quad: THREE.Mesh;
+  private palette: THREE.ShaderMaterial | null = null;
+  /** The screen effect in use. */
+  effect: FxMode = "off";
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -121,14 +144,23 @@ export class RetroRenderer {
       depthBuffer: true,
     });
 
-    const quad = new THREE.Mesh(
-      new THREE.PlaneGeometry(2, 2),
-      FX_ENABLED
-        ? paletteMaterial(this.target.texture)
-        : new THREE.MeshBasicMaterial({ map: this.target.texture }),
-    );
-    this.blitScene.add(quad);
+    this.plain = new THREE.MeshBasicMaterial({ map: this.target.texture });
+    this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.plain);
+    this.blitScene.add(this.quad);
+    this.setEffect(FX_FROM_URL);
     this.resize();
+  }
+
+  /** Switch the screen effect (takes effect on the next frame). */
+  setEffect(mode: FxMode): void {
+    this.effect = mode;
+    if (mode === "off") {
+      this.quad.material = this.plain;
+      return;
+    }
+    this.palette ??= paletteMaterial(this.target.texture, FX_DITHER[mode]);
+    this.palette.uniforms.uDither = { value: FX_DITHER[mode] };
+    this.quad.material = this.palette;
   }
 
   resize(): void {

@@ -27,11 +27,59 @@
         pointer-events: none;
         text-shadow: 1px 1px 0 #000;
       }
+      #panel {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        width: 190px;
+        padding: 10px;
+        color: #e8e4d8;
+        font: 12px/1.4 monospace;
+        background: rgba(11, 11, 13, 0.85);
+        border: 1px solid #2de2e6;
+      }
+      #panel label {
+        display: block;
+        margin: 8px 0 3px;
+        color: #2de2e6;
+      }
+      #panel select,
+      #panel button {
+        width: 100%;
+        padding: 4px;
+        color: #e8e4d8;
+        font: 12px monospace;
+        background: #2a2c31;
+        border: 1px solid #7a7e86;
+      }
+      #panel button {
+        margin-top: 8px;
+        cursor: pointer;
+      }
+      #panel .check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 8px 0 0;
+        color: #e8e4d8;
+      }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="help"></div>
+    <div id="panel">
+      <label for="model">Model</label>
+      <select id="model"></select>
+      <label for="anim">Animation</label>
+      <select id="anim"></select>
+      <button id="replay">Play again</button>
+      <label class="check"><input id="aim" type="checkbox" /> Aim down sights</label>
+      <label class="check"><input id="fire" type="checkbox" /> Fire (hold)</label>
+      <label for="fx">Screen effect</label>
+      <select id="fx"></select>
+      <label class="check"><input id="hitbox" type="checkbox" /> Hitbox outline</label>
+    </div>
     <script type="module" src="/src/figureViewer.ts"></script>
   </body>
 </html>
