@@ -14,5 +14,5 @@ Format (units metres, Y up):
 - `targets[]`: practice dummies, client-only: `{id, pos (feet), kind: "static"|"strafe", axis: "x"|"z", range}`; strafing ones move +-`range` m around `pos`.
 - `controlPoints[]`: ignored in Phase 1.
 
-Loader and validation: `client/src/sim/level.ts` (`parseLevel`). Levels: `example.json` (schema sample), `greybox.json` (movement test arena).
+Loaders and validation: `client/src/sim/level.ts` (`parseLevel`) and `server/internal/level` (`Load`); the server takes `--level`. Spawn zones become the server's player spawn points. Levels: `example.json` (schema sample), `greybox.json` (movement test arena).
 The schema is not frozen.

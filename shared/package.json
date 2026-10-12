@@ -1,0 +1,10 @@
+{
+  "name": "@arena/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "gen": "node scripts/gen-go.mjs",
+    "test": "node scripts/gen-go.mjs --check"
+  }
+}

@@ -1,20 +1,49 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalPassThroughEnv": ["GOPATH", "GOCACHE", "GOMODCACHE", "GOFLAGS", "GOROOT"],
+  "globalPassThroughEnv": [
+    "GOPATH",
+    "GOCACHE",
+    "GOMODCACHE",
+    "GOFLAGS",
+    "GOROOT"
+  ],
   "tasks": {
     "dev": {
       "cache": false,
       "persistent": true
     },
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", "bin/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        "bin/**"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/shared/params.json",
+        "$TURBO_ROOT$/levels/*.json"
+      ]
     },
     "test": {
-      "outputs": []
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/shared/params.json",
+        "$TURBO_ROOT$/levels/*.json",
+        "$TURBO_ROOT$/testvectors/movement/*.json",
+        "$TURBO_ROOT$/shared/scripts/*.mjs",
+        "$TURBO_ROOT$/server/internal/game/params_gen.go"
+      ]
     },
     "lint": {
-      "outputs": []
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/shared/params.json",
+        "$TURBO_ROOT$/levels/*.json"
+      ]
     }
   }
 }

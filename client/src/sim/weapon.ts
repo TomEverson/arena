@@ -38,6 +38,8 @@ export interface WeaponContext {
   /** Horizontal speed of the player. */
   hSpeed: number;
   onGround: boolean;
+  crouching: boolean;
+  sliding: boolean;
 }
 
 export interface ShotResult {
@@ -79,8 +81,14 @@ export function spreadDegrees(burst: number, ads: boolean, ctx: WeaponContext): 
   let spread = ads ? W.adsSpread : W.hipSpread;
   let bloom = W.moveBloom * Math.min(1, ctx.hSpeed / PARAMS.runSpeed);
   if (!ctx.onGround) bloom += W.airBloom;
+  if (ctx.sliding) bloom *= W.slideBloomScale;
   if (ads) bloom *= W.adsBloomScale;
   spread += bloom + Math.min(W.shotBloomMax, burst * W.shotBloom);
+  // Crouching steadies hipfire a lot, sliding a little; aiming down sights is already tight.
+  if (!ads) {
+    if (ctx.crouching) spread *= W.crouchHipMult;
+    else if (ctx.sliding) spread *= W.slideHipMult;
+  }
   return spread;
 }
 

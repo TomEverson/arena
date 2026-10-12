@@ -8,7 +8,9 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "build": "turbo run build",
-    "bots": "echo 'bots: not implemented yet'"
+    "bots": "echo 'bots: not implemented yet'",
+    "gen": "pnpm --filter @arena/shared gen",
+    "vectors": "pnpm --filter @arena/client vectors"
   },
   "devDependencies": {
     "turbo": "^2.11.7"

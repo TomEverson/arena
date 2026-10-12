@@ -177,7 +177,12 @@ const sim = new FixedTimestep(() => {
   const res = stepWeapon(
     weapon,
     { fire: held.has("Mouse0"), reload: pressed.reload, ads },
-    { hSpeed: hSpeed(player), onGround: player.onGround },
+    {
+      hSpeed: hSpeed(player),
+      onGround: player.onGround,
+      crouching: player.crouching,
+      sliding: player.sliding,
+    },
     DT,
   );
   weapon = res.state;
@@ -218,6 +223,8 @@ function frame(nowMs: number): void {
   const spread = spreadDegrees(weapon.burst, adsHeld, {
     hSpeed: hSpeed(player),
     onGround: player.onGround,
+    crouching: player.crouching,
+    sliding: player.sliding,
   });
   const shake = fx.update(frameDt, adsT, spread, fov);
   cam.rotation.set(look.pitch + shake.pitch, look.yaw + shake.yaw, 0);
@@ -235,6 +242,7 @@ function frame(nowMs: number): void {
   const state = [
     player.onGround ? "ground" : "air",
     player.sliding ? "slide" : "",
+    player.crouching ? "crouch" : "",
     player.climbing ? "climb" : "",
     player.dashTime > 0 ? "dash" : "",
     player.mantling ? "mantle" : "",
@@ -246,7 +254,7 @@ function frame(nowMs: number): void {
     `jumps ${"●".repeat(player.airJumps)}${"○".repeat(PARAMS.maxAirJumps - player.airJumps)}  dash ${"●".repeat(Math.floor(player.dashCharges))}${"○".repeat(PARAMS.dashCharges - Math.floor(player.dashCharges))}  ` +
     `(${(player.dashCharges % 1).toFixed(2)})\n` +
     `${killLog}\n` +
-    `WASD move · Space jump (hold at green walls to climb) · Shift dash · C slide · LMB fire · RMB aim · R reload · P respawn\n` +
+    `WASD move · Space jump (hold at green walls to climb) · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · P respawn\n` +
     `render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks} | server ${net.state}${net.serverTick !== null ? ` tick ${net.serverTick}` : ""}`;
   requestAnimationFrame(frame);
 }

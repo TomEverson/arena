@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hSpeed, spawnState, stepPlayer } from "./movement";
+import { bodyHeight, eyeHeight, hSpeed, spawnState, stepPlayer } from "./movement";
 import { PARAMS as P } from "./params";
 import { box, DT, flatWorld, grounded, run } from "./testutil";
 import { emptyInput } from "./types";
@@ -217,6 +217,86 @@ describe("slide", () => {
     s = run(s, tunnel, 400, FORWARD);
     expect(s.z).toBeLessThan(-20.5);
     expect(s.sliding).toBe(false);
+  });
+});
+
+describe("crouch", () => {
+  const world = flatWorld();
+  const walking = () => run(grounded(world), world, 30, { moveZ: 0.3 }); // slow: below slide speed
+
+  it("crouches when the key is held while standing", () => {
+    const s = run(grounded(world), world, 3, { slide: true });
+    expect(s.crouching).toBe(true);
+    expect(s.sliding).toBe(false);
+    expect(bodyHeight(s)).toBe(P.crouchHeight);
+    expect(eyeHeight(s)).toBe(P.crouchEye);
+  });
+
+  it("crouches (does not slide) when moving slowly", () => {
+    const s = run(walking(), world, 3, { moveZ: 0.3, slide: true });
+    expect(hSpeed(s)).toBeLessThan(P.slideMinSpeed);
+    expect(s.crouching).toBe(true);
+    expect(s.sliding).toBe(false);
+  });
+
+  it("still slides when running fast", () => {
+    const running = run(grounded(world), world, 60, { moveZ: 1 });
+    const s = run(running, world, 2, { moveZ: 1, slide: true });
+    expect(s.sliding).toBe(true);
+    expect(s.crouching).toBe(false);
+  });
+
+  it("crouch-walks at the crouch speed", () => {
+    const s = run(grounded(world), world, 90, { moveZ: 1, slide: true });
+    expect(s.crouching).toBe(true);
+    expect(hSpeed(s)).toBeCloseTo(P.crouchSpeed, 6);
+  });
+
+  it("stands up on release", () => {
+    let s = run(grounded(world), world, 10, { slide: true });
+    s = run(s, world, 2, { slide: false });
+    expect(s.crouching).toBe(false);
+    expect(bodyHeight(s)).toBe(P.standHeight);
+  });
+
+  it("settles into a crouch when a slide runs out while the key is held", () => {
+    let s = run(run(grounded(world), world, 60, { moveZ: 1 }), world, 2, { moveZ: 1, slide: true });
+    expect(s.sliding).toBe(true);
+    s = run(s, world, 200, { slide: true });
+    expect(s.sliding).toBe(false);
+    expect(s.crouching).toBe(true);
+  });
+
+  it("cannot stand or jump under a low ceiling, but can walk out and stand", () => {
+    const low = flatWorld({ boxes: [box(0, 1.7, -10, 4, 1, 20)] }); // underside at 1.2
+    let s = run(spawnState(0, 0, 10), low, 5, { slide: true });
+    s = run(s, low, 200, { moveZ: 1, slide: true }); // crouch-walk into the tunnel
+    expect(s.z).toBeLessThan(-1);
+    s = run(s, low, 20, { moveZ: 0.1, slide: false, jump: true });
+    expect(s.crouching).toBe(true); // no room to stand
+    expect(s.onGround).toBe(true); // jump refused
+    s = run(s, low, 400, { moveZ: 1 });
+    expect(s.z).toBeLessThan(-20.5);
+    expect(s.crouching).toBe(false);
+  });
+
+  it("jumping from a crouch stands up", () => {
+    let s = run(grounded(world), world, 10, { slide: true });
+    s = run(s, world, 1, { slide: true, jump: true });
+    expect(s.crouching).toBe(false);
+    expect(s.vy).toBeGreaterThan(0);
+  });
+
+  it("does not start a crouch in mid-air", () => {
+    const s = run(spawnState(0, 5, 0), world, 3, { slide: true });
+    expect(s.crouching).toBe(false);
+  });
+
+  it("is not climbing or mantling while crouched", () => {
+    const wall = flatWorld({ boxes: [{ ...box(0, 5, -12, 6, 10, 20), climbable: true }] });
+    let s = run(grounded(wall, 0, 3), wall, 60, { moveZ: 1, slide: true });
+    s = run(s, wall, 30, { moveZ: 1, slide: true, jumpHeld: true });
+    expect(s.climbing).toBe(false);
   });
 });
 

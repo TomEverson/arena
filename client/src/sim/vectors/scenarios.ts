@@ -1,0 +1,872 @@
+/**
+ * Scenarios recorded into /testvectors/movement. Each one demonstrates a movement
+ * feature and carries a `verify` that must hold, so a recording can never freeze a
+ * broken behaviour. Inline worlds keep most of them independent of greybox.json.
+ */
+import { PARAMS as P } from "../params";
+import { box, flatWorld } from "../testutil";
+import type { Aabb, PlayerInput, PlayerState, Ramp } from "../types";
+import type { Scenario } from "./record";
+
+type Trace = PlayerState[];
+type Input = Partial<PlayerInput>;
+type InputFn = (tick: number, s: PlayerState) => Input;
+
+const F: Input = { moveZ: 1 };
+const SLIDE_F: Input = { moveZ: 1, slide: true };
+
+function inline(boxes: Aabb[] = [], ramps: Ramp[] = []) {
+  const w = flatWorld({ boxes, ramps });
+  return { boxes: w.boxes, ramps: w.ramps };
+}
+
+/** Input factory from [ticks, input] phases (the last phase repeats forever). */
+function phases(list: [number, Input][]): { total: number; input: () => InputFn } {
+  const total = list.reduce((n, [t]) => n + t, 0);
+  return {
+    total,
+    input: () => (tick) => {
+      let t = tick;
+      for (const [len, input] of list) {
+        if (t < len) return input;
+        t -= len;
+      }
+      return list[list.length - 1]?.[1] ?? {};
+    },
+  };
+}
+
+function check(cond: boolean, msg: string): void {
+  if (!cond) throw new Error(`verify failed: ${msg}`);
+}
+const last = (t: Trace): PlayerState => t[t.length - 1] as PlayerState;
+const speed = (s: PlayerState) => Math.hypot(s.vx, s.vz);
+const maxOf = (t: Trace, f: (s: PlayerState) => number) => Math.max(...t.map(f));
+const any = (t: Trace, f: (s: PlayerState) => boolean) => t.some(f);
+
+function scenario(
+  name: string,
+  description: string,
+  world: Scenario["world"],
+  start: [number, number, number],
+  p: { total: number; input: () => InputFn },
+  verify: (t: Trace) => void,
+  overrides?: Partial<PlayerState>,
+): Scenario {
+  return { name, description, world, start, overrides, ticks: p.total, input: p.input, verify };
+}
+
+const PI = Math.PI;
+const GREYBOX = { level: "greybox" };
+
+// --- Pseudo-random input scripts (seeded, recorded as data) -----------------
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function fuzzInput(seed: number): () => InputFn {
+  return () => {
+    const rnd = mulberry32(seed);
+    let left = 0;
+    let held: Input = {};
+    let yaw = 0;
+    return () => {
+      if (left <= 0) {
+        left = 10 + Math.floor(rnd() * 35);
+        yaw += (rnd() - 0.5) * 1.2;
+        const axis = () => (rnd() < 0.3 ? 0 : rnd() < 0.5 ? -1 : 1) * (rnd() < 0.8 ? 1 : 0.5);
+        held = {
+          moveX: axis(),
+          moveZ: rnd() < 0.8 ? 1 : axis(),
+          yaw,
+          jumpHeld: rnd() < 0.3,
+          slide: rnd() < 0.25,
+          ads: rnd() < 0.15,
+        };
+      }
+      left--;
+      return { ...held, jump: rnd() < 0.04, dash: rnd() < 0.015 };
+    };
+  };
+}
+
+const fuzzBoxes: Aabb[] = [
+  box(0, 0.5, -8, 4, 1, 4),
+  box(8, 1, -4, 6, 2, 2),
+  box(-8, 2, 4, 3, 4, 3),
+  { ...box(10, 4, 10, 3, 8, 3), climbable: true },
+  box(0, 3, 14, 8, 1, 6),
+  box(-14, 0.15, -2, 4, 0.3, 4),
+  box(0, 1.7, 22, 6, 1, 10), // low ceiling
+  box(0, 5, -31, 62, 10, 2),
+  box(0, 5, 31, 62, 10, 2),
+  box(-31, 5, 0, 2, 10, 62),
+  box(31, 5, 0, 2, 10, 62),
+];
+const fuzzRamps: Ramp[] = [{ box: box(-14, 1.5, 12, 6, 3, 10), rises: "+z" }];
+const wallClimbable: Aabb = { ...box(0, 1.5, -12, 6, 3, 20), climbable: true };
+
+export const scenarios: Scenario[] = [
+  (() => {
+    const p = phases([[120, {}]]);
+    return scenario(
+      "stand-and-fall",
+      "Dropped from 5 m, lands and stays grounded.",
+      inline(),
+      [0, 5, 0],
+      p,
+      (t) => {
+        check(last(t).onGround && last(t).y === 0, "should land on the floor");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [90, F],
+    ]);
+    return scenario(
+      "run-accel",
+      "Accelerates to exactly run speed, forward is -Z.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(Math.abs(speed(last(t)) - P.runSpeed) < 1e-9, "should reach run speed");
+        check(last(t).vz < 0, "forward should be -Z");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [80, { moveX: 1, moveZ: 1, yaw: 0.7 }],
+    ]);
+    return scenario(
+      "run-diagonal-yawed",
+      "Diagonal input while turned is not faster.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(Math.abs(speed(last(t)) - P.runSpeed) < 1e-9, "diagonal must not exceed run speed");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [60, F],
+      [60, {}],
+    ]);
+    return scenario(
+      "stop-friction",
+      "Friction brings the player to rest.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(speed(last(t)) < 0.01, "should stop");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [1, { jump: true }],
+      [89, {}],
+    ]);
+    return scenario(
+      "jump-apex",
+      "Single jump reaches the expected height and lands.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        const apex = (P.jumpSpeed * P.jumpSpeed) / (2 * P.gravity);
+        const peak = maxOf(t, (s) => s.y);
+        check(peak > apex * 0.9 && peak < apex * 1.1, `apex ${peak}`);
+        check(last(t).onGround, "should land");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [1, { jump: true }],
+      [39, {}],
+    ]);
+    return scenario(
+      "jump-buffer",
+      "A jump pressed just before landing is buffered and fires on touchdown.",
+      inline(),
+      [0, 0.1, 0],
+      p,
+      (t) => check(maxOf(t, (s) => s.y) > 1, "buffered jump should fire"),
+      { airJumps: 0 },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 1, 0, 10, 2, 10)]);
+    const input = (): InputFn => (t) => (t < 2 ? {} : { moveX: 1, jump: t === 10 });
+    return scenario(
+      "coyote-jump",
+      "A jump a few ticks after running off a ledge still works.",
+      w,
+      [4, 2, 0],
+      { total: 62, input },
+      (t) => check(maxOf(t, (s) => s.y) > 3, "coyote jump should rise above the ledge"),
+      { airJumps: 0 },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [1, { jump: true }],
+      [17, {}],
+      [1, { jump: true }],
+      [100, {}],
+    ]);
+    return scenario(
+      "double-jump",
+      "A second press in the air gives extra height; landing refills it.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(maxOf(t, (s) => s.y) > 2.4, "double jump should go higher than a single jump");
+        check(
+          any(t, (s) => s.airJumps === 0),
+          "air jump should be spent",
+        );
+        check(last(t).airJumps === P.maxAirJumps, "landing refills it");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 1, 0, 10, 2, 10)]);
+    const input = (): InputFn => (t) => (t < 2 ? {} : { moveX: 1, jump: t === 32 });
+    return scenario(
+      "walk-off-then-air-jump",
+      "After walking off a ledge the air jump is still available.",
+      w,
+      [4, 2, 0],
+      { total: 70, input },
+      (t) => {
+        const y32 = (t[32] as PlayerState).y;
+        check(maxOf(t.slice(32), (s) => s.y) - y32 > 1, "air jump should rise");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [60, F],
+      [40, SLIDE_F],
+      [40, {}],
+    ]);
+    return scenario(
+      "slide-boost-and-end",
+      "Running + slide boosts speed up to slide speed, decays, ends on release.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(
+          any(t, (s) => s.sliding),
+          "should slide",
+        );
+        check(
+          maxOf(t, speed) <= P.slideSpeed + 1e-9 && maxOf(t, speed) > P.runSpeed + 1,
+          "boosted to slide speed",
+        );
+        check(!last(t).sliding && !last(t).crouching, "released");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [60, F],
+      [10, SLIDE_F],
+      [1, { ...SLIDE_F, jump: true }],
+      [40, F],
+    ]);
+    return scenario(
+      "slide-jump",
+      "Jumping out of a slide keeps momentum.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        const j = t[75] as PlayerState;
+        check(!j.sliding && j.vy > 0, "jumped out of the slide");
+        check(speed(j) > 10, "kept speed");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [60, F],
+      [2, SLIDE_F],
+      [200, { slide: true }],
+    ]);
+    return scenario(
+      "slide-to-crouch",
+      "A slide that runs out with the key held settles into a crouch.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(
+          any(t, (s) => s.sliding),
+          "should slide first",
+        );
+        check(last(t).crouching && !last(t).sliding, "should end crouched");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [10, { slide: true }],
+      [90, SLIDE_F],
+    ]);
+    return scenario(
+      "crouch-walk",
+      "Crouching from standing; walking while crouched is capped at crouch speed.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(last(t).crouching, "crouching");
+        check(Math.abs(speed(last(t)) - P.crouchSpeed) < 1e-9, "crouch speed");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 1.7, -10, 4, 1, 20)]); // underside at 1.2
+    const p = phases([
+      [3, {}],
+      [20, F],
+      [50, SLIDE_F],
+      [30, F],
+      [400, F],
+    ]);
+    return scenario(
+      "crouch-low-ceiling",
+      "Slide into a low tunnel, cannot stand inside, crawl out and stand.",
+      w,
+      [0, 0, 10],
+      p,
+      (t) => {
+        check(
+          any(t, (s) => s.z < -1 && s.z > -19 && (s.sliding || s.crouching)),
+          "stayed low under the ceiling",
+        );
+        check(
+          last(t).z < -20.5 && !last(t).sliding && !last(t).crouching,
+          "stood up after leaving",
+        );
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [1, { ...F, dash: true }],
+      [40, F],
+    ]);
+    return scenario(
+      "dash-ground",
+      "Dash covers a fixed distance and spends a charge.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(t[0] !== undefined && -last(t).z > 5, "dash distance");
+        check(
+          any(t, (s) => s.dashTime > 0),
+          "dashed",
+        );
+      },
+    );
+  })(),
+
+  (() => {
+    const D: Input = { ...F, dash: true };
+    const p = phases([
+      [3, {}],
+      [1, D],
+      [19, F],
+      [1, D],
+      [19, F],
+      [1, D],
+      [99, F],
+      [1, D],
+      [40, F],
+    ]);
+    return scenario(
+      "dash-charges",
+      "Two dashes, the third has no charge, one regenerates later.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check((t[4] as PlayerState).dashTime > 0, "first dash");
+        check((t[24] as PlayerState).dashTime > 0, "second dash");
+        check((t[44] as PlayerState).dashTime === 0, "no charge for the third");
+        check((t[144] as PlayerState).dashTime > 0, "regenerated charge");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [1, { ...F, dash: true }],
+      [10, F],
+    ]);
+    return scenario(
+      "dash-air",
+      "Dashing in mid-air ignores gravity.",
+      inline(),
+      [0, 10, 0],
+      p,
+      (t) => {
+        const y3 = (t[3] as PlayerState).y;
+        check(Math.abs((t[8] as PlayerState).y - y3) < 0.5, "held height during the dash");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 2, -5, 10, 4, 0.2)]);
+    const input = (): InputFn => (t) => (t < 3 ? {} : { ...F, dash: (t - 3) % 20 === 0 });
+    return scenario(
+      "dash-thin-wall",
+      "Dashing into a 0.2 m wall never tunnels through.",
+      w,
+      [0, 0, 0],
+      { total: 123, input },
+      (t) => {
+        check(last(t).z > -5 + 0.1 + P.halfWidth - 1e-6, "stayed in front of the wall");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 2, -10, 4, 4, 4)]);
+    const p = phases([
+      [3, {}],
+      [120, { moveZ: 1, yaw: -PI / 4 }],
+    ]);
+    return scenario(
+      "corner-outer",
+      "Running diagonally into an outer corner slides around it.",
+      w,
+      [-4, 0, -6],
+      p,
+      (t) => {
+        const s = last(t);
+        check(!(Math.abs(s.x) < 2.3 && s.z < -7.7 && s.z > -12.3), "not inside the pillar");
+        check(s.z < -6, "made progress");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 2, -12, 12, 4, 1), box(6, 2, -6, 1, 4, 12)]);
+    const p = phases([
+      [3, {}],
+      [150, { moveZ: 1, yaw: -PI / 4 }],
+    ]);
+    return scenario(
+      "corner-inner",
+      "Running diagonally into an inner corner stops cleanly.",
+      w,
+      [0, 0, -2],
+      p,
+      (t) => {
+        const s = last(t);
+        check(
+          s.x <= 5.5 - P.halfWidth + 1e-6 && s.z >= -11.5 + P.halfWidth - 1e-6,
+          "stopped inside the corner",
+        );
+        check(speed(s) < 0.5, "at rest");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 0.15, -30, 4, 0.3, 56)]);
+    const p = phases([
+      [3, {}],
+      [90, F],
+    ]);
+    return scenario(
+      "step-up",
+      "A 0.3 m ledge is stepped onto without leaving the ground.",
+      w,
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(Math.abs(last(t).y - 0.3) < 1e-9 && last(t).onGround, "on top of the step");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 3.5, 0, 10, 1, 10)]);
+    const p = phases([
+      [3, {}],
+      [1, { jump: true }],
+      [40, {}],
+    ]);
+    return scenario(
+      "ceiling-bonk",
+      "Jumping under a ceiling stops the rise.",
+      w,
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(maxOf(t, (s) => s.y) + P.standHeight <= 3 + 1e-6, "head stopped by the ceiling");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline(
+      [box(0, 1.5, -46, 6, 3, 60)],
+      [{ box: box(0, 1.5, -10, 6, 3, 12), rises: "-z" }],
+    );
+    const p = phases([
+      [3, {}],
+      [240, F],
+      [200, { moveZ: 1, yaw: PI }],
+    ]);
+    return scenario(
+      "ramp-up-down",
+      "Walk up a 3 m ramp onto a platform and back down without hopping.",
+      w,
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(maxOf(t, (s) => s.y) > 2.99, "reached the top");
+        check(t.slice(250).filter((s) => !s.onGround).length < 3, "stays grounded on the way down");
+        check(last(t).y < 3, "came back down");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([], [{ box: box(0, 1.5, -10, 6, 3, 12), rises: "+z" }]);
+    const p = phases([
+      [3, {}],
+      [200, F],
+    ]);
+    return scenario(
+      "ramp-tall-side",
+      "The tall side of a ramp is a wall.",
+      w,
+      [0, 0, 10],
+      p,
+      (t) => {
+        check(last(t).y === 0 && last(t).z > -4, "blocked by the tall side");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 1, -12, 6, 2, 20)]);
+    const input = (): InputFn => (t) => (t < 3 ? {} : { ...F, jump: t === 43 });
+    return scenario(
+      "mantle-2m",
+      "A jump into a 2 m ledge mantles up onto it.",
+      w,
+      [0, 0, 3],
+      { total: 123, input },
+      (t) => {
+        check(
+          any(t, (s) => s.mantling),
+          "mantled",
+        );
+        check(Math.abs(last(t).y - 2) < 1e-9 && last(t).onGround, "on top");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 2.5, -12, 6, 5, 20)]);
+    const input = (): InputFn => (t) => (t < 3 ? {} : { ...F, jump: t % 30 === 0 });
+    return scenario(
+      "mantle-too-high",
+      "A 5 m wall is out of mantle reach.",
+      w,
+      [0, 0, 3],
+      { total: 123, input },
+      (t) => {
+        check(
+          !any(t, (s) => s.mantling) && maxOf(t, (s) => s.y) < 5,
+          "could not mantle onto the 5 m wall",
+        );
+        check(last(t).y < 1, "ended back on the floor");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([{ ...box(0, 1.5, -12, 6, 3, 20), climbable: true }]);
+    const p = phases([
+      [3, {}],
+      [40, F],
+      [160, { jumpHeld: true }],
+    ]);
+    return scenario(
+      "climb-top-out",
+      "Hold jump facing a climbable wall: climb and pull over the top.",
+      w,
+      [0, 0, 3],
+      p,
+      (t) => {
+        check(
+          any(t, (s) => s.climbing),
+          "climbed",
+        );
+        check(Math.abs(last(t).y - 3) < 1e-9 && last(t).onGround, "on top");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([{ ...box(0, 15, -12, 6, 30, 20), climbable: true }]);
+    const p = phases([
+      [3, {}],
+      [40, F],
+      [60, { jumpHeld: true }],
+      [400, {}],
+    ]);
+    return scenario(
+      "climb-release",
+      "Letting go of jump drops you off the wall.",
+      w,
+      [0, 0, 3],
+      p,
+      (t) => {
+        check(maxOf(t, (s) => s.y) > 4 && any(t, (s) => s.climbing), "climbed");
+        check(last(t).onGround && last(t).y === 0, "fell back down");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [60, { moveZ: 1, ads: true }],
+    ]);
+    return scenario(
+      "ads-run",
+      "Aiming down sights slows ground movement.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        check(Math.abs(speed(last(t)) - P.runSpeed * P.adsSpeedMult) < 1e-9, "ads speed");
+      },
+    );
+  })(),
+
+  // --- Routes through the real greybox level ---
+  (() => {
+    const p = phases([
+      [3, {}],
+      [150, { moveZ: 1, yaw: PI }],
+    ]);
+    return scenario(
+      "greybox-ramp-platform",
+      "Greybox: walk up the 3 m ramp onto its platform.",
+      GREYBOX,
+      [30, 0, -32],
+      p,
+      (t) => {
+        check(Math.abs(last(t).y - 3) < 1e-9 && last(t).onGround, "on the platform");
+      },
+    );
+  })(),
+
+  (() => {
+    const input = (): InputFn => (t) => (t < 3 ? {} : { ...F, jump: t > 33 && t % 20 === 0 });
+    return scenario(
+      "greybox-mantle-wall",
+      "Greybox: jump-mantle the 2 m wall.",
+      GREYBOX,
+      [12, 0, -4],
+      { total: 153, input },
+      (t) => {
+        check(
+          any(t, (s) => s.mantling) && any(t, (s) => s.onGround && Math.abs(s.y - 2) < 1e-9),
+          "mantled onto the 2 m wall",
+        );
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [22, { ...F }],
+      [65, SLIDE_F],
+      [150, F],
+    ]);
+    return scenario(
+      "greybox-slide-tunnel",
+      "Greybox: slide through the low tunnel and stand up beyond.",
+      GREYBOX,
+      [-20, 0, 30],
+      p,
+      (t) => {
+        check(
+          any(t, (s) => s.z < 18 && s.z > 6 && s.sliding),
+          "slid under the ceiling",
+        );
+        check(last(t).z < 3 && !last(t).sliding && !last(t).crouching, "stood up on the far side");
+      },
+    );
+  })(),
+
+  (() => {
+    const input = (): InputFn => {
+      let airTicks = 0;
+      return (_t, s) => {
+        if (!s.onGround) airTicks++;
+        return {
+          ...F,
+          yaw: -PI / 2,
+          jump: s.onGround && s.x > 7.2 && s.x < 8,
+          dash: airTicks === 6,
+        };
+      };
+    };
+    return scenario(
+      "greybox-dash-gap",
+      "Greybox: run, jump and dash across the 9 m gap.",
+      GREYBOX,
+      [3, 2, 15],
+      { total: 150, input },
+      (t) => {
+        check(
+          any(t, (s) => s.onGround && s.x > 17 && s.x < 23 && Math.abs(s.y - 2) < 1e-6),
+          "landed on the far platform",
+        );
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [40, F],
+      [200, { jumpHeld: true }],
+    ]);
+    return scenario(
+      "greybox-climb-tower",
+      "Greybox: climb the 10 m tower and pull over the top.",
+      GREYBOX,
+      [-30, 0, 8],
+      p,
+      (t) => {
+        check(Math.abs(last(t).y - 10) < 1e-9 && last(t).onGround, "on top of the tower");
+      },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
+      [120, F],
+    ]);
+    return scenario(
+      "greybox-step",
+      "Greybox: walk over the 0.3 m step without leaving the ground.",
+      GREYBOX,
+      [-30, 0, 36],
+      p,
+      (t) => {
+        check(
+          t.slice(3).every((s) => s.onGround),
+          "never airborne",
+        );
+      },
+    );
+  })(),
+
+  // --- Seeded pseudo-random runs ---
+  scenario(
+    "fuzz-inline",
+    "900 ticks of seeded random input in a small arena with boxes, a ramp, a climbable pillar and a low ceiling.",
+    { boxes: flatWorld({ boxes: fuzzBoxes }).boxes, ramps: fuzzRamps },
+    [0, 0, 0],
+    { total: 900, input: fuzzInput(12345) },
+    (t) => {
+      check(
+        t.every((s) => [s.x, s.y, s.z, s.vx, s.vy, s.vz].every(Number.isFinite)),
+        "finite",
+      );
+      check(
+        t.every((s) => Math.abs(s.x) < 31 && Math.abs(s.z) < 31),
+        "stayed in the arena",
+      );
+    },
+  ),
+  scenario(
+    "fuzz-greybox",
+    "900 ticks of seeded random input through the greybox level.",
+    GREYBOX,
+    [0, 0, 34],
+    { total: 900, input: fuzzInput(987654) },
+    (t) => {
+      check(
+        t.every((s) => [s.x, s.y, s.z, s.vx, s.vy, s.vz].every(Number.isFinite)),
+        "finite",
+      );
+      check(
+        t.every((s) => Math.abs(s.x) < 41 && Math.abs(s.z) < 41),
+        "stayed in the arena",
+      );
+    },
+  ),
+  scenario(
+    "fuzz-inline-2",
+    "A second seeded random run (different seed, start in a corner of the inline arena).",
+    { boxes: flatWorld({ boxes: [...fuzzBoxes, wallClimbable] }).boxes, ramps: fuzzRamps },
+    [-20, 0, 20],
+    { total: 900, input: fuzzInput(424242) },
+    (t) => {
+      check(
+        t.every((s) => [s.x, s.y, s.z, s.vx, s.vy, s.vz].every(Number.isFinite)),
+        "finite",
+      );
+    },
+  ),
+];

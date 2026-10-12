@@ -16,6 +16,8 @@ import (
 const (
 	TickRate     = 60
 	SnapshotRate = 30
+	// TickDT is the simulation step in seconds. 1.0/60 rounds exactly like JavaScript's 1/60.
+	TickDT = 1.0 / TickRate
 	// snapshotEvery is how many ticks pass between snapshots.
 	snapshotEvery = TickRate / SnapshotRate
 	// MaxPlayers bounds every preallocated buffer so Step never grows a slice.
@@ -23,6 +25,8 @@ const (
 	// snapshotBuffers is the number of in-flight snapshots per player.
 	snapshotBuffers = 4
 	inboxSize       = 1024
+	// InputQueueSize is how many not-yet-simulated inputs we buffer per player.
+	InputQueueSize = 16
 )
 
 // Entity is the replicated state of one thing in the world.
@@ -35,20 +39,25 @@ type Entity struct {
 	Z      float64 `json:"z"`
 }
 
-// Input is one client command for one client tick.
-type Input struct {
-	Seq   uint32  `json:"seq"`
-	MoveX float64 `json:"moveX"`
-	MoveZ float64 `json:"moveZ"`
-	Yaw   float64 `json:"yaw"`
-	Pitch float64 `json:"pitch"`
-}
-
 // Snapshot is a reusable buffer holding what one player sees at one tick.
 type Snapshot struct {
 	Tick     uint64
-	AckSeq   uint32 // last input sequence the server has processed for this player
+	AckSeq   uint32 // last input sequence the server has simulated for this player
 	Entities []Entity
+}
+
+// Level is what the world needs from a map: collision geometry and spawn points.
+type Level struct {
+	Collision CollisionWorld
+	Spawns    []Vec3
+}
+
+// FlatLevel is a large empty floor with its top at y = 0 and one spawn point.
+func FlatLevel() *Level {
+	return &Level{
+		Collision: CollisionWorld{Boxes: []Aabb{{MinX: -200, MaxX: 200, MinY: -1, MaxY: 0, MinZ: -200, MaxZ: 200}}},
+		Spawns:    []Vec3{{}},
+	}
 }
 
 // Player is the world's view of a connection. The network layer creates it
@@ -56,6 +65,8 @@ type Snapshot struct {
 type Player struct {
 	ID     uint32
 	Entity Entity
+	// State is the player's movement state. Owned by the world goroutine once joined.
+	State PlayerState
 
 	// Out carries filled snapshots to the connection's writer goroutine.
 	// Free returns drained buffers. Both are created by NewPlayer.
@@ -63,6 +74,15 @@ type Player struct {
 	Free chan *Snapshot
 
 	ackSeq uint32
+
+	// Pending inputs, oldest first (a fixed ring: no allocation).
+	queue     [InputQueueSize]Input
+	qHead     int
+	qLen      int
+	lastInput Input
+
+	initial    PlayerState
+	hasInitial bool
 }
 
 // NewPlayer allocates a player and its snapshot buffer pool.
@@ -78,6 +98,30 @@ func NewPlayer(id uint32) *Player {
 		p.Free <- &Snapshot{Entities: make([]Entity, 0, MaxPlayers)}
 	}
 	return p
+}
+
+// SetInitialState makes the player join with this state instead of a level spawn
+// (used by tests and the movement vectors). Call before Join.
+func (p *Player) SetInitialState(s PlayerState) {
+	p.initial = s
+	p.hasInitial = true
+}
+
+func (p *Player) pushInput(in Input) {
+	if p.qLen == InputQueueSize {
+		// Full: drop the oldest so the player stays close to real time.
+		p.qHead = (p.qHead + 1) % InputQueueSize
+		p.qLen--
+	}
+	p.queue[(p.qHead+p.qLen)%InputQueueSize] = in
+	p.qLen++
+}
+
+func (p *Player) popInput() Input {
+	in := p.queue[p.qHead]
+	p.qHead = (p.qHead + 1) % InputQueueSize
+	p.qLen--
+	return in
 }
 
 type commandKind uint8
@@ -97,15 +141,25 @@ type command struct {
 
 // World is the authoritative game state.
 type World struct {
-	tick    uint64
-	players []*Player // cap MaxPlayers, never grows
-	inbox   chan command
+	tick      uint64
+	level     *Level
+	players   []*Player // cap MaxPlayers, never grows
+	inbox     chan command
+	nextSpawn int
 
 	publishedTick atomic.Uint64 // readable from other goroutines (healthz)
 }
 
-func NewWorld() *World {
+// NewWorld creates a world on the given level (nil means FlatLevel).
+func NewWorld(level *Level) *World {
+	if level == nil {
+		level = FlatLevel()
+	}
+	if len(level.Spawns) == 0 {
+		level.Spawns = []Vec3{{}}
+	}
 	return &World{
+		level:   level,
 		players: make([]*Player, 0, MaxPlayers),
 		inbox:   make(chan command, inboxSize),
 	}
@@ -131,7 +185,7 @@ func (w *World) Leave(ctx context.Context, id uint32) {
 }
 
 // SubmitInput queues a client input. It never blocks: if the inbox is full
-// the input is dropped (the client will resend via its next input).
+// the input is dropped.
 func (w *World) SubmitInput(id uint32, in Input) {
 	select {
 	case w.inbox <- command{kind: cmdInput, id: id, input: in}:
@@ -157,12 +211,32 @@ func (w *World) Step() {
 	w.drainInbox()
 	w.tick++
 
-	// Movement/gameplay simulation goes here (designated file: movement.go).
+	for _, p := range w.players {
+		w.stepPlayer(p)
+	}
 
 	if w.tick%snapshotEvery == 0 {
 		w.sendSnapshots()
 	}
 	w.publishedTick.Store(w.tick)
+}
+
+// stepPlayer simulates one tick of movement for p. It consumes exactly one
+// queued input; if the queue is empty it repeats the last input with the
+// one-shot buttons (jump, dash) cleared, so a held key keeps working but a
+// press is never applied twice.
+func (w *World) stepPlayer(p *Player) {
+	if p.qLen > 0 {
+		p.lastInput = p.popInput()
+		p.ackSeq = p.lastInput.Seq
+	} else {
+		p.lastInput.Jump = false
+		p.lastInput.Dash = false
+	}
+	StepPlayer(&p.State, &p.lastInput, &w.level.Collision, TickDT)
+	p.Entity.X = p.State.X
+	p.Entity.Y = p.State.Y
+	p.Entity.Z = p.State.Z
 }
 
 func (w *World) drainInbox() {
@@ -180,7 +254,16 @@ func (w *World) apply(c command) {
 	switch c.kind {
 	case cmdJoin:
 		if len(w.players) < cap(w.players) {
-			w.players = append(w.players, c.player)
+			p := c.player
+			if p.hasInitial {
+				p.State = p.initial
+			} else {
+				sp := w.level.Spawns[w.nextSpawn%len(w.level.Spawns)]
+				w.nextSpawn++
+				p.State = SpawnState(sp.X, sp.Y, sp.Z)
+			}
+			p.Entity.X, p.Entity.Y, p.Entity.Z = p.State.X, p.State.Y, p.State.Z
+			w.players = append(w.players, p)
 		}
 	case cmdLeave:
 		for i, p := range w.players {
@@ -195,7 +278,7 @@ func (w *World) apply(c command) {
 	case cmdInput:
 		for _, p := range w.players {
 			if p.ID == c.id {
-				p.ackSeq = c.input.Seq
+				p.pushInput(c.input)
 				return
 			}
 		}

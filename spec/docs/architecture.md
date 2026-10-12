@@ -18,6 +18,9 @@ In dev, Vite serves the client on :5173 and proxies `/ws` and `/healthz` to the 
 - Slow clients: if all of a player's snapshot buffers are in flight, that snapshot is skipped, never queued.
 - If the inbox is full, inputs are dropped rather than blocking the network goroutine.
 
+- Player movement runs on the server from queued inputs (`World.stepPlayer`): one input per player per tick; an empty queue repeats the last input with jump/dash presses cleared; a full queue drops the oldest. `server/internal/game/movement.go` is a port of the TS sim, locked to it by `testvectors/`.
+- Levels (`/levels/*.json`) are loaded by both sides (`client/src/sim/level.ts`, `server/internal/level`); tuning numbers come from `/shared/params.json` (Go constants generated).
+
 ## Client
 - `FixedTimestep` (`client/src/loop.ts`) simulates at 60 Hz in an accumulator; rendering runs per
   animation frame with an interpolation alpha between the previous and current sim state.

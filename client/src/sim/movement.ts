@@ -23,6 +23,7 @@ export function spawnState(x: number, y: number, z: number): PlayerState {
     vz: 0,
     onGround: false,
     climbing: false,
+    crouching: false,
     sliding: false,
     slideTime: 0,
     slideCooldown: 0,
@@ -45,8 +46,10 @@ export function spawnState(x: number, y: number, z: number): PlayerState {
 }
 
 export const hSpeed = (s: PlayerState): number => Math.hypot(s.vx, s.vz);
-export const bodyHeight = (s: PlayerState): number => (s.sliding ? P.slideHeight : P.standHeight);
-export const eyeHeight = (s: PlayerState): number => (s.sliding ? P.slideEye : P.standEye);
+export const bodyHeight = (s: PlayerState): number =>
+  s.sliding ? P.slideHeight : s.crouching ? P.crouchHeight : P.standHeight;
+export const eyeHeight = (s: PlayerState): number =>
+  s.sliding ? P.slideEye : s.crouching ? P.crouchEye : P.standEye;
 
 interface WallHit {
   box: Aabb;
@@ -123,7 +126,9 @@ export function stepPlayer(
   }
 
   const wall =
-    s.dashTime > 0 || s.sliding || !input.jumpHeld ? null : findClimbWall(world, s, input.yaw);
+    s.dashTime > 0 || s.sliding || s.crouching || !input.jumpHeld
+      ? null
+      : findClimbWall(world, s, input.yaw);
   s.climbing = wall !== null;
 
   if (s.dashTime > 0) {
@@ -140,6 +145,7 @@ export function stepPlayer(
     s.jumpBuffer = 0;
   } else {
     updateSlide(s, input, world, dt);
+    updateCrouch(s, input, world);
     updateHorizontalVelocity(s, wish, dt);
     tryJump(s, input, world);
     if (!s.onGround) s.vy = Math.max(-P.terminalVelocity, s.vy - P.gravity * dt);
@@ -187,7 +193,7 @@ function endSlide(s: PlayerState): void {
 function updateSlide(s: PlayerState, input: PlayerInput, world: CollisionWorld, dt: number): void {
   const speed = hSpeed(s);
   if (!s.sliding) {
-    if (input.slide && s.onGround && speed >= P.slideMinSpeed) {
+    if (input.slide && s.onGround && !s.crouching && speed >= P.slideMinSpeed) {
       s.sliding = true;
       s.slideTime = 0;
       if (s.slideCooldown <= 0 && speed < P.slideSpeed) {
@@ -203,6 +209,23 @@ function updateSlide(s: PlayerState, input: PlayerInput, world: CollisionWorld, 
     !input.slide || !s.onGround || speed < P.slideEndSpeed || s.slideTime > P.slideMaxTime;
   // Cannot stand up under a low ceiling: stay in the slide.
   if (wantEnd && fitsStanding(s, world)) endSlide(s);
+}
+
+/**
+ * Crouch: hold the slide key while on the ground without being fast enough to
+ * slide. A finished slide with the key still held settles into a crouch.
+ */
+function updateCrouch(s: PlayerState, input: PlayerInput, world: CollisionWorld): void {
+  if (s.sliding) {
+    s.crouching = false;
+    return;
+  }
+  if (!s.crouching) {
+    if (input.slide && s.onGround) s.crouching = true;
+    return;
+  }
+  // Stay low while the key is held or while there is no room to stand.
+  if (!input.slide && fitsStanding(s, world)) s.crouching = false;
 }
 
 // --- Horizontal velocity ---------------------------------------------------
@@ -239,8 +262,9 @@ function updateHorizontalVelocity(s: PlayerState, wish: Wish, dt: number): void 
     return;
   }
   if (s.onGround) {
-    // Still low (e.g. under a ceiling after the slide ran out): crouch-walk.
-    const wishSpeed = (s.sliding ? P.crouchSpeed : P.runSpeed) * wish.mag * wish.speed;
+    // Crouch-walk (also when stuck low under a ceiling after a slide).
+    const wishSpeed =
+      (s.sliding || s.crouching ? P.crouchSpeed : P.runSpeed) * wish.mag * wish.speed;
     if (wish.mag === 0) {
       reduceSpeed(s, Math.max(hSpeed(s), P.stopSpeed) * P.groundFriction * dt, 0);
     } else {
@@ -272,6 +296,10 @@ function tryJump(s: PlayerState, input: PlayerInput, world: CollisionWorld): voi
     if (s.sliding) {
       if (!fitsStanding(s, world)) return;
       endSlide(s);
+    }
+    if (s.crouching) {
+      if (!fitsStanding(s, world)) return;
+      s.crouching = false;
     }
     s.vy = P.jumpSpeed;
     s.onGround = false;
@@ -415,7 +443,7 @@ function findClimbWall(world: CollisionWorld, s: PlayerState, yaw: number): Wall
 // --- Mantle ----------------------------------------------------------------
 
 function tryStartMantle(s: PlayerState, world: CollisionWorld, wish: Wish, hit: WallHit): void {
-  if (s.sliding || s.dashTime > 0) return;
+  if (s.sliding || s.crouching || s.dashTime > 0) return;
   // Must be pushing into the wall we hit.
   const into = (hit.axis === "x" ? wish.x : wish.z) * hit.sign;
   if (into < 0.3) return;
@@ -439,6 +467,7 @@ function tryStartMantle(s: PlayerState, world: CollisionWorld, wish: Wish, hit: 
   s.mantling = true;
   s.mantleT = 0;
   s.sliding = false;
+  s.crouching = false;
   s.mantleFromX = s.x;
   s.mantleFromY = s.y;
   s.mantleFromZ = s.z;

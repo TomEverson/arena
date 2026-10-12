@@ -13,6 +13,7 @@ import (
 
 	"arena/server/internal/game"
 	"arena/server/internal/gameserver"
+	"arena/server/internal/level"
 	"arena/server/internal/netsim"
 	"arena/server/internal/wire"
 )
@@ -21,6 +22,7 @@ func main() {
 	addr := flag.String("addr", ":8080", "listen address")
 	latency := flag.Duration("fake-latency", 0, "added one-way latency on every packet, both directions (e.g. 80ms)")
 	loss := flag.String("loss", "0%", "random packet loss, both directions (e.g. 3%)")
+	levelPath := flag.String("level", "../levels/greybox.json", "level JSON to load (relative to the working directory)")
 	flag.Parse()
 
 	lossFrac, err := netsim.ParseLoss(*loss)
@@ -35,7 +37,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	world := game.NewWorld()
+	lv, err := level.Load(*levelPath)
+	if err != nil {
+		log.Fatalf("loading level %q: %v (pass --level=<path>)", *levelPath, err)
+	}
+	log.Printf("level %s: %d boxes, %d ramps, %d spawns", *levelPath, len(lv.Collision.Boxes), len(lv.Collision.Ramps), len(lv.Spawns))
+	world := game.NewWorld(lv)
 	ticker := time.NewTicker(time.Second / game.TickRate)
 	defer ticker.Stop()
 	go world.Run(ctx, ticker.C)

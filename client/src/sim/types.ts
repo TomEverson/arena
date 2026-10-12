@@ -58,6 +58,8 @@ export interface PlayerState {
 
   climbing: boolean;
 
+  /** Crouched (hold the slide key without enough speed to slide). */
+  crouching: boolean;
   sliding: boolean;
   slideTime: number;
   slideCooldown: number;

@@ -16,7 +16,7 @@ import {
 
 const DT = 1 / 60;
 const idle: WeaponInput = { fire: false, reload: false, ads: false };
-const still = { hSpeed: 0, onGround: true };
+const still = { hSpeed: 0, onGround: true, crouching: false, sliding: false };
 
 function fire(
   w: WeaponState,
@@ -106,11 +106,36 @@ describe("recoil and spread", () => {
 
   it("spread grows with movement, air time and sustained fire", () => {
     const base = spreadDegrees(0, false, still);
-    expect(spreadDegrees(0, false, { hSpeed: PARAMS.runSpeed, onGround: true })).toBeGreaterThan(
-      base,
-    );
-    expect(spreadDegrees(0, false, { hSpeed: 0, onGround: false })).toBeGreaterThan(base);
+    expect(spreadDegrees(0, false, { ...still, hSpeed: PARAMS.runSpeed })).toBeGreaterThan(base);
+    expect(spreadDegrees(0, false, { ...still, onGround: false })).toBeGreaterThan(base);
     expect(spreadDegrees(20, false, still)).toBeGreaterThan(base);
+  });
+
+  it("crouching tightens hipfire but does not change ADS", () => {
+    const crouched = { ...still, crouching: true };
+    expect(spreadDegrees(0, false, crouched)).toBeCloseTo(W.hipSpread * W.crouchHipMult, 9);
+    expect(spreadDegrees(0, false, crouched)).toBeLessThan(spreadDegrees(0, false, still));
+    expect(spreadDegrees(0, true, crouched)).toBe(spreadDegrees(0, true, still));
+    // still gets worse with sustained fire, but stays tighter than standing
+    expect(spreadDegrees(20, false, crouched)).toBeLessThan(spreadDegrees(20, false, still));
+  });
+
+  it("sliding tightens hipfire a little, less than crouching, and not ADS", () => {
+    const sliding = { ...still, sliding: true };
+    const crouched = { ...still, crouching: true };
+    expect(spreadDegrees(0, false, sliding)).toBeCloseTo(W.hipSpread * W.slideHipMult, 9);
+    expect(spreadDegrees(0, false, sliding)).toBeLessThan(spreadDegrees(0, false, still));
+    expect(spreadDegrees(0, false, sliding)).toBeGreaterThan(spreadDegrees(0, false, crouched));
+    expect(spreadDegrees(0, true, sliding)).toBe(spreadDegrees(0, true, still));
+  });
+
+  it("sliding at speed has far less movement bloom than running at the same speed", () => {
+    const fast = PARAMS.slideSpeed;
+    const running = spreadDegrees(0, false, { ...still, hSpeed: fast });
+    const sliding = spreadDegrees(0, false, { ...still, hSpeed: fast, sliding: true });
+    expect(sliding).toBeLessThan(running - 0.8);
+    // Still a bit looser than standing still, since you are moving.
+    expect(sliding).toBeGreaterThan(spreadDegrees(0, false, { ...still, sliding: true }));
   });
 
   it("keeps every bullet inside the cone and is deterministic for a seed", () => {

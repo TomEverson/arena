@@ -11,4 +11,4 @@ Until then, the de-facto JSON messages are defined by:
 Current messages:
 - server -> client `welcome`: `{type, playerId, tickRate, snapshotRate}`
 - server -> client `snapshot` (30 Hz): `{type, tick, ackSeq, entities: [{id, teamId, x, y, z}]}`
-- client -> server input: `{seq, moveX, moveZ, yaw, pitch}`
+- client -> server input (one per client tick, 60 Hz): `{seq, moveX, moveZ, yaw, pitch, jump, jumpHeld, dash, slide, ads}`. `jump` and `dash` mean "pressed this tick"; the rest are held states. The browser client does not send these yet (M4).
