@@ -16,6 +16,7 @@ export class DummyViews {
     onGround: true,
     sliding: false,
     alive: true,
+    armed: true,
   };
 
   constructor(scene: THREE.Scene, dummies: readonly Dummy[]) {
@@ -39,6 +40,8 @@ export class DummyViews {
       s.y = d.y;
       s.z = d.z;
       s.alive = d.alive;
+      s.wallRunning = d.kind === "wallrun"; // up on a wall, in the wall-run pose
+      s.onGround = !s.wallRunning;
       this.bodies[i]?.update(s, frameDt, viewer);
     });
   }

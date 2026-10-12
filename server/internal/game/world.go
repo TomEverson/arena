@@ -49,6 +49,8 @@ type (
 
 // Level is what the world needs from a map: collision geometry and spawn points.
 type Level struct {
+	// Name is the level's name ("ffa", "greybox"); clients load the map of the same name.
+	Name      string
 	Collision CollisionWorld
 	Spawns    []Vec3
 	// Targets are the practice range's dummies; only practice rooms use them.
@@ -60,8 +62,11 @@ type TargetSpec struct {
 	ID     string
 	Pos    Vec3 // feet position (the centre of a strafe)
 	Strafe bool
-	AxisX  bool    // strafe along x (true) or z
-	Range  float64 // half the strafe distance
+	// WallRun makes the target run along a wall: it strafes (Strafe is true too) up in the
+	// air at Pos.Y, drawn in the wall-run pose. It is a moving target at height.
+	WallRun bool
+	AxisX   bool    // strafe along x (true) or z
+	Range   float64 // half the strafe distance
 }
 
 // FlatLevel is a large empty floor with its top at y = 0 and one spawn point.

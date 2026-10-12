@@ -19,6 +19,7 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const help = document.getElementById("help") as HTMLDivElement;
 const modelSelect = document.getElementById("model") as HTMLSelectElement;
 const animSelect = document.getElementById("anim") as HTMLSelectElement;
+const weaponSelect = document.getElementById("weapon") as HTMLSelectElement;
 const fxSelect = document.getElementById("fx") as HTMLSelectElement;
 const replayButton = document.getElementById("replay") as HTMLButtonElement;
 const hitboxCheck = document.getElementById("hitbox") as HTMLInputElement;
@@ -120,6 +121,7 @@ const ANIMATIONS = [
   ["wallrun", "Wall run"],
   ["aim", "Aim"],
   ["shoot", "Shoot"],
+  ["equip", "Equip gun (draw)"],
   ["hit", "Hit (flinch)"],
   ["die", "Die"],
 ] as const;
@@ -133,7 +135,7 @@ const WEAPON_ANIMATIONS = [
 type WeaponAnimId = (typeof WEAPON_ANIMATIONS)[number][0];
 type AnimId = (typeof ANIMATIONS)[number][0] | (typeof WEAPON_ANIMATIONS)[number][0];
 /** One-shot animations repeat on their own while selected, so there is always something to see. */
-const REPEATING = new Set<AnimId>(["jump", "doublejump", "dash", "hit"]);
+const REPEATING = new Set<AnimId>(["jump", "doublejump", "dash", "hit", "equip"]);
 const REPEAT_SECONDS = 1.8;
 const FIRE_SECONDS = 60 / 600; // the rifle's 600 rpm
 
@@ -146,6 +148,15 @@ function fillAnimations(): void {
   animSelect.value = model.kind === "weapon" ? "w-fire" : "walk";
 }
 fillAnimations();
+/** What the character can carry. The Brick comes with arms that hold it in every animation. */
+const WEAPONS = [
+  ["none", "None (hands free)"],
+  ["brick", "Brick (rifle)"],
+] as const;
+for (const [id, name] of WEAPONS) weaponSelect.add(new Option(name, id));
+weaponSelect.value = "brick";
+const weaponOn = () => weaponSelect.value === "brick";
+
 for (const m of FX_MODES) fxSelect.add(new Option(m.name, m.id));
 fxSelect.value = view.effect;
 
@@ -169,6 +180,7 @@ const state: BodyState = {
   crouching: false,
   dashing: false,
   aiming: false,
+  armed: true,
 };
 let gait: Gait = "walk";
 let dir = 1;
@@ -179,6 +191,7 @@ let deadT = 0;
 let dashT = 0;
 let airJumpAt = -1; // seconds until the double jump's second kick (-1 = none planned)
 let repeatT = 0;
+let equipAt = 0; // seconds until the gun is drawn (the equip animation holsters it first)
 let weaponT = 0;
 let flashLeft = 0;
 let ammo = 1;
@@ -239,8 +252,10 @@ function play(id: AnimId): void {
   if (id === "idle" || id === "walk" || id === "run") {
     gait = id;
   } else if (id === "jump") {
+    gait = "idle"; // jump on the spot, so the pose is easy to see
     jump();
   } else if (id === "doublejump") {
+    gait = "idle";
     jump();
     airJumpAt = 0.3;
   } else if (id === "crouchstill" || id === "crouchwalk") {
@@ -258,11 +273,18 @@ function play(id: AnimId): void {
     state.wallRunning = true;
     state.onGround = false;
     state.y = 1.6; // held in the air beside the wall
+  } else if (id === "equip") {
+    gait = "idle";
+    if (!weaponOn()) weaponSelect.value = "brick";
+    state.armed = false; // holster, then draw
+    equipAt = 0.35;
   } else if (id === "aim") {
     gait = "idle";
+    weaponSelect.value = "brick"; // aiming needs the rifle
     aimCheck.checked = true;
   } else if (id === "shoot") {
     gait = "idle";
+    weaponSelect.value = "brick";
     aimCheck.checked = true;
     fireCheck.checked = true;
   } else if (id === "hit") {
@@ -294,6 +316,7 @@ modelSelect.addEventListener("change", () => {
   play(animSelect.value as AnimId);
   modelSelect.blur();
 });
+weaponSelect.addEventListener("change", () => weaponSelect.blur()); // picking Brick plays the draw
 fxSelect.addEventListener("change", () => {
   view.setEffect(fxSelect.value as FxMode);
   fxSelect.blur();
@@ -320,6 +343,7 @@ function characterKeys(e: KeyboardEvent): void {
   if (e.code === "KeyW") play("wallrun");
   if (e.code === "KeyA") play("aim");
   if (e.code === "KeyE") play("shoot");
+  if (e.code === "KeyG") play("equip");
   if (e.code === "KeyH") play("hit");
   if (e.code === "KeyK") play("die");
 }
@@ -430,6 +454,12 @@ function stepFakePlayer(dt: number): void {
       state.onGround = true;
     }
   }
+  if (equipAt > 0) {
+    equipAt -= dt;
+    state.armed = equipAt <= 0 && weaponOn();
+  } else {
+    state.armed = weaponOn();
+  }
   state.aiming = aimCheck.checked;
   if (fireCheck.checked) {
     fireT -= dt;
@@ -496,7 +526,7 @@ function frame(now: number): void {
   }
   help.textContent =
     `${model.name}: ${doing}${aimCheck.checked ? " + aim" : ""}${fireCheck.checked ? " + fire" : ""}  ${speed.toFixed(1)} m/s\n` +
-    "1 idle · 2 walk · 3 run · Space jump · D double jump · C crouch · S slide · F dash · W wall run · A aim · E shoot · H hit · K kill\n" +
+    "1 idle · 2 walk · 3 run · Space jump · D double jump · C crouch · S slide · F dash · W wall run · A aim · E shoot · G draw gun · H hit · K kill\n" +
     "B hitbox · drag turn camera · scroll/arrows zoom · ?res=240 retro look";
   requestAnimationFrame(frame);
 }

@@ -353,3 +353,51 @@ func TestPracticeStepDoesNotAllocate(t *testing.T) {
 		t.Logf("note: no target died during the allocation run, so the death path may not have been covered")
 	}
 }
+
+// A wall-running target runs along a wall in the air on the same arc as the player's wall run:
+// it rises and falls (not a straight line), ends each pass where it began, turns at the ends,
+// stays inside its range, and is flagged as wall running (so clients draw the wall-run pose).
+func TestWallRunTargetFollowsTheWallRunArc(t *testing.T) {
+	lv := FlatLevel()
+	lv.Targets = []TargetSpec{{ID: "wr", Pos: Vec3{X: 5, Y: 2.5, Z: -10}, Strafe: true, WallRun: true, Range: 8}}
+	w := NewWorld(lv)
+	w.SetPractice(true)
+	e := &w.targets[0].Entity
+	if e.Flags&protocol.EntityFlagWallRunning == 0 || e.Flags&protocol.EntityFlagOnGround != 0 {
+		t.Fatalf("flags = %b, want wall running and not on the ground", e.Flags)
+	}
+	if e.X != 5 || e.Y != 2.5 || e.Z != -18 {
+		t.Fatalf("starts at (%v, %v, %v), want one end of the run (5, 2.5, -18)", e.X, e.Y, e.Z)
+	}
+	maxY, minY := e.Y, e.Y
+	var sawBack bool
+	prevZ := e.Z
+	for i := 0; i < int(2*WallRunMaxTime*TickRate)+5; i++ {
+		w.stepTargets()
+		if e.X != 5 {
+			t.Fatalf("it left its wall line: x=%v", e.X)
+		}
+		if e.Z < -10-8-1e-9 || e.Z > -10+8+1e-9 {
+			t.Fatalf("z = %v is outside its range", e.Z)
+		}
+		if e.Z < prevZ-1e-9 {
+			sawBack = true // it turned round and came back
+		}
+		prevZ = e.Z
+		maxY, minY = max(maxY, e.Y), min(minY, e.Y)
+		if e.Y < 2.5-1e-9 {
+			t.Fatalf("y = %v dipped below its start", e.Y)
+		}
+	}
+	if !sawBack {
+		t.Fatal("it should turn at the end of a pass and run back")
+	}
+	// The same arc as the player's wall run: a rise of about a metre, not a straight line.
+	peak := wallRunArc(WallRunMaxTime / 2)
+	if peak < 0.5 || maxY < 2.5+peak-0.05 {
+		t.Fatalf("peak %v (arc says %v): it should rise like a wall run", maxY-2.5, peak)
+	}
+	if got := wallRunArc(WallRunMaxTime); got > 1e-9 || got < -1e-9 {
+		t.Fatalf("a pass should end at its starting height, ends %v above", got)
+	}
+}

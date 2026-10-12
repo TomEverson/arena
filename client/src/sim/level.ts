@@ -35,8 +35,8 @@ export interface LevelTarget {
   id: string;
   /** Feet position. */
   pos: [number, number, number];
-  kind: "static" | "strafe";
-  /** Strafe axis and half-range in metres (strafe only). */
+  kind: "static" | "strafe" | "wallrun";
+  /** Strafe axis and half-range in metres (strafe and wallrun only). A wallrun target runs along a wall in the air. */
   axis: "x" | "z";
   range: number;
 }
@@ -87,7 +87,8 @@ function parseTarget(v: unknown, path: string): LevelTarget {
   const o = record(v, path);
   if (typeof o.id !== "string") fail(`${path}.id`, "expected a string");
   const kind = o.kind ?? "static";
-  if (kind !== "static" && kind !== "strafe") fail(`${path}.kind`, "expected static or strafe");
+  if (kind !== "static" && kind !== "strafe" && kind !== "wallrun")
+    fail(`${path}.kind`, "expected static, strafe or wallrun");
   const axis = o.axis ?? "x";
   if (axis !== "x" && axis !== "z") fail(`${path}.axis`, "expected x or z");
   const range = o.range ?? 0;

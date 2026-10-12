@@ -302,6 +302,19 @@
         4
       ],
       "climbable": true
+    },
+    {
+      "id": "wallrun-wall",
+      "pos": [
+        -16,
+        4,
+        -20
+      ],
+      "size": [
+        16,
+        8,
+        1
+      ]
     }
   ],
   "ramps": [
@@ -438,6 +451,17 @@
       "kind": "strafe",
       "axis": "x",
       "range": 5
+    },
+    {
+      "id": "wallrun-a",
+      "pos": [
+        -16,
+        2.5,
+        -19.1
+      ],
+      "kind": "wallrun",
+      "axis": "x",
+      "range": 7.5
     }
   ]
 }

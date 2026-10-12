@@ -69,3 +69,25 @@ describe("level loading", () => {
     expect(DT).toBeGreaterThan(0);
   });
 });
+
+describe("wall-running targets", () => {
+  it("are a valid target kind, and still need a sane range", () => {
+    const level = parseLevel({
+      name: "t",
+      boxes: [],
+      ramps: [],
+      spawnZones: [],
+      targets: [{ id: "wr", pos: [0, 2.5, 0], kind: "wallrun", axis: "z", range: 6 }],
+    });
+    expect(level.targets[0]?.kind).toBe("wallrun");
+    expect(() =>
+      parseLevel({
+        name: "t",
+        boxes: [],
+        ramps: [],
+        spawnZones: [],
+        targets: [{ id: "x", pos: [0, 0, 0], kind: "flying" }],
+      }),
+    ).toThrow(/static, strafe or wallrun/);
+  });
+});

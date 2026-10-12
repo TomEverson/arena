@@ -2,6 +2,7 @@ import * as THREE from "three";
 
 import greybox from "../../levels/greybox.json";
 import { AudioEngine, type MoveSound, MoveSoundTracker, StepCounter } from "./audio";
+import { type BodyState, CharacterBody } from "./character";
 import {
   aliveHitboxes,
   type Dummy,
@@ -16,6 +17,7 @@ import { Fx } from "./fx";
 import { HitFeedback } from "./hitFeedback";
 import { CombatHud } from "./hud";
 import { buildLevelMeshes } from "./levelRender";
+import { levelByName } from "./levels";
 import { FixedTimestep, TICK_RATE } from "./loop";
 import { MatchHud } from "./matchHud";
 import { canAct } from "./matchui";
@@ -47,7 +49,7 @@ import { PracticeStats } from "./practiceStats";
 import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
 import { castRay, type Hitbox } from "./sim/hitscan";
-import { buildCollisionWorld, parseLevel } from "./sim/level";
+import { buildCollisionWorld, type Level, parseLevel } from "./sim/level";
 import { bodyHeight, eyeHeight, hSpeed, spawnState, stepPlayer } from "./sim/movement";
 import { COMBAT, PARAMS, WEAPON } from "./sim/params";
 import { emptyInput, type PlayerState } from "./sim/types";
@@ -66,17 +68,33 @@ const hud = document.getElementById("hud") as HTMLDivElement;
 const hint = document.getElementById("hint") as HTMLDivElement;
 
 // --- Level -----------------------------------------------------------------
-const level = parseLevel(greybox);
-const world = buildCollisionWorld(level);
+// The level starts as the greybox (also the offline practice course); online, the server's
+// welcome names the room's map and `useLevel` swaps to it before the first snapshot.
+let level = parseLevel(greybox);
+let world = buildCollisionWorld(level);
 
 const scene = new THREE.Scene();
 scene.background = PALETTE.HAZE;
 scene.fog = new THREE.Fog(PALETTE.HAZE, 30, 90);
-scene.add(buildLevelMeshes(level));
+let levelMeshes = buildLevelMeshes(level);
+scene.add(levelMeshes);
 scene.add(new THREE.HemisphereLight(PALETTE.BONE, PALETTE.GRAPHITE, 1.2));
 const sun = new THREE.DirectionalLight(0xffffff, 1.5);
 sun.position.set(20, 40, 10);
 scene.add(sun);
+
+/** Switch to another map: new collision world and new meshes (the old ones are dropped). */
+function useLevel(next: Level): void {
+  level = next;
+  world = buildCollisionWorld(level);
+  scene.remove(levelMeshes);
+  // Free the old geometry (materials are shared between maps, so they stay).
+  levelMeshes.traverse((o) => {
+    if (o instanceof THREE.Mesh) (o.geometry as THREE.BufferGeometry).dispose();
+  });
+  levelMeshes = buildLevelMeshes(level);
+  scene.add(levelMeshes);
+}
 
 const view = new RetroRenderer(canvas, scene);
 window.addEventListener("resize", () => view.resize());
@@ -86,6 +104,25 @@ const HITSTOP_TICKS = 4; // about 67 ms: dummies freeze when one dies
 
 const dummies: Dummy[] = makeDummies(level.targets);
 const dummyViews = new DummyViews(scene, dummies);
+
+// Your own body is the Dummy too, seen from inside: no head, arms or rifle (the viewmodel has
+// those), just the torso and legs you see when you look down, in every pose the body has.
+/** How far behind the camera your own body is drawn (metres). */
+const SELF_BODY_BACK = 0.25;
+/** Your body shows when the camera pitch is below this (radians, negative = looking down). */
+const SELF_BODY_SHOW_PITCH = -0.45;
+const selfBody = new CharacterBody(scene, 99);
+let selfBodyShown = false;
+selfBody.setFirstPerson(true);
+const selfState: BodyState = {
+  x: 0,
+  y: 0,
+  z: 0,
+  onGround: true,
+  sliding: false,
+  alive: true,
+  armed: true,
+};
 const fx = new Fx(scene, view.camera);
 const hitFeedback = new HitFeedback();
 const ammoEl = document.getElementById("ammo") as HTMLDivElement;
@@ -319,8 +356,11 @@ function startNet(code: string): void {
       roomCode = w.room;
       combatHud.setPlayerId(w.playerId);
       gameMode = w.mode === "practice" ? "practice" : "ffa";
-      if (w.level !== level.name)
-        netNote = `WARNING: server runs "${w.level}", client has "${level.name}"`;
+      if (w.level !== level.name) {
+        const next = levelByName(w.level);
+        if (next) useLevel(next);
+        else netNote = `WARNING: server runs "${w.level}", client has no such map`;
+      }
     },
     onSnapshot(s) {
       clock.onSnapshot(s.tick, performance.now());
@@ -614,6 +654,26 @@ function frame(nowMs: number): void {
     lerp(prevPlayer.y, player.y, alpha) + eye + smoother.y,
     lerp(prevPlayer.z, player.z, alpha) + smoother.z,
   );
+
+  // The body sits a little behind the camera, so looking down shows the chest edge and legs
+  // instead of the top of the shoulders filling the screen.
+  selfState.x = cam.position.x + Math.sin(look.yaw) * SELF_BODY_BACK;
+  selfState.y = lerp(prevPlayer.y, player.y, alpha) + smoother.y;
+  selfState.z = cam.position.z + Math.cos(look.yaw) * SELF_BODY_BACK;
+  selfState.onGround = player.onGround;
+  selfState.sliding = player.sliding;
+  selfState.crouching = player.crouching;
+  selfState.dashing = player.dashTime > 0;
+  selfState.wallRunning = player.wallRunning;
+  selfState.alive = !dead;
+  selfState.aiming = adsHeld;
+  selfState.yaw = look.yaw + Math.PI; // the figure faces +Z, the camera looks down -Z at yaw 0
+  selfBody.update(selfState, frameDt, cam.position);
+  // Only show your body when you look down at it (or when dead): sliding, crouching, dashing
+  // and wall running pose it in ways that would otherwise put legs and torso in the way of the
+  // view while you look ahead. A little hysteresis stops it flickering at the edge.
+  selfBodyShown = look.pitch < (selfBodyShown ? SELF_BODY_SHOW_PITCH + 0.05 : SELF_BODY_SHOW_PITCH);
+  selfBody.root.visible = selfBodyShown || dead;
 
   // Other players: where they were INTERP_TICKS ago, interpolated between snapshots.
   const renderTick = clock.tickAt(nowMs) - INTERP_TICKS;

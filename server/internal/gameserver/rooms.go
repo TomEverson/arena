@@ -57,6 +57,8 @@ type Room struct {
 	Code  string
 	Mode  string
 	World *game.World
+	// LevelName is the map this room runs (from the level file); clients load the same one.
+	LevelName string
 
 	capacity int
 	seats    atomic.Int32 // connected or connecting players
@@ -143,7 +145,7 @@ func (m *Rooms) Create(mode string) (*Room, error) {
 		capacity = game.MaxPlayers
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	room := &Room{Code: code, Mode: mode, World: world, capacity: capacity, cancel: cancel}
+	room := &Room{Code: code, Mode: mode, World: world, LevelName: mc.Level.Name, capacity: capacity, cancel: cancel}
 	room.emptySince.Store(time.Now().UnixNano())
 	go func() {
 		ticker := time.NewTicker(time.Second / game.TickRate)

@@ -43,12 +43,16 @@ export interface BodyState {
   dashing?: boolean;
   /** Aiming down the sights: the rifle comes up to the shoulder. */
   aiming?: boolean;
+  /** Carrying the Brick: arms hold it, in every animation. Turning this on plays the draw. */
+  armed?: boolean;
+  /** Which way the body faces (radians, the figure's own yaw), instead of toward its movement. */
+  yaw?: number;
 }
 
 const FLASH_SECONDS = 0.09;
-const FLIP_SECONDS = 0.5; // the double-jump somersault
+const EQUIP_SECONDS = 0.5; // drawing the rifle: arms come up onto it with a little overshoot
+const AIR_JUMP_SECONDS = 0.4; // the second jump in the air: knees up, then push off
 const SHOT_SECONDS = 0.09; // recoil and muzzle flash after a shot
-const CENTER_Y = 0.9; // the somersault turns about the middle of the body
 const FLINCH_DECAY = 10; // per second
 const DEATH_SECONDS = 0.6;
 const SPAWN_SECONDS = 0.25;
@@ -64,6 +68,99 @@ const RUN_STRIDE = 2.6; // ... and when running
 
 /** How fast pose weights fade in and out (per second; higher = snappier). */
 const BLEND_RATE = 12;
+
+/** The arms are two bones: shoulder to elbow, elbow to the middle of the fist. */
+const ARM_UPPER = 0.28;
+const ARM_FORE = 0.32;
+const SHOULDER_X = 0.2;
+
+/** Where the rifle sits (in the upper body's space) for each way of carrying it. */
+interface GunSpot {
+  x: number;
+  y: number;
+  z: number;
+  /** Tilt about X: positive points the muzzle down. */
+  pitch: number;
+}
+const GUN_HOLSTER: GunSpot = { x: 0.2, y: 0.02, z: 0.02, pitch: 1.4 }; // slung at the hip
+const GUN_LOW: GunSpot = { x: 0.05, y: 0.18, z: 0.12, pitch: 0.1 }; // held low and ready
+const GUN_AIM: GunSpot = { x: 0.06, y: 0.4, z: 0.14, pitch: 0 }; // up at the shoulder
+/** Where each hand grips, in the rifle's own space: the grip, and under the front of the receiver. */
+const GRIP_RIGHT = [0, -0.075, 0] as const;
+const GRIP_LEFT = [0, -0.07, 0.3] as const;
+
+/** Joint pose that puts a hand at a point. */
+export interface ArmSolution {
+  /** Rotation of the shoulder group (the arm hangs along -Y when this is the identity). */
+  q: THREE.Quaternion;
+  /** Elbow bend about X (negative = forearm forward). */
+  elbow: number;
+}
+
+// Scratch objects, so solving an arm allocates nothing.
+const _v = new THREE.Vector3();
+const _p = new THREE.Vector3();
+const _c = new THREE.Vector3();
+const _e = new THREE.Vector3();
+const _pole = new THREE.Vector3();
+const _euler = new THREE.Euler();
+const _qa = new THREE.Quaternion();
+const _qb = new THREE.Quaternion();
+
+/**
+ * Two-bone arm IK. The shoulder is at (shoulderX, SHOULDER_Y, 0) in the upper body's space; the
+ * hand (the middle of the fist) should be at (tx, ty, tz). A target out of reach gets a fully
+ * straight arm pointing at it. The elbow bends about its own X axis, and the arm is rolled
+ * about the shoulder-to-hand line so the elbow points down and a little outward and back.
+ */
+export function solveArm(
+  shoulderX: number,
+  tx: number,
+  ty: number,
+  tz: number,
+  out: ArmSolution,
+): ArmSolution {
+  _v.set(tx - shoulderX, ty - SHOULDER_Y, tz);
+  let d = _v.length();
+  const reach = ARM_UPPER + ARM_FORE - 1e-4;
+  if (d > reach) {
+    _v.multiplyScalar(reach / d);
+    d = reach;
+  }
+  const cosE = Math.min(
+    1,
+    Math.max(
+      -1,
+      (d * d - ARM_UPPER * ARM_UPPER - ARM_FORE * ARM_FORE) / (2 * ARM_UPPER * ARM_FORE),
+    ),
+  );
+  const elbow = -Math.acos(cosE);
+  // The hand in the shoulder's own frame with the arm hanging: P. Turn P onto the shoulder-to-hand line.
+  _p.set(0, -(ARM_UPPER + ARM_FORE * cosE), -ARM_FORE * Math.sin(elbow));
+  _c.copy(_v).divideScalar(d || 1);
+  const q = _qa.setFromUnitVectors(_p.normalize(), _c);
+  // Roll about that line so the elbow lies toward the pole (down, a little out and back).
+  _e.set(0, -ARM_UPPER, 0).applyQuaternion(q);
+  _pole.set(Math.sign(shoulderX) * 0.3, -1, -0.3);
+  _e.addScaledVector(_c, -_e.dot(_c));
+  _pole.addScaledVector(_c, -_pole.dot(_c));
+  if (_e.lengthSq() > 1e-12 && _pole.lengthSq() > 1e-12) {
+    _e.normalize();
+    _pole.normalize();
+    const angle = Math.atan2(_c.dot(_e.clone().cross(_pole)), _e.dot(_pole));
+    _qb.setFromAxisAngle(_c, angle);
+    q.premultiply(_qb);
+  }
+  out.q.copy(q);
+  out.elbow = elbow;
+  return out;
+}
+
+const easeOutBack = (x: number) => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2;
+};
 
 const FLASH_GLOW = new THREE.Color(0x888888);
 const NO_GLOW = new THREE.Color(0);
@@ -87,6 +184,9 @@ interface Pose {
   armRX: number;
   armLZ: number;
   armRZ: number;
+  /** Elbow bend (negative = forearm forward). */
+  elbowL: number;
+  elbowR: number;
   /** Leg length multiplier (1 = full; the crouch squashes the legs so the feet stay planted). */
   legScale: number;
 }
@@ -103,6 +203,8 @@ const zeroPose = (): Pose => ({
   armRX: 0,
   armLZ: 0,
   armRZ: 0,
+  elbowL: 0,
+  elbowR: 0,
   legScale: 1,
 });
 
@@ -154,6 +256,7 @@ export class CharacterBody {
   private readonly upper: THREE.Group;
   private readonly legs: [THREE.Group, THREE.Group];
   private readonly arms: [THREE.Group, THREE.Group];
+  private readonly elbows: [THREE.Group, THREE.Group];
   private readonly materials: {
     mat: THREE.MeshLambertMaterial;
     color: THREE.Color;
@@ -181,13 +284,28 @@ export class CharacterBody {
   private crouchW = 0;
   private dashW = 0;
   private aimW = 0;
-  /** 0 = no somersault; 0..1 = how far through it is. */
-  private flipT = 0;
+  /** 0 = the rifle is slung and the arms are free; 1 = both hands on it (overshoots when drawing). */
+  private holdW = 0;
+  private equipT = 0;
+  private wasArmed = false;
+  private armInit = false;
+  private firstPerson = false;
+  private readonly ik: ArmSolution = { q: new THREE.Quaternion(), elbow: 0 };
+  /** The solved shoulder rotations for the two hands, and how much of them to use. */
+  private readonly handQ: [THREE.Quaternion, THREE.Quaternion] = [
+    new THREE.Quaternion(),
+    new THREE.Quaternion(),
+  ];
+  private handMix = 0;
+  /** 0 = not air jumping; 0..1 = how far through the second jump it is. */
+  private airJumpT = 0;
   private shootT = 0;
   private prevRawVy = 0;
   private readonly gun = new THREE.Group();
   private readonly muzzleFlash: THREE.Mesh;
   private readonly brick: Brick;
+  /** Helmet, face, ears, neck and collar: hidden in first person, where the camera sits inside the head. */
+  private readonly headParts: THREE.Mesh[] = [];
   private airTime = 0;
   private land = 0;
   private readonly ground = zeroPose();
@@ -235,28 +353,42 @@ export class CharacterBody {
     this.upper = upper;
     part(upper, ink, box(0.3, 0.16, 0.21), [0, 0, 0]); // shorts
     part(upper, armor, box(0.3, 0.42, 0.2), [0, 0.29, 0]); // chest
-    part(upper, suit, box(0.32, 0.08, 0.21), [0, 0.48, 0]); // collar
-    part(upper, ink, tube(0.05, 0.05, 0.06), [0, 0.54, 0]); // neck
+    this.headParts.push(part(upper, suit, box(0.32, 0.08, 0.21), [0, 0.48, 0])); // collar
+    this.headParts.push(part(upper, ink, tube(0.05, 0.05, 0.06), [0, 0.54, 0])); // neck
 
     // Big round helmet: wide rather than tall, so it stays inside the head hitbox (1.5..1.8 m).
     const helmet = part(upper, armor, new THREE.SphereGeometry(0.16, 8, 6), [0, 0.73, -0.01]);
+    this.headParts.push(helmet);
     helmet.scale.set(1.18, 0.9, 1.05); // wider than the body, like a big-headed hero
-    part(upper, face, box(0.2, 0.13, 0.06), [0, 0.7, 0.13]); // face, set into the helmet
+    this.headParts.push(part(upper, face, box(0.2, 0.13, 0.06), [0, 0.7, 0.13])); // face, set into the helmet
     for (const side of [-1, 1]) {
-      part(upper, ink, box(0.045, 0.065, 0.01), [side * 0.05, 0.715, 0.162]); // eye
+      this.headParts.push(part(upper, ink, box(0.045, 0.065, 0.01), [side * 0.05, 0.715, 0.162])); // eye
       // Ear disc with a SIGNAL light (technology).
-      part(upper, metal, tube(0.06, 0.06, 0.04), [side * 0.19, 0.72, 0], [0, 0, Math.PI / 2]);
-      part(upper, light, tube(0.028, 0.028, 0.012), [side * 0.213, 0.72, 0], [0, 0, Math.PI / 2]);
+      this.headParts.push(
+        part(upper, metal, tube(0.06, 0.06, 0.04), [side * 0.19, 0.72, 0], [0, 0, Math.PI / 2]),
+      );
+      this.headParts.push(
+        part(upper, light, tube(0.028, 0.028, 0.012), [side * 0.213, 0.72, 0], [0, 0, Math.PI / 2]),
+      );
     }
 
-    // Arms: slim upper arm, chunky forearm and fist (outer edge 0.285 m: inside the 0.3 hitbox).
+    // Arms: slim upper arm, then an elbow, chunky forearm and fist (outer edge 0.285 m: inside
+    // the 0.3 hitbox). Two bones, so the hands can reach the rifle.
+    const elbows: THREE.Group[] = [];
     this.arms = [-1, 1].map((side) => {
-      const shoulder = pivot(upper, side * 0.2, SHOULDER_Y);
-      part(shoulder, suit, tube(0.045, 0.04, 0.24), [0, -0.12, 0]); // upper arm
-      part(shoulder, armor, tube(0.072, 0.085, 0.24), [0, -0.35, 0]); // forearm
-      part(shoulder, armor, box(0.12, 0.11, 0.13), [0, -0.52, 0.01]); // fist
+      const shoulder = pivot(upper, side * SHOULDER_X, SHOULDER_Y);
+      part(shoulder, suit, tube(0.045, 0.04, ARM_UPPER), [0, -ARM_UPPER / 2, 0]); // upper arm
+      const elbow = pivot(shoulder, 0, -ARM_UPPER);
+      part(elbow, armor, tube(0.072, 0.085, ARM_FORE - 0.06), [
+        0,
+        -(ARM_FORE - 0.06) / 2 - 0.02,
+        0,
+      ]); // forearm
+      part(elbow, armor, box(0.12, 0.11, 0.13), [0, -ARM_FORE, 0.01]); // fist
+      elbows.push(elbow);
       return shoulder;
     }) as [THREE.Group, THREE.Group];
+    this.elbows = elbows as [THREE.Group, THREE.Group];
 
     // The rifle: slung at the hip while walking, up at the shoulder when aiming.
     const gun = this.gun;
@@ -275,6 +407,18 @@ export class CharacterBody {
     this.muzzleFlash.visible = false;
 
     scene.add(this.root);
+  }
+
+  /**
+   * Make this the player's own body: seen from inside, so the head, the arms and the rifle are
+   * hidden (the first-person viewmodel supplies the arms and the rifle). What is left is the
+   * torso and legs you see when you look down, with every pose the body has.
+   */
+  setFirstPerson(on: boolean): void {
+    for (const m of this.headParts) m.visible = !on;
+    for (const a of this.arms) a.visible = !on;
+    this.firstPerson = on;
+    this.gun.visible = false;
   }
 
   /** Fired a shot: recoil and a muzzle flash for a moment (raises the rifle too). */
@@ -326,7 +470,8 @@ export class CharacterBody {
     // Facing: the way it's moving, otherwise toward the viewer.
     const moving = s.alive && this.speed > 0.5 && dist > 1e-4;
     const targetYaw = moving ? Math.atan2(dx, dz) : Math.atan2(viewer.x - s.x, viewer.z - s.z);
-    if (s.alive) this.yaw += angleDelta(this.yaw, targetYaw) * follow(10, dt);
+    if (s.alive && s.yaw !== undefined) this.yaw = s.yaw;
+    else if (s.alive) this.yaw += angleDelta(this.yaw, targetYaw) * follow(10, dt);
     this.root.position.set(s.x, s.y, s.z);
     this.root.rotation.y = this.yaw;
 
@@ -343,20 +488,41 @@ export class CharacterBody {
     }
     this.land = Math.max(0, this.land - dt * 5);
 
-    // Double jump: a sudden upward kick while already in the air starts a somersault.
-    if (inAir && this.airTime > 0.12 && rawVy - this.prevRawVy > 5 && this.flipT === 0) {
-      this.flipT = 1e-6;
+    // Double jump: a sudden upward kick while already in the air starts the second jump.
+    if (inAir && this.airTime > 0.12 && rawVy - this.prevRawVy > 5 && this.airJumpT === 0) {
+      this.airJumpT = 1e-6;
     }
     this.prevRawVy = rawVy;
-    if (!inAir || !s.alive) this.flipT = 0;
-    else if (this.flipT > 0)
-      this.flipT = this.flipT + dt / FLIP_SECONDS >= 1 ? 0 : this.flipT + dt / FLIP_SECONDS;
+    if (!inAir || !s.alive) this.airJumpT = 0;
+    else if (this.airJumpT > 0)
+      this.airJumpT =
+        this.airJumpT + dt / AIR_JUMP_SECONDS >= 1 ? 0 : this.airJumpT + dt / AIR_JUMP_SECONDS;
 
     const crouching = s.alive && s.crouching === true && !s.sliding;
     this.crouchW += ((crouching ? 1 : 0) - this.crouchW) * follow(BLEND_RATE, dt);
     this.dashW += ((s.alive && s.dashing ? 1 : 0) - this.dashW) * follow(BLEND_RATE * 1.5, dt);
     this.shootT = Math.max(0, this.shootT - dt / SHOT_SECONDS);
-    const aiming = s.alive && (s.aiming === true || this.shootT > 0);
+    // The rifle: draw it when armed turns on; the arms follow its hold weight.
+    const armed = s.armed === true;
+    if (!armed) this.equipT = 0;
+    if (!this.armInit) {
+      this.armInit = true;
+      this.holdW = armed ? 1 : 0; // already carrying it when first seen: no draw
+    } else if (armed && !this.wasArmed) {
+      this.equipT = 1e-6;
+      this.holdW = 0;
+    }
+    this.wasArmed = armed;
+    if (this.equipT > 0) {
+      this.equipT += dt / EQUIP_SECONDS;
+      if (this.equipT >= 1) {
+        this.equipT = 0;
+        this.holdW = 1;
+      } else this.holdW = easeOutBack(this.equipT);
+    } else {
+      this.holdW += ((armed ? 1 : 0) - this.holdW) * follow(BLEND_RATE, dt);
+    }
+    const aiming = s.alive && armed && (s.aiming === true || this.shootT > 0);
     this.aimW += ((aiming ? 1 : 0) - this.aimW) * follow(BLEND_RATE, dt);
 
     // Walk/run cycle advances with distance, so feet keep pace with the ground.
@@ -376,37 +542,61 @@ export class CharacterBody {
     blendPose(p, p, this.crouch, this.crouchW);
     blendPose(p, p, this.dash, this.dashW);
 
-    // Double-jump somersault about the middle of the body, tucked up while it spins.
-    if (this.flipT > 0) {
-      const phi = this.flipT * Math.PI * 2;
-      const tuck = Math.sin(this.flipT * Math.PI);
-      p.bodyPitch += phi;
-      p.bodyY += CENTER_Y * (1 - Math.cos(phi));
-      p.bodyZ -= CENTER_Y * Math.sin(phi);
-      p.legL = lerp(p.legL, -1.3, tuck);
-      p.legR = lerp(p.legR, -1.3, tuck);
-      p.armLX = lerp(p.armLX, -1.1, tuck);
-      p.armRX = lerp(p.armRX, -1.1, tuck);
+    // Second jump in the air: sink a little with the knees pulled up, then drive off and
+    // stretch out with the arms thrown up, like jumping again from nothing.
+    if (this.airJumpT > 0) {
+      const u = this.airJumpT;
+      const bump = (from: number, to: number) =>
+        u <= from || u >= to ? 0 : Math.sin((Math.PI * (u - from)) / (to - from));
+      const knees = bump(0, 0.6);
+      const swing = bump(0.15, 1);
+      p.bodyY += -0.12 * bump(0, 0.35) + 0.05 * bump(0.35, 1);
+      p.legL = lerp(p.legL, -1.25, knees);
+      p.legR = lerp(p.legR, -0.8, knees);
+      p.upperPitch = lerp(p.upperPitch, 0.35, knees);
+      p.armLX = lerp(p.armLX, -2.3, swing);
+      p.armRX = lerp(p.armRX, -2.3, swing);
+      p.armLZ = lerp(p.armLZ, -0.45, swing);
+      p.armRZ = lerp(p.armRZ, 0.45, swing);
     }
 
-    // Aiming: both arms up on the rifle, whatever the legs are doing.
+    // Aiming lifts the torso a touch (the arms and rifle are handled below).
     if (this.aimW > 0.001) {
-      const k = this.aimW;
-      const recoil = this.shootT;
-      p.upperPitch = lerp(p.upperPitch, 0.05 - 0.08 * recoil, k);
-      p.armLX = lerp(p.armLX, -1.35 + 0.18 * recoil, k);
-      p.armRX = lerp(p.armRX, -1.45 + 0.18 * recoil, k);
-      p.armLZ = lerp(p.armLZ, 0.28, k);
-      p.armRZ = lerp(p.armRZ, -0.12, k);
+      p.upperPitch = lerp(p.upperPitch, 0.05 - 0.08 * this.shootT, this.aimW);
     }
-    // The rifle follows: hip carry to shoulder aim, kicking back a little on each shot.
+
+    // The rifle goes where the carry says (slung, low and ready, or up at the shoulder, with a
+    // kick on each shot), and BOTH HANDS ARE SOLVED TO IT, so the arms follow the rifle in every
+    // animation instead of swinging on their own.
     const g = this.gun;
-    g.position.set(
-      lerp(0.22, 0.03, this.aimW),
-      lerp(0.2, 0.4, this.aimW),
-      lerp(0.12, 0.28, this.aimW) - 0.04 * this.shootT,
-    );
-    g.rotation.set(lerp(1.0, 0, this.aimW) - 0.05 * this.shootT, 0, 0);
+    g.visible = !this.firstPerson && (this.holdW > 0.02 || this.equipT > 0);
+    const hw = this.holdW;
+    const aw = this.aimW;
+    const kick = this.shootT;
+    const gx = lerp(lerp(GUN_HOLSTER.x, GUN_LOW.x, hw), GUN_AIM.x, aw);
+    const gy = lerp(lerp(GUN_HOLSTER.y, GUN_LOW.y, hw), GUN_AIM.y, aw);
+    const gz = lerp(lerp(GUN_HOLSTER.z, GUN_LOW.z, hw), GUN_AIM.z, aw) - 0.04 * kick;
+    const gp = lerp(lerp(GUN_HOLSTER.pitch, GUN_LOW.pitch, hw), GUN_AIM.pitch, aw) - 0.05 * kick;
+    g.position.set(gx, gy, gz);
+    g.rotation.set(gp, 0, 0);
+    this.handMix = 0;
+    if (hw > 0.001) {
+      const cp = Math.cos(gp);
+      const sp = Math.sin(gp);
+      const w = clamp01(hw);
+      this.handMix = w;
+      // A point in the rifle's space (about X only) to the upper body's space, then the arm.
+      const grip = (o: readonly [number, number, number], shoulderX: number, left: boolean) => {
+        const y = gy + o[1] * cp - o[2] * sp;
+        const z = gz + o[1] * sp + o[2] * cp;
+        const r = solveArm(shoulderX, gx + o[0], y, z, this.ik);
+        this.handQ[left ? 0 : 1].copy(r.q);
+        if (left) p.elbowL = lerp(p.elbowL, r.elbow, w);
+        else p.elbowR = lerp(p.elbowR, r.elbow, w);
+      };
+      grip(GRIP_LEFT, -SHOULDER_X, true);
+      grip(GRIP_RIGHT, SHOULDER_X, false);
+    }
     this.muzzleFlash.visible = this.shootT > 0.55;
     this.brick.update(dt, 1, this.time);
 
@@ -558,7 +748,13 @@ export class CharacterBody {
     this.legs[1].scale.y = p.legScale;
     this.legs[0].rotation.x = p.legL;
     this.legs[1].rotation.x = p.legR;
-    this.arms[0].rotation.set(p.armLX, 0, p.armLZ);
-    this.arms[1].rotation.set(p.armRX, 0, p.armRZ);
+    this.arms[0].quaternion.setFromEuler(_euler.set(p.armLX, 0, p.armLZ));
+    this.arms[1].quaternion.setFromEuler(_euler.set(p.armRX, 0, p.armRZ));
+    if (this.handMix > 0) {
+      this.arms[0].quaternion.slerp(this.handQ[0], this.handMix);
+      this.arms[1].quaternion.slerp(this.handQ[1], this.handMix);
+    }
+    this.elbows[0].rotation.x = p.elbowL;
+    this.elbows[1].rotation.x = p.elbowR;
   }
 }

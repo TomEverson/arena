@@ -4,7 +4,7 @@
  */
 import type { Hitbox } from "./sim/hitscan";
 import type { LevelTarget } from "./sim/level";
-import { COMBAT, WEAPON as W } from "./sim/params";
+import { COMBAT, PARAMS as P, WEAPON as W } from "./sim/params";
 import { fullHealth, type Health } from "./sim/weapon";
 
 const HALF_WIDTH = 0.3;
@@ -18,10 +18,13 @@ export interface Dummy extends Health {
   range: number;
   homeX: number;
   homeZ: number;
+  homeY: number;
   x: number;
   y: number;
   z: number;
   dir: 1 | -1;
+  /** Seconds into the current pass along the wall (wallrun targets). */
+  runT: number;
   alive: boolean;
   respawnIn: number;
   /** Sim time of the first hit of the current life; null until hit. */
@@ -33,7 +36,7 @@ export interface Dummy extends Health {
 }
 
 export function makeDummies(targets: readonly LevelTarget[]): Dummy[] {
-  return targets.map((t, i) => ({
+  const list: Dummy[] = targets.map((t, i) => ({
     id: i,
     name: t.id,
     kind: t.kind,
@@ -41,10 +44,12 @@ export function makeDummies(targets: readonly LevelTarget[]): Dummy[] {
     range: t.range,
     homeX: t.pos[0],
     homeZ: t.pos[2],
+    homeY: t.pos[1],
     x: t.pos[0],
     y: t.pos[1],
     z: t.pos[2],
-    dir: 1,
+    dir: 1 as const,
+    runT: 0,
     alive: true,
     respawnIn: 0,
     firstHitAt: null,
@@ -53,6 +58,8 @@ export function makeDummies(targets: readonly LevelTarget[]): Dummy[] {
     headshots: 0,
     ...fullHealth(),
   }));
+  for (const d of list) placeOnWall(d); // wall runners start at one end of their run
+  return list;
 }
 
 export function hitboxOf(d: Dummy): Hitbox {
@@ -72,6 +79,24 @@ export function aliveHitboxes(dummies: readonly Dummy[]): Hitbox[] {
   return dummies.filter((d) => d.alive).map(hitboxOf);
 }
 
+/**
+ * How far above its wall-run line a wall runner is `tau` seconds into a pass: the same rise and
+ * slow fall as the player's wall run, tilted so the pass ends at the height it began.
+ */
+export function wallRunArc(tau: number): number {
+  const f = (t: number) => P.wallRunMaxRise * t - 0.5 * P.gravity * P.wallRunGravityScale * t * t;
+  return f(tau) - (f(P.wallRunMaxTime) * tau) / P.wallRunMaxTime;
+}
+
+/** Put a wall-running dummy where its pass has got to (it runs end to end in wallRunMaxTime). */
+function placeOnWall(d: Dummy): void {
+  if (d.kind !== "wallrun") return;
+  const off = d.dir * d.range * (2 * (d.runT / P.wallRunMaxTime) - 1);
+  if (d.axis === "x") d.x = d.homeX + off;
+  else d.z = d.homeZ + off;
+  d.y = d.homeY + wallRunArc(d.runT);
+}
+
 /** Practice-range reset: every dummy back at home with full health. */
 export function resetDummies(dummies: Dummy[]): void {
   for (const d of dummies) {
@@ -82,6 +107,8 @@ export function resetDummies(dummies: Dummy[]): void {
     d.x = d.homeX;
     d.z = d.homeZ;
     d.dir = 1;
+    d.runT = 0;
+    placeOnWall(d);
     d.firstHitAt = null;
     d.hits = 0;
     d.headshots = 0;
@@ -108,10 +135,21 @@ export function stepDummies(dummies: Dummy[], dt: number, frozen: boolean): void
         d.headshots = 0;
         d.x = d.homeX;
         d.z = d.homeZ;
+        d.runT = 0;
+        placeOnWall(d);
       }
       continue;
     }
-    if (d.kind !== "strafe") continue;
+    if (d.kind === "static") continue;
+    if (d.kind === "wallrun") {
+      d.runT += dt;
+      if (d.runT >= P.wallRunMaxTime) {
+        d.runT -= P.wallRunMaxTime;
+        d.dir = d.dir === 1 ? -1 : 1;
+      }
+      placeOnWall(d);
+      continue;
+    }
     const home = d.axis === "x" ? d.homeX : d.homeZ;
     let p = (d.axis === "x" ? d.x : d.z) + d.dir * COMBAT.targetSpeed * dt;
     if (p > home + d.range) {

@@ -72,7 +72,7 @@ func Parse(data []byte) (*game.Level, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("level: %w", err)
 	}
-	lv := &game.Level{}
+	lv := &game.Level{Name: raw.Name}
 	for i, b := range raw.Boxes {
 		if err := validate("boxes", i, b); err != nil {
 			return nil, err
@@ -120,8 +120,8 @@ func parseTarget(i int, t rawTarget) (game.TargetSpec, error) {
 	if axis == "" {
 		axis = "x"
 	}
-	if kind != "static" && kind != "strafe" {
-		return game.TargetSpec{}, fmt.Errorf("level: targets[%d].kind: expected static or strafe", i)
+	if kind != "static" && kind != "strafe" && kind != "wallrun" {
+		return game.TargetSpec{}, fmt.Errorf("level: targets[%d].kind: expected static, strafe or wallrun", i)
 	}
 	if axis != "x" && axis != "z" {
 		return game.TargetSpec{}, fmt.Errorf("level: targets[%d].axis: expected x or z", i)
@@ -130,11 +130,12 @@ func parseTarget(i int, t rawTarget) (game.TargetSpec, error) {
 		return game.TargetSpec{}, fmt.Errorf("level: targets[%d].range: expected a number >= 0", i)
 	}
 	return game.TargetSpec{
-		ID:     t.ID,
-		Pos:    game.Vec3{X: t.Pos[0], Y: t.Pos[1], Z: t.Pos[2]},
-		Strafe: kind == "strafe",
-		AxisX:  axis == "x",
-		Range:  t.Range,
+		ID:      t.ID,
+		Pos:     game.Vec3{X: t.Pos[0], Y: t.Pos[1], Z: t.Pos[2]},
+		Strafe:  kind == "strafe" || kind == "wallrun",
+		WallRun: kind == "wallrun",
+		AxisX:   axis == "x",
+		Range:   t.Range,
 	}, nil
 }
 

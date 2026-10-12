@@ -34,20 +34,23 @@ func TestLoadsPracticeTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lv.Targets) != 5 {
-		t.Fatalf("targets = %d, want 5", len(lv.Targets))
+	if len(lv.Targets) != 6 {
+		t.Fatalf("targets = %d, want 6", len(lv.Targets))
 	}
-	strafing := 0
+	strafing, wallRunning := 0, 0
 	for _, tg := range lv.Targets {
 		if tg.Strafe {
 			strafing++
+			if tg.WallRun {
+				wallRunning++
+			}
 			if tg.Range <= 0 {
 				t.Fatalf("strafing target %s has no range", tg.ID)
 			}
 		}
 	}
-	if strafing != 2 {
-		t.Fatalf("strafing targets = %d, want 2", strafing)
+	if strafing != 3 || wallRunning != 1 {
+		t.Fatalf("strafing targets = %d (want 3), wall-running = %d (want 1)", strafing, wallRunning)
 	}
 }
 
@@ -80,5 +83,32 @@ func TestRejectsBadLevels(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("Parse(%s) error = %v, want it to mention %q", in, err, want)
 		}
+	}
+}
+
+func TestLoadFFA(t *testing.T) {
+	lv, err := Load("../../../levels/ffa.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lv.Name != "ffa" {
+		t.Fatalf("name = %q, want ffa", lv.Name)
+	}
+	if len(lv.Spawns) != 8 {
+		t.Fatalf("spawns = %d, want 8 (one per player)", len(lv.Spawns))
+	}
+	// Every spawn point must be standing room: nothing solid in a player-sized box above it.
+	for i, sp := range lv.Spawns {
+		for _, b := range lv.Collision.Boxes {
+			inX := sp.X+0.3 > b.MinX && sp.X-0.3 < b.MaxX
+			inZ := sp.Z+0.3 > b.MinZ && sp.Z-0.3 < b.MaxZ
+			inY := sp.Y+1.8 > b.MinY && sp.Y < b.MaxY-0.001
+			if inX && inZ && inY {
+				t.Fatalf("spawn %d (%v, %v, %v) is inside a box %+v", i, sp.X, sp.Y, sp.Z, b)
+			}
+		}
+	}
+	if len(lv.Targets) != 0 {
+		t.Fatalf("an FFA map has no practice targets, got %d", len(lv.Targets))
 	}
 }

@@ -48,6 +48,7 @@ type testCfg struct {
 
 func rangeLevel() *game.Level {
 	lv := game.FlatLevel()
+	lv.Name = "range-test" // a mode's own map is what its welcome names
 	lv.Targets = []game.TargetSpec{{ID: "t1", Pos: game.Vec3{Z: -10}}, {ID: "t2", Pos: game.Vec3{X: 5, Z: -15}}}
 	return lv
 }
@@ -518,4 +519,25 @@ func TestPracticeCommandsOverTheWire(t *testing.T) {
 	ffa.send(map[string]any{"type": "practice", "action": "start"})
 	ffa.send(map[string]any{"type": "ping", "t": 2})
 	ffa.next("pong")
+}
+
+func TestWelcomeNamesTheRoomsOwnMap(t *testing.T) {
+	ts := startServer(t, testCfg{Match: practice(), MaxRooms: 4})
+	// FFA rooms use the level that has no name of its own: they report the server's default.
+	ffa := ts.join(ts.createRoomMode("ffa"))
+	var w protocol.Welcome
+	if err := json.Unmarshal(ffa.next("welcome"), &w); err != nil {
+		t.Fatal(err)
+	}
+	if w.Level != "test" {
+		t.Fatalf("ffa welcome level = %q, want the server default \"test\"", w.Level)
+	}
+	// A practice room runs a different map and must say so, or the client would predict on the wrong one.
+	practice := ts.join(ts.createRoomMode("practice"))
+	if err := json.Unmarshal(practice.next("welcome"), &w); err != nil {
+		t.Fatal(err)
+	}
+	if w.Level != "range-test" {
+		t.Fatalf("practice welcome level = %q, want range-test", w.Level)
+	}
 }

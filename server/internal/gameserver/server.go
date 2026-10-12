@@ -146,12 +146,16 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	p := game.NewPlayer(s.nextID.Add(1))
 	log.Printf("player %d joined room %s", p.ID, room.Code)
 
+	levelName := room.LevelName // each mode can run its own map
+	if levelName == "" {
+		levelName = s.LevelName
+	}
 	hello, err := s.Codec.EncodeWelcome(nil, &protocol.Welcome{
 		Type:         protocol.ServerTypeWelcome,
 		PlayerID:     p.ID,
 		TickRate:     game.TickRate,
 		SnapshotRate: game.SnapshotRate,
-		Level:        s.LevelName,
+		Level:        levelName,
 		Room:         room.Code,
 		Mode:         room.Mode,
 		MaxPlayers:   uint8(room.Capacity()),

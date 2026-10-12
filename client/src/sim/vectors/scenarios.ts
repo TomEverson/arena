@@ -982,6 +982,23 @@ export const scenarios: Scenario[] = [
     },
   ),
   scenario(
+    "fuzz-ffa",
+    "900 ticks of seeded random input through the FFA map (wall runs, tower, tunnel, platforms).",
+    { level: "ffa" },
+    [0, 0, 26],
+    { total: 900, input: fuzzInput(424242) },
+    (t) => {
+      check(
+        t.every((s) => [s.x, s.y, s.z, s.vx, s.vy, s.vz].every(Number.isFinite)),
+        "finite",
+      );
+      check(
+        t.every((s) => Math.abs(s.x) < 31 && Math.abs(s.z) < 31),
+        "stayed in the arena",
+      );
+    },
+  ),
+  scenario(
     "fuzz-inline-2",
     "A second seeded random run (different seed, start in a corner of the inline arena).",
     { boxes: flatWorld({ boxes: [...fuzzBoxes, wallClimbable] }).boxes, ramps: fuzzRamps },

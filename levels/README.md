@@ -14,5 +14,7 @@ Format (units metres, Y up):
 - `targets[]`: practice dummies, client-only: `{id, pos (feet), kind: "static"|"strafe", axis: "x"|"z", range}`; strafing ones move +-`range` m around `pos`.
 - `controlPoints[]`: ignored in Phase 1.
 
-Loaders and validation: `client/src/sim/level.ts` (`parseLevel`) and `server/internal/level` (`Load`); the server takes `--level`. Spawn zones become the server's player spawn points. Levels: `example.json` (schema sample), `greybox.json` (movement test arena), `duel.json` (an open 80 m arena with two spawns at opposite ends, used by `pnpm combatcheck`). `range.json` (an open arena with two static and two strafing targets all in view of the spawn, used by `pnpm practicecheck`).
+Loaders and validation: `client/src/sim/level.ts` (`parseLevel`) and `server/internal/level` (`Load`); the server takes `--level`. Spawn zones become the server's player spawn points. Levels: `example.json` (schema sample), `greybox.json` (movement test arena), `duel.json` (an open 80 m arena with two spawns at opposite ends, used by `pnpm combatcheck`). `range.json` (an open arena with two static and two strafing targets all in view of the spawn, used by `pnpm practicecheck`). `ffa.json` is the first FFA map (60 x 60 m, 8 spawns): a ring of lanes around a raised centre. It is **generated** by `node levels/gen-ffa.mjs`, so edit the layout in that script, not the JSON.
+
+The server reports each room's level name in the welcome message, and the client (`client/src/levels.ts`) loads the map of that name; add new maps there too. FFA rooms run `ffa` (`--level`), practice rooms run the greybox (`--practice-level`).
 The schema is not frozen.

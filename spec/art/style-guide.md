@@ -109,6 +109,7 @@ Built from boxes and low-poly (8-sided) cylinders and spheres, animated in code 
 
 - **Colors:** GRAPHITE body, CONCRETE shroud, rail and side plates, INK details. One SIGNAL accent: the **ammo strip**, a light on each side of the receiver that shrinks as the magazine empties and turns HAZARD and blinks at 25% or less. HAZARD is otherwise only the muzzle flash.
 - **Moving parts:** a slide on the top rail kicks back on each shot; the magazine is its own group, pulled out and slotted back in during the reload (`reloadAnim.ts`).
+- **Held by the body:** the character's arms are two bones (shoulder, elbow), and both hands are solved onto the rifle every frame (`solveArm` in `character.ts`), so the gun and hands stay together in every animation: slung while drawing, held low and ready, up at the shoulder when aiming, kicking on a shot. `armed` on the body state turns it on; turning it on plays a draw (`G` in the viewer).
 - **Preview:** `/figure.html`, model "Brick (rifle)": idle, fire loop, reload loop, strip drain, low-ammo blink.
 - **To tune:** the numbers in `buildBrick` (sizes and positions), `LOW_AMMO` and `SLIDE_KICK`.
 

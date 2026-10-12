@@ -28,10 +28,12 @@ const (
 
 // Target is one dummy.
 type Target struct {
-	ID     uint32
-	spec   TargetSpec
-	x, z   float64
-	dir    float64 // +1 or -1 along the strafe axis
+	ID      uint32
+	spec    TargetSpec
+	x, y, z float64
+	dir     float64 // +1 or -1 along the strafe axis
+	// runT is how long the current pass along the wall has lasted (wall-running targets).
+	runT   float64
 	Health protocol.PlayerHealth
 	hist   history
 	Entity protocol.Entity
@@ -46,15 +48,20 @@ func newTarget(i int, spec TargetSpec) Target {
 
 // reset brings the target back at its home position with full health.
 func (t *Target) reset() {
-	t.x, t.z, t.dir = t.spec.Pos.X, t.spec.Pos.Z, 1
+	t.x, t.y, t.z, t.dir, t.runT = t.spec.Pos.X, t.spec.Pos.Y, t.spec.Pos.Z, 1, 0
+	if t.spec.WallRun {
+		t.placeOnWall() // starts at one end of its run
+	}
 	t.Health = protocol.PlayerHealth{Health: WeaponMaxHealth, Shield: WeaponMaxShield, Alive: true}
 	t.syncEntity()
 }
 
 func (t *Target) syncEntity() {
 	e := &t.Entity
-	e.X, e.Y, e.Z = t.x, t.spec.Pos.Y, t.z
-	if t.Health.Alive {
+	e.X, e.Y, e.Z = t.x, t.y, t.z
+	if t.Health.Alive && t.spec.WallRun {
+		e.Flags = protocol.EntityFlagWallRunning
+	} else if t.Health.Alive {
 		e.Flags = protocol.EntityFlagOnGround
 	} else {
 		e.Flags = protocol.EntityFlagDead
@@ -62,7 +69,7 @@ func (t *Target) syncEntity() {
 }
 
 func (t *Target) live(tick uint64) histEntry {
-	return histEntry{tick: uint32(tick), valid: true, alive: t.Health.Alive, x: t.x, y: t.spec.Pos.Y, z: t.z, height: StandHeight}
+	return histEntry{tick: uint32(tick), valid: true, alive: t.Health.Alive, x: t.x, y: t.y, z: t.z, height: StandHeight}
 }
 
 // SetPractice makes this world a practice range: the level's targets appear, players
@@ -102,6 +109,10 @@ func (w *World) stepTargets() {
 			}
 			continue
 		}
+		if t.spec.WallRun {
+			t.stepWallRun()
+			continue
+		}
 		if !t.spec.Strafe {
 			continue
 		}
@@ -117,6 +128,38 @@ func (w *World) stepTargets() {
 		}
 		t.syncEntity()
 	}
+}
+
+// wallRunArc is how far above its wall-run line a wall runner is `tau` seconds into a pass: the
+// same rise and slow fall as the player's wall run (WallRunMaxRise up, gravity scaled by
+// WallRunGravityScale), tilted so the pass ends back at the height it began.
+func wallRunArc(tau float64) float64 {
+	f := func(t float64) float64 { return WallRunMaxRise*t - 0.5*Gravity*WallRunGravityScale*t*t }
+	return f(tau) - f(WallRunMaxTime)*tau/WallRunMaxTime
+}
+
+// placeOnWall puts a wall-running target where its pass has got to: it runs from one end of
+// its range to the other in WallRunMaxTime (the longest a player can wall run), then turns.
+func (t *Target) placeOnWall() {
+	u := t.runT / WallRunMaxTime
+	off := t.dir * t.spec.Range * (2*u - 1)
+	if t.spec.AxisX {
+		t.x = t.spec.Pos.X + off
+	} else {
+		t.z = t.spec.Pos.Z + off
+	}
+	t.y = t.spec.Pos.Y + wallRunArc(t.runT)
+}
+
+// stepWallRun advances a wall-running target one tick along its arc.
+func (t *Target) stepWallRun() {
+	t.runT += TickDT
+	if t.runT >= WallRunMaxTime {
+		t.runT -= WallRunMaxTime
+		t.dir = -t.dir
+	}
+	t.placeOnWall()
+	t.syncEntity()
 }
 
 func (w *World) recordTargetHistory() {

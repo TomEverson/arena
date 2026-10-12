@@ -57,6 +57,7 @@ const STYLED_VIA_PARENT = new Set([
   "play-practice",
   // The viewer's controls, all inside #panel.
   "model",
+  "weapon",
   "anim",
   "replay",
   "hitbox",

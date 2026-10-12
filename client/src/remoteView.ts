@@ -33,7 +33,7 @@ export class RemoteViews {
       if (!v) {
         v = {
           body: new CharacterBody(this.scene, pose.id),
-          state: { x: 0, y: 0, z: 0, onGround: true, sliding: false, alive: true },
+          state: { x: 0, y: 0, z: 0, onGround: true, sliding: false, alive: true, armed: true },
           lastY: pose.y,
         };
         this.views.set(pose.id, v);

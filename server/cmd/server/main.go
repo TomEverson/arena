@@ -24,7 +24,7 @@ func main() {
 	addr := flag.String("addr", ":8080", "listen address")
 	latency := flag.Duration("fake-latency", 0, "added one-way latency on every packet, both directions (e.g. 80ms)")
 	loss := flag.String("loss", "0%", "random packet loss, both directions (e.g. 3%)")
-	levelPath := flag.String("level", "../levels/greybox.json", "level JSON to load (relative to the working directory)")
+	levelPath := flag.String("level", "../levels/ffa.json", "level JSON for FFA rooms (relative to the working directory)")
 	practiceLevelPath := flag.String("practice-level", "../levels/greybox.json", "level JSON for practice ranges")
 	noMatch := flag.Bool("no-match", false, "FFA rooms are always live: no waiting, countdown, timer or results")
 	countdown := flag.Duration("countdown", time.Duration(game.MatchCountdownSeconds*float64(time.Second)), "countdown before a match")
