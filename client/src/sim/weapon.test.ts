@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { castRay, type Hitbox, rayAabb } from "./hitscan";
 import { PARAMS, WEAPON as W } from "./params";
 import { box, flatWorld } from "./testutil";

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+
 import greybox from "../../levels/greybox.json";
 import { aliveHitboxes, type Dummy, killDummy, makeDummies, stepDummies } from "./dummies";
 import { DummyViews } from "./dummyView";
@@ -100,8 +101,9 @@ document.addEventListener("mousedown", (e) => {
 });
 document.addEventListener("mouseup", (e) => held.delete(`Mouse${e.button}`));
 document.addEventListener("contextmenu", (e) => e.preventDefault());
-hint.addEventListener("click", () => canvas.requestPointerLock());
-canvas.addEventListener("click", () => canvas.requestPointerLock());
+const lockPointer = () => void canvas.requestPointerLock();
+hint.addEventListener("click", lockPointer);
+canvas.addEventListener("click", lockPointer);
 document.addEventListener("pointerlockchange", () => {
   const locked = document.pointerLockElement === canvas;
   hint.classList.toggle("hidden", locked);

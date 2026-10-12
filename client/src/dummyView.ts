@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { DUMMY_HALF_WIDTH, DUMMY_HEIGHT, type Dummy } from "./dummies";
+
+import { type Dummy, DUMMY_HALF_WIDTH, DUMMY_HEIGHT } from "./dummies";
 import { WEAPON as W } from "./sim/params";
 
 const FLASH_SECONDS = 0.09;

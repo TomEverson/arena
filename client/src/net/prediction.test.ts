@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { spawnState, stepPlayer } from "../sim/movement";
 import { flatWorld } from "../sim/testutil";
 import { emptyInput, type PlayerInput, type PlayerState } from "../sim/types";

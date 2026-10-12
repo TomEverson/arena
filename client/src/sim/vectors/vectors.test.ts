@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { replayVector } from "./format";
 import { loadVectors, loadWorld } from "./node";
 import { recordScenario } from "./record";

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { aliveHitboxes, killDummy, makeDummies, stepDummies } from "./dummies";
 import type { LevelTarget } from "./sim/level";
 

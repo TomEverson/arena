@@ -10,12 +10,13 @@
  */
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+
 import { FixedTimestep } from "../src/loop";
 import { NetClient } from "../src/net/client";
 import { ServerClock } from "../src/net/clock";
 import { INTERP_TICKS, RemoteTracks } from "../src/net/interpolation";
 import { Predictor } from "../src/net/prediction";
-import { emptyInput } from "../src/sim/types";
+import { emptyInput, type PlayerInput, type PlayerState } from "../src/sim/types";
 import { loadWorld } from "../src/sim/vectors/node";
 import { fuzzInput } from "../src/sim/vectors/scenarios";
 
@@ -46,7 +47,7 @@ class HeadlessClient {
   readonly net: NetClient;
   reconciled = 0;
   inputsSent = 0;
-  private readonly inputFor: (tick: number, s: never) => Record<string, unknown>;
+  private readonly inputFor: (tick: number, s: PlayerState) => Partial<PlayerInput>;
   private tick = 0;
   private running = true;
   private readonly loop: FixedTimestep;
@@ -56,8 +57,7 @@ class HeadlessClient {
     readonly name: string,
     seed: number,
   ) {
-    const gen = fuzzInput(seed)();
-    this.inputFor = gen as never;
+    this.inputFor = fuzzInput(seed)();
     this.net = new NetClient(`ws://localhost:${port}/ws`, {
       onWelcome: () => {},
       onSnapshot: (s) => {
@@ -73,7 +73,7 @@ class HeadlessClient {
     });
     this.loop = new FixedTimestep(() => {
       if (!this.predictor || !this.running) return;
-      const raw = this.inputFor(this.tick++, this.predictor.state as never);
+      const raw = this.inputFor(this.tick++, this.predictor.state);
       this.predictor.step({ ...emptyInput(), ...raw }, 0);
       this.net.sendInputs(this.predictor.recent());
       this.inputsSent++;

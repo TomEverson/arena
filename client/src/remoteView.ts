@@ -1,4 +1,5 @@
 import * as THREE from "three";
+
 import type { Pose } from "./net/interpolation";
 import { EntityFlags } from "./net/protocol.gen";
 import { PARAMS } from "./sim/params";

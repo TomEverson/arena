@@ -3,6 +3,7 @@
  * Run with `pnpm vectors`. A scenario whose `verify` fails aborts the recording.
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+
 import { loadWorld, VECTOR_DIR } from "../src/sim/vectors/node";
 import { recordScenario } from "../src/sim/vectors/record";
 import { scenarios } from "../src/sim/vectors/scenarios";
@@ -18,7 +19,7 @@ for (const sc of scenarios) {
   try {
     sc.verify(trace);
   } catch (e) {
-    throw new Error(`scenario "${sc.name}": ${(e as Error).message}`);
+    throw new Error(`scenario "${sc.name}": ${(e as Error).message}`, { cause: e });
   }
   writeFileSync(`${VECTOR_DIR}/${sc.name}.json`, `${JSON.stringify(vector)}\n`);
   for (const s of trace) {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import example from "../../../levels/example.json";
 import greybox from "../../../levels/greybox.json";
 import { buildCollisionWorld, parseLevel } from "./level";

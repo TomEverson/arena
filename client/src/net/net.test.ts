@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { ServerClock, TICK_MS } from "./clock";
 import { INTERP_TICKS, lerpAngle, RemoteTracks } from "./interpolation";
 import type { Entity } from "./protocol.gen";

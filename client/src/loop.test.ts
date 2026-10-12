@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { FixedTimestep, TICK_MS } from "./loop";
 
 describe("FixedTimestep", () => {

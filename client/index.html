@@ -5,56 +5,185 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Arena</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-      canvas { display: block; width: 100%; height: 100%; }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
       #hud {
-        position: fixed; top: 8px; left: 8px; color: #9f9; font: 12px/1.4 monospace;
-        white-space: pre; pointer-events: none; text-shadow: 1px 1px 0 #000;
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        color: #9f9;
+        font: 12px/1.4 monospace;
+        white-space: pre;
+        pointer-events: none;
+        text-shadow: 1px 1px 0 #000;
       }
       #hint {
-        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-        color: #fff; font: 16px monospace; background: rgba(0, 0, 0, 0.4); cursor: pointer;
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font: 16px monospace;
+        background: rgba(0, 0, 0, 0.4);
+        cursor: pointer;
       }
-      #hint.hidden { display: none; }
-      #crosshair { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; --gap: 8px; }
-      #crosshair i { position: absolute; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); }
-      #crosshair .t { width: 2px; height: 8px; left: -1px; top: calc(-8px - var(--gap)); }
-      #crosshair .b { width: 2px; height: 8px; left: -1px; top: var(--gap); }
-      #crosshair .l { width: 8px; height: 2px; top: -1px; left: calc(-8px - var(--gap)); }
-      #crosshair .r { width: 8px; height: 2px; top: -1px; left: var(--gap); }
-      #crosshair .d { width: 2px; height: 2px; left: -1px; top: -1px; }
-      #hitmarker { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; opacity: 0; }
-      #hitmarker::before, #hitmarker::after {
-        content: ""; position: absolute; left: -11px; top: -1.5px; width: 22px; height: 3px;
-        background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+      #hint.hidden {
+        display: none;
       }
-      #hitmarker::before { transform: rotate(45deg); }
-      #hitmarker::after { transform: rotate(-45deg); }
-      #hitmarker.on { animation: hit 0.18s ease-out; }
-      #hitmarker.head::before, #hitmarker.head::after { background: #ff4a4a; }
-      #hitmarker.kill::before, #hitmarker.kill::after { background: #ffd24a; left: -16px; width: 32px; }
-      @keyframes hit { from { opacity: 1; transform: scale(1.35); } to { opacity: 0; transform: scale(0.9); } }
+      #crosshair {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        pointer-events: none;
+        --gap: 8px;
+      }
+      #crosshair i {
+        position: absolute;
+        background: #fff;
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+      }
+      #crosshair .t {
+        width: 2px;
+        height: 8px;
+        left: -1px;
+        top: calc(-8px - var(--gap));
+      }
+      #crosshair .b {
+        width: 2px;
+        height: 8px;
+        left: -1px;
+        top: var(--gap);
+      }
+      #crosshair .l {
+        width: 8px;
+        height: 2px;
+        top: -1px;
+        left: calc(-8px - var(--gap));
+      }
+      #crosshair .r {
+        width: 8px;
+        height: 2px;
+        top: -1px;
+        left: var(--gap);
+      }
+      #crosshair .d {
+        width: 2px;
+        height: 2px;
+        left: -1px;
+        top: -1px;
+      }
+      #hitmarker {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        pointer-events: none;
+        opacity: 0;
+      }
+      #hitmarker::before,
+      #hitmarker::after {
+        content: "";
+        position: absolute;
+        left: -11px;
+        top: -1.5px;
+        width: 22px;
+        height: 3px;
+        background: #fff;
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+      }
+      #hitmarker::before {
+        transform: rotate(45deg);
+      }
+      #hitmarker::after {
+        transform: rotate(-45deg);
+      }
+      #hitmarker.on {
+        animation: hit 0.18s ease-out;
+      }
+      #hitmarker.head::before,
+      #hitmarker.head::after {
+        background: #ff4a4a;
+      }
+      #hitmarker.kill::before,
+      #hitmarker.kill::after {
+        background: #ffd24a;
+        left: -16px;
+        width: 32px;
+      }
+      @keyframes hit {
+        from {
+          opacity: 1;
+          transform: scale(1.35);
+        }
+        to {
+          opacity: 0;
+          transform: scale(0.9);
+        }
+      }
       #ammo {
-        position: fixed; right: 24px; bottom: 20px; color: #fff; font: 700 28px/1 monospace;
-        text-shadow: 2px 2px 0 #000; pointer-events: none; text-align: right;
+        position: fixed;
+        right: 24px;
+        bottom: 20px;
+        color: #fff;
+        font: 700 28px/1 monospace;
+        text-shadow: 2px 2px 0 #000;
+        pointer-events: none;
+        text-align: right;
       }
-      #ammo small { display: block; font-size: 13px; color: #fc6; margin-top: 4px; min-height: 1em; }
+      #ammo small {
+        display: block;
+        font-size: 13px;
+        color: #fc6;
+        margin-top: 4px;
+        min-height: 1em;
+      }
       #targetinfo {
-        position: fixed; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); color: #fff;
-        font: 12px monospace; text-shadow: 1px 1px 0 #000; pointer-events: none; opacity: 0;
-        transition: opacity 0.25s; white-space: pre; text-align: center;
+        position: fixed;
+        left: 50%;
+        top: calc(50% + 48px);
+        transform: translateX(-50%);
+        color: #fff;
+        font: 12px monospace;
+        text-shadow: 1px 1px 0 #000;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.25s;
+        white-space: pre;
+        text-align: center;
       }
-      #targetinfo.on { opacity: 1; transition: none; }
+      #targetinfo.on {
+        opacity: 1;
+        transition: none;
+      }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="hud"></div>
-    <div id="crosshair"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i></div>
+    <div id="crosshair">
+      <i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i>
+    </div>
     <div id="hitmarker"></div>
     <div id="targetinfo"></div>
     <div id="ammo"></div>
-    <div id="hint">Click to play — WASD move · Space jump (hold at green walls to climb) · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · P respawn · Esc release</div>
+    <div id="hint">
+      Click to play — WASD move · Space jump (hold at green walls to climb) · Shift dash · C
+      crouch/slide · LMB fire · RMB aim · R reload · P respawn · Esc release
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

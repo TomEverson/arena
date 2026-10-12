@@ -32,7 +32,8 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
 | `pnpm install` | Install JS deps (Go deps resolve on first build) |
 | `pnpm dev` | Client (Vite :5173) + server (air :8080) in parallel, prefixed logs |
 | `pnpm test` | Vitest + `go test ./...` + check that generated Go params are current |
-| `pnpm lint` | Biome + tsc, and `go vet` + gofmt + golangci-lint (skipped if not installed) |
+| `pnpm lint` | ESLint (type-aware) + Prettier check + tsc, and `go vet` + gofmt + golangci-lint (skipped if not installed) |
+| `pnpm format` | Auto-fix the client: ESLint `--fix` (also sorts imports) then Prettier `--write` |
 | `pnpm build` | `vite build` + `go build -o server/bin/server` |
 | `pnpm gen` | Regenerate generated code: Go constants from `shared/params.json`, wire types from `protocol/messages.json` |
 | `pnpm dev:lag` | Like `pnpm dev`, with the server's fake network (80 ms each way, 3% loss) |
@@ -44,7 +45,7 @@ Server flags: `--addr=:8080 --level=../levels/greybox.json --fake-latency=80ms -
 Prereqs: Node 22+, pnpm 10, Go 1.24+, `air` (`go install github.com/air-verse/air@latest`), optional `golangci-lint`.
 
 ## Layout
-`client/` Vite+TS+Three.js · `server/` Go module · `protocol/` wire messages source of truth (generated Go + TS) ·
+`client/` Vite+TS+Three.js (ESLint + Prettier config in `client/`) · `server/` Go module · `protocol/` wire messages source of truth (generated Go + TS) ·
 `shared/` shared tuning numbers + Go codegen · `levels/` level JSON · `testvectors/` shared movement vectors · `tools/bots/` fake clients · `spec/` (`brainstorm/` notes, `docs/` polished docs)
 
 <!-- BEGIN:turborepo-agent-rules -->

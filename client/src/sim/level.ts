@@ -53,7 +53,8 @@ function vec3(v: unknown, path: string, positive = false): [number, number, numb
     if (typeof n !== "number" || !Number.isFinite(n)) fail(path, "expected finite numbers");
     if (positive && n <= 0) fail(path, "sizes must be positive");
   }
-  return [v[0], v[1], v[2]];
+  const [x, y, z] = v as [number, number, number]; // checked above
+  return [x, y, z];
 }
 
 function record(v: unknown, path: string): Record<string, unknown> {

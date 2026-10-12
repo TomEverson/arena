@@ -1,7 +1,7 @@
 import { spawnState, stepPlayer } from "../movement";
 import type { CollisionWorld, PlayerInput, PlayerState } from "../types";
 import { emptyInput } from "../types";
-import { CHECKPOINT_EVERY, VECTOR_DT, type Vector, type VectorWorld } from "./format";
+import { CHECKPOINT_EVERY, type Vector, VECTOR_DT, type VectorWorld } from "./format";
 
 export interface Scenario {
   name: string;
