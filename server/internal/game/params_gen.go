@@ -77,6 +77,16 @@ const (
 	WeaponMagSize         = 30
 	WeaponReloadTime      = 1.8
 	WeaponRange           = 250
+	WeaponBulletSpeed     = 300
+	WeaponBulletGravity   = 8
+	WeaponMeleeDamage     = 20
+	WeaponMeleeKnockback  = 9
+	WeaponMeleeKnockUp    = 2.5
+	WeaponMeleeRange      = 2.4
+	WeaponMeleeConeDeg    = 55
+	WeaponMeleeWindup     = 0.12
+	WeaponMeleeCooldown   = 0.75
+	WeaponMeleeLock       = 0.35
 	WeaponHipSpread       = 2
 	WeaponAdsSpread       = 0.15
 	WeaponMoveBloom       = 1.2

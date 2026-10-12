@@ -4,14 +4,18 @@ import { fileURLToPath } from "node:url";
 
 import { buildCollisionWorld, parseLevel } from "../level";
 import type { CollisionWorld } from "../types";
+import type { BulletVector } from "./bullet-format";
 import type { HitscanVector, WeaponVector } from "./combat-format";
 import type { Vector, VectorWorld } from "./format";
+import type { MeleeVector } from "./melee-format";
 
 const repo = (rel: string) => fileURLToPath(new URL(`../../../../${rel}`, import.meta.url));
 
 export const VECTOR_DIR = repo("testvectors/movement");
 export const WEAPON_DIR = repo("testvectors/weapon");
 export const HITSCAN_DIR = repo("testvectors/hitscan");
+export const BULLET_DIR = repo("testvectors/bullet");
+export const MELEE_DIR = repo("testvectors/melee");
 
 export function loadWorld(spec: VectorWorld): CollisionWorld {
   if ("level" in spec) {
@@ -37,3 +41,5 @@ function loadDir<T>(dir: string): T[] {
 
 export const loadWeaponVectors = (): WeaponVector[] => loadDir<WeaponVector>(WEAPON_DIR);
 export const loadHitscanVectors = (): HitscanVector[] => loadDir<HitscanVector>(HITSCAN_DIR);
+export const loadBulletVectors = (): BulletVector[] => loadDir<BulletVector>(BULLET_DIR);
+export const loadMeleeVectors = (): MeleeVector[] => loadDir<MeleeVector>(MELEE_DIR);

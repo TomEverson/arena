@@ -45,11 +45,14 @@ export interface BodyState {
   aiming?: boolean;
   /** Carrying the Brick: arms hold it, in every animation. Turning this on plays the draw. */
   armed?: boolean;
+  /** In the middle of a melee swing (rising edge starts the animation). */
+  meleeing?: boolean;
   /** Which way the body faces (radians, the figure's own yaw), instead of toward its movement. */
   yaw?: number;
 }
 
 const FLASH_SECONDS = 0.09;
+const MELEE_SECONDS = 0.35; // the rifle thrust of a melee swing
 const EQUIP_SECONDS = 0.5; // drawing the rifle: arms come up onto it with a little overshoot
 const AIR_JUMP_SECONDS = 0.4; // the second jump in the air: knees up, then push off
 const SHOT_SECONDS = 0.09; // recoil and muzzle flash after a shot
@@ -85,6 +88,20 @@ interface GunSpot {
 const GUN_HOLSTER: GunSpot = { x: 0.2, y: 0.02, z: 0.02, pitch: 1.4 }; // slung at the hip
 const GUN_LOW: GunSpot = { x: 0.05, y: 0.18, z: 0.12, pitch: 0.1 }; // held low and ready
 const GUN_AIM: GunSpot = { x: 0.06, y: 0.4, z: 0.14, pitch: 0 }; // up at the shoulder
+const GUN_MELEE: GunSpot = { x: -0.1, y: 0.38, z: 0.2, pitch: 0.9 }; // hanging from the left hand while the right punches
+/** The right fist during a punch, in the upper body's space: resting, wound back, struck. */
+const FIST_REST = [0.2, 0.16, 0.14] as const;
+const FIST_WIND = [0.27, 0.3, -0.02] as const;
+const FIST_STRIKE = [0.1, 0.44, 0.58] as const;
+const smooth = (x: number) => {
+  const t = Math.min(1, Math.max(0, x));
+  return t * t * (3 - 2 * t);
+};
+const mix3 = (a: readonly number[], b: readonly number[], t: number): [number, number, number] => [
+  lerp(a[0] ?? 0, b[0] ?? 0, t),
+  lerp(a[1] ?? 0, b[1] ?? 0, t),
+  lerp(a[2] ?? 0, b[2] ?? 0, t),
+];
 /** Where each hand grips, in the rifle's own space: the grip, and under the front of the receiver. */
 const GRIP_RIGHT = [0, -0.075, 0] as const;
 const GRIP_LEFT = [0, -0.07, 0.3] as const;
@@ -287,6 +304,9 @@ export class CharacterBody {
   /** 0 = the rifle is slung and the arms are free; 1 = both hands on it (overshoots when drawing). */
   private holdW = 0;
   private equipT = 0;
+  /** 0 = not swinging; 0..1 = how far through a melee swing. */
+  private meleeT = 0;
+  private wasMeleeing = false;
   private wasArmed = false;
   private armInit = false;
   private firstPerson = false;
@@ -296,7 +316,8 @@ export class CharacterBody {
     new THREE.Quaternion(),
     new THREE.Quaternion(),
   ];
-  private handMix = 0;
+  private handMixL = 0;
+  private handMixR = 0;
   /** 0 = not air jumping; 0..1 = how far through the second jump it is. */
   private airJumpT = 0;
   private shootT = 0;
@@ -522,6 +543,11 @@ export class CharacterBody {
     } else {
       this.holdW += ((armed ? 1 : 0) - this.holdW) * follow(BLEND_RATE, dt);
     }
+    const meleeing = s.meleeing === true;
+    if (meleeing && !this.wasMeleeing) this.meleeT = 1e-6;
+    this.wasMeleeing = meleeing;
+    if (this.meleeT > 0)
+      this.meleeT = this.meleeT + dt / MELEE_SECONDS >= 1 ? 0 : this.meleeT + dt / MELEE_SECONDS;
     const aiming = s.alive && armed && (s.aiming === true || this.shootT > 0);
     this.aimW += ((aiming ? 1 : 0) - this.aimW) * follow(BLEND_RATE, dt);
 
@@ -573,29 +599,64 @@ export class CharacterBody {
     const hw = this.holdW;
     const aw = this.aimW;
     const kick = this.shootT;
-    const gx = lerp(lerp(GUN_HOLSTER.x, GUN_LOW.x, hw), GUN_AIM.x, aw);
-    const gy = lerp(lerp(GUN_HOLSTER.y, GUN_LOW.y, hw), GUN_AIM.y, aw);
-    const gz = lerp(lerp(GUN_HOLSTER.z, GUN_LOW.z, hw), GUN_AIM.z, aw) - 0.04 * kick;
-    const gp = lerp(lerp(GUN_HOLSTER.pitch, GUN_LOW.pitch, hw), GUN_AIM.pitch, aw) - 0.05 * kick;
+    // A melee swing is a punch: the rifle drops to the left hand at the hip and the right fist
+    // winds back, strikes forward and returns (the hands are solved to the rifle and the fist).
+    const mu = this.meleeT;
+    const mm = mu <= 0 ? 0 : smooth(mu / 0.2) * (1 - smooth((mu - 0.8) / 0.2)); // 0..1 how much of the carry
+    const punch = mu <= 0 ? 0 : Math.sin(Math.PI * clamp01((mu - 0.2) / 0.5)); // the strike itself
+    if (mu > 0) p.upperPitch += 0.22 * punch;
+    const gx = lerp(lerp(lerp(GUN_HOLSTER.x, GUN_LOW.x, hw), GUN_AIM.x, aw), GUN_MELEE.x, mm);
+    const gy = lerp(lerp(lerp(GUN_HOLSTER.y, GUN_LOW.y, hw), GUN_AIM.y, aw), GUN_MELEE.y, mm);
+    const gz =
+      lerp(lerp(lerp(GUN_HOLSTER.z, GUN_LOW.z, hw), GUN_AIM.z, aw), GUN_MELEE.z, mm) - 0.04 * kick;
+    const gp =
+      lerp(
+        lerp(lerp(GUN_HOLSTER.pitch, GUN_LOW.pitch, hw), GUN_AIM.pitch, aw),
+        GUN_MELEE.pitch,
+        mm,
+      ) -
+      0.05 * kick;
     g.position.set(gx, gy, gz);
     g.rotation.set(gp, 0, 0);
-    this.handMix = 0;
-    if (hw > 0.001) {
+    this.handMixL = 0;
+    this.handMixR = 0;
+    const holdMix = clamp01(hw);
+    if (hw > 0.001 || mm > 0) {
       const cp = Math.cos(gp);
       const sp = Math.sin(gp);
-      const w = clamp01(hw);
-      this.handMix = w;
       // A point in the rifle's space (about X only) to the upper body's space, then the arm.
       const grip = (o: readonly [number, number, number], shoulderX: number, left: boolean) => {
         const y = gy + o[1] * cp - o[2] * sp;
         const z = gz + o[1] * sp + o[2] * cp;
         const r = solveArm(shoulderX, gx + o[0], y, z, this.ik);
         this.handQ[left ? 0 : 1].copy(r.q);
-        if (left) p.elbowL = lerp(p.elbowL, r.elbow, w);
-        else p.elbowR = lerp(p.elbowR, r.elbow, w);
+        if (left) p.elbowL = lerp(p.elbowL, r.elbow, holdMix);
+        else p.elbowR = lerp(p.elbowR, r.elbow, holdMix);
       };
-      grip(GRIP_LEFT, -SHOULDER_X, true);
-      grip(GRIP_RIGHT, SHOULDER_X, false);
+      if (hw > 0.001) {
+        this.handMixL = holdMix;
+        this.handMixR = holdMix;
+        grip(GRIP_LEFT, -SHOULDER_X, true);
+        grip(GRIP_RIGHT, SHOULDER_X, false);
+      }
+      if (mm > 0) {
+        // The right fist: rest, wind back, strike, return.
+        const u = mu;
+        const f =
+          u < 0.2
+            ? FIST_REST
+            : u < 0.4
+              ? mix3(FIST_REST, FIST_WIND, smooth((u - 0.2) / 0.2))
+              : u < 0.55
+                ? mix3(FIST_WIND, FIST_STRIKE, smooth((u - 0.4) / 0.15))
+                : mix3(FIST_STRIKE, FIST_REST, smooth((u - 0.55) / 0.45));
+        const r = solveArm(SHOULDER_X, f[0], f[1], f[2], this.ik);
+        // From the rifle grip (or the idle arm) to the fist, as far as the carry has got.
+        if (this.handMixR > 0) this.handQ[1].slerp(r.q, mm);
+        else this.handQ[1].copy(r.q);
+        p.elbowR = lerp(p.elbowR, r.elbow, mm);
+        this.handMixR = Math.max(this.handMixR, mm);
+      }
     }
     this.muzzleFlash.visible = this.shootT > 0.55;
     this.brick.update(dt, 1, this.time);
@@ -726,13 +787,15 @@ export class CharacterBody {
   /** Dash: stretched out forward, arms swept back, legs split. */
   private dashPose(): void {
     const d = this.dash;
-    d.bodyPitch = 0.35;
+    // A streamlined lean, not a fold: the whole body tips a little and the chest only a little
+    // more, so the torso stays over the hips, and the legs stride rather than split.
+    d.bodyPitch = 0.2;
     d.bodyY = 0;
     d.bodyZ = 0;
-    d.upperPitch = 0.5;
+    d.upperPitch = 0.15;
     d.upperY = 0;
-    d.legL = -1.0;
-    d.legR = 1.0;
+    d.legL = -0.65;
+    d.legR = 0.65;
     d.armLX = 1.0;
     d.armRX = 1.0;
     d.armLZ = -0.25;
@@ -750,10 +813,8 @@ export class CharacterBody {
     this.legs[1].rotation.x = p.legR;
     this.arms[0].quaternion.setFromEuler(_euler.set(p.armLX, 0, p.armLZ));
     this.arms[1].quaternion.setFromEuler(_euler.set(p.armRX, 0, p.armRZ));
-    if (this.handMix > 0) {
-      this.arms[0].quaternion.slerp(this.handQ[0], this.handMix);
-      this.arms[1].quaternion.slerp(this.handQ[1], this.handMix);
-    }
+    if (this.handMixL > 0) this.arms[0].quaternion.slerp(this.handQ[0], this.handMixL);
+    if (this.handMixR > 0) this.arms[1].quaternion.slerp(this.handQ[1], this.handMixR);
     this.elbows[0].rotation.x = p.elbowL;
     this.elbows[1].rotation.x = p.elbowR;
   }

@@ -60,7 +60,8 @@ function compareRecord(
   }
 }
 
-const interesting = (r: ShotResult) => r.fired || r.reloadStarted || r.reloadFinished || r.dryFire;
+const interesting = (r: ShotResult) =>
+  r.fired || r.reloadStarted || r.reloadFinished || r.dryFire || r.meleeStarted || r.meleeStrike;
 
 /** Run steps through the live weapon sim, collecting events and checkpoints. */
 export function runWeaponSteps(

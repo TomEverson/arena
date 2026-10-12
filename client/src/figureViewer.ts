@@ -122,6 +122,7 @@ const ANIMATIONS = [
   ["aim", "Aim"],
   ["shoot", "Shoot"],
   ["equip", "Equip gun (draw)"],
+  ["melee", "Melee swing"],
   ["hit", "Hit (flinch)"],
   ["die", "Die"],
 ] as const;
@@ -135,7 +136,7 @@ const WEAPON_ANIMATIONS = [
 type WeaponAnimId = (typeof WEAPON_ANIMATIONS)[number][0];
 type AnimId = (typeof ANIMATIONS)[number][0] | (typeof WEAPON_ANIMATIONS)[number][0];
 /** One-shot animations repeat on their own while selected, so there is always something to see. */
-const REPEATING = new Set<AnimId>(["jump", "doublejump", "dash", "hit", "equip"]);
+const REPEATING = new Set<AnimId>(["jump", "doublejump", "dash", "hit", "equip", "melee"]);
 const REPEAT_SECONDS = 1.8;
 const FIRE_SECONDS = 60 / 600; // the rifle's 600 rpm
 
@@ -181,6 +182,7 @@ const state: BodyState = {
   dashing: false,
   aiming: false,
   armed: true,
+  meleeing: false,
 };
 let gait: Gait = "walk";
 let dir = 1;
@@ -191,6 +193,7 @@ let deadT = 0;
 let dashT = 0;
 let airJumpAt = -1; // seconds until the double jump's second kick (-1 = none planned)
 let repeatT = 0;
+let meleeOff = 0; // seconds until the melee flag clears (the swing itself plays on the rising edge)
 let equipAt = 0; // seconds until the gun is drawn (the equip animation holsters it first)
 let weaponT = 0;
 let flashLeft = 0;
@@ -246,7 +249,8 @@ function play(id: AnimId): void {
     return;
   }
   repeatT = 0;
-  resetStance();
+  // A dash pressed in the air stays in the air (press F during a jump or double jump).
+  if (!(id === "dash" && !state.onGround && !state.wallRunning)) resetStance();
   if (gait === "crouch") gait = "run"; // a crouch walk does not carry over to the next animation
   if (id !== "aim" && id !== "shoot") aimCheck.checked = fireCheck.checked = false;
   if (id === "idle" || id === "walk" || id === "run") {
@@ -273,6 +277,11 @@ function play(id: AnimId): void {
     state.wallRunning = true;
     state.onGround = false;
     state.y = 1.6; // held in the air beside the wall
+  } else if (id === "melee") {
+    gait = "idle";
+    if (!weaponOn()) weaponSelect.value = "brick";
+    state.meleeing = true;
+    meleeOff = 0.4;
   } else if (id === "equip") {
     gait = "idle";
     if (!weaponOn()) weaponSelect.value = "brick";
@@ -344,6 +353,7 @@ function characterKeys(e: KeyboardEvent): void {
   if (e.code === "KeyA") play("aim");
   if (e.code === "KeyE") play("shoot");
   if (e.code === "KeyG") play("equip");
+  if (e.code === "KeyV") play("melee");
   if (e.code === "KeyH") play("hit");
   if (e.code === "KeyK") play("die");
 }
@@ -445,7 +455,8 @@ function stepFakePlayer(dt: number): void {
       airJumpAt = -1;
     }
   }
-  if (!state.onGround && !state.wallRunning) {
+  if (dashT > 0 && !state.onGround) vy = 0; // a dash holds its height
+  if (!state.onGround && !state.wallRunning && dashT <= 0) {
     vy -= P.gravity * dt;
     state.y += vy * dt;
     if (state.y <= 0) {
@@ -453,6 +464,10 @@ function stepFakePlayer(dt: number): void {
       vy = 0;
       state.onGround = true;
     }
+  }
+  if (meleeOff > 0) {
+    meleeOff -= dt;
+    if (meleeOff <= 0) state.meleeing = false;
   }
   if (equipAt > 0) {
     equipAt -= dt;
@@ -526,7 +541,7 @@ function frame(now: number): void {
   }
   help.textContent =
     `${model.name}: ${doing}${aimCheck.checked ? " + aim" : ""}${fireCheck.checked ? " + fire" : ""}  ${speed.toFixed(1)} m/s\n` +
-    "1 idle · 2 walk · 3 run · Space jump · D double jump · C crouch · S slide · F dash · W wall run · A aim · E shoot · G draw gun · H hit · K kill\n" +
+    "1 idle · 2 walk · 3 run · Space jump · D double jump · C crouch · S slide · F dash · W wall run · A aim · E shoot · G draw gun · V melee · H hit · K kill\n" +
     "B hitbox · drag turn camera · scroll/arrows zoom · ?res=240 retro look";
   requestAnimationFrame(frame);
 }

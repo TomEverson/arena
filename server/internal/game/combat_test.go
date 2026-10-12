@@ -55,6 +55,14 @@ func (d *duel) step(a, b *Input) {
 	d.victimX = append(d.victimX, d.b.State.X)
 }
 
+// settle runs ticks with no input, so bullets in flight reach their targets: a 10 m shot at
+// 300 m/s lands about two ticks after it is fired.
+func (d *duel) settle(ticks int) {
+	for i := 0; i < ticks; i++ {
+		d.step(nil, nil)
+	}
+}
+
 // aimedShot is an aimed-down-sights shot straight down -Z, pitched down so it lands on the body.
 func aimedShot(pitch float64) *Input { return &Input{Fire: true, ADS: true, Pitch: pitch} }
 
@@ -74,6 +82,7 @@ func eventsOf(p *Player, kind uint8) []protocol.GameEvent {
 func TestBodyShotHitsShieldFirst(t *testing.T) {
 	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
 	d.step(aimedShot(bodyPitch), nil)
+	d.settle(4)
 
 	if d.b.Health.Shield != WeaponMaxShield-WeaponDamage || d.b.Health.Health != WeaponMaxHealth {
 		t.Fatalf("victim health %+v, want shield %v and full health", d.b.Health, WeaponMaxShield-WeaponDamage)
@@ -92,7 +101,7 @@ func TestBodyShotHitsShieldFirst(t *testing.T) {
 			t.Fatalf("event victim health/shield = %v/%v, want %v/%v", e.Health, e.Shield, float64(WeaponMaxHealth), WeaponMaxShield-WeaponDamage)
 		}
 	}
-	if d.b.sinceDamage > 2*TickDT { // reset by the hit, then at most a tick or two of timer since
+	if d.b.sinceDamage > 6*TickDT { // reset by the hit, then at most a tick or two of timer since
 		t.Fatalf("damage should reset the shield recharge timer, got %v s", d.b.sinceDamage)
 	}
 }
@@ -100,6 +109,7 @@ func TestBodyShotHitsShieldFirst(t *testing.T) {
 func TestHeadshotDoesMoreDamage(t *testing.T) {
 	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
 	d.step(aimedShot(0), nil) // level at eye height 1.6 m: the head
+	d.settle(4)
 	ev := eventsOf(d.a, protocol.EventKindHit)
 	if len(ev) != 1 || ev[0].Amount != WeaponDamage*WeaponHeadshotMult || ev[0].Flags&protocol.GameEventFlagHeadshot == 0 {
 		t.Fatalf("headshot event = %+v", ev)
@@ -115,6 +125,7 @@ func TestCrouchedPlayersCanBeHeadshotToo(t *testing.T) {
 		t.Fatal("victim should be crouching")
 	}
 	d.step(aimedShot(-0.0155), nil) // lands about 1.45 m: over the head of a 1.2 m figure
+	d.settle(4)
 	if n := len(eventsOf(d.a, protocol.EventKindHit)); n != 0 {
 		t.Fatalf("a shot over a crouched player's head should miss, got %d hits", n)
 	}
@@ -122,6 +133,7 @@ func TestCrouchedPlayersCanBeHeadshotToo(t *testing.T) {
 		d.step(&Input{}, nil)
 	}
 	d.step(aimedShot(-0.057), nil) // about 1.05 m at 9.7 m: the middle of the 0.9-1.2 m head zone
+	d.settle(4)
 	ev := eventsOf(d.a, protocol.EventKindHit)
 	if len(ev) == 0 || ev[len(ev)-1].Flags&protocol.GameEventFlagHeadshot == 0 {
 		t.Fatalf("expected a headshot on the crouched player, got %+v", ev)
@@ -134,6 +146,7 @@ func TestKillFlow(t *testing.T) {
 	for i := 0; i < 300 && d.b.Health.Alive; i++ {
 		d.step(aimedShot(bodyPitch), nil)
 	}
+	d.settle(4)
 	if d.b.Health.Alive {
 		t.Fatal("victim never died")
 	}
@@ -329,6 +342,7 @@ func TestViewTickFromTheFutureIsIgnored(t *testing.T) {
 	shot := aimedShot(bodyPitch)
 	shot.ViewTick = float64(d.w.tick) + 500
 	d.step(shot, nil)
+	d.settle(4)
 	if len(eventsOf(d.a, protocol.EventKindHit)) != 1 {
 		t.Fatalf("a bogus view tick should fall back to the present and still hit a stationary target")
 	}
@@ -475,5 +489,231 @@ func TestCombatStepDoesNotAllocate(t *testing.T) {
 	}
 	if deaths <= deathsBefore {
 		t.Fatalf("the test never saw a kill, so it did not cover the death and respawn paths")
+	}
+}
+
+// --- Projectiles -----------------------------------------------------------
+
+func TestBulletsTakeTimeToArrive(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -45}) // 45 m away: 0.15 s of flight, nine ticks
+	d.step(aimedShot(-0.0), nil)
+	if len(eventsOf(d.a, protocol.EventKindHit)) != 0 {
+		t.Fatal("a 45 m shot cannot land on the tick it is fired")
+	}
+	landed := -1
+	for i := 1; i <= 20 && landed < 0; i++ {
+		d.step(nil, nil)
+		if len(eventsOf(d.a, protocol.EventKindHit)) > 0 {
+			landed = i
+		}
+	}
+	if landed < 7 || landed > 11 {
+		t.Fatalf("the bullet landed %d ticks after the shot, want about 9 (45 m at 300 m/s)", landed)
+	}
+}
+
+func TestBulletsDropOverDistance(t *testing.T) {
+	// Eye height 1.6 m, the head zone starts at 1.5 m. Aimed a hair high (6 cm at 40 m), the bullet
+	// falls 7 cm on the way and still ends in the head zone. (Aimed level it would too, but the
+	// aiming spread alone is about 10 cm, so this shot is not left to chance.)
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -40})
+	d.step(aimedShot(0.0015), nil)
+	d.settle(20)
+	ev := eventsOf(d.a, protocol.EventKindHit)
+	if len(ev) != 1 || ev[0].Flags&protocol.GameEventFlagHeadshot == 0 {
+		t.Fatalf("40 m level shot = %+v, want a headshot", ev)
+	}
+}
+
+func TestBulletsCanBeLedAndDodged(t *testing.T) {
+	// A target sprinting across at run speed 30 m away. A shot at where it is misses, because it
+	// has moved on by the time the bullet arrives.
+	d := newDuel(t, nil, Vec3{}, Vec3{X: -3, Z: -30})
+	d.step(aimedShot(bodyPitch*0.4), &Input{MoveX: 1})
+	for i := 0; i < 20; i++ {
+		d.step(nil, &Input{MoveX: 1})
+	}
+	if n := len(eventsOf(d.a, protocol.EventKindHit)); n != 0 {
+		t.Fatalf("a shot at a sprinter's current position should miss (it ran on), got %d hits", n)
+	}
+}
+
+func TestShotsAreAnnouncedForTracers(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
+	d.step(aimedShot(bodyPitch), nil)
+	got := d.w.shots.recent(nil, d.w.tick)
+	if len(got) != 1 || got[0].Actor != 1 || got[0].Seq == 0 {
+		t.Fatalf("shots = %+v, want one from player 1", got)
+	}
+	if got[0].Dz >= 0 || got[0].Y != 1.6 {
+		t.Fatalf("shot origin/direction = %+v, want from the eye (1.6 m) toward -Z", got[0])
+	}
+	// They are resent for a few ticks, then dropped.
+	d.settle(CombatEventRedundancyTicks + 2)
+	if got := d.w.shots.recent(nil, d.w.tick); len(got) != 0 {
+		t.Fatalf("an old shot is still being resent: %+v", got)
+	}
+}
+
+func TestBulletsStopAtWalls(t *testing.T) {
+	lv := FlatLevel()
+	lv.Collision.Boxes = append(lv.Collision.Boxes, Aabb{MinX: -5, MaxX: 5, MinY: 0, MaxY: 4, MinZ: -6, MaxZ: -5})
+	d := newDuel(t, lv, Vec3{}, Vec3{Z: -10}) // the wall is between them
+	d.step(aimedShot(bodyPitch), nil)
+	d.settle(10)
+	if len(eventsOf(d.a, protocol.EventKindHit)) != 0 {
+		t.Fatal("a bullet went through a wall")
+	}
+}
+
+func TestBulletsNeverOutliveTheirRange(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{X: 20, Z: 20})
+	d.step(aimedShot(0.3), nil) // up into the sky
+	d.settle(int(WeaponRange/(WeaponBulletSpeed*TickDT)) + 10)
+	for i := range d.w.bullets {
+		if d.w.bullets[i].active {
+			t.Fatal("a bullet is still flying long past its range")
+		}
+	}
+}
+
+// --- Melee -----------------------------------------------------------------
+
+func meleeInput() *Input { return &Input{Melee: true} }
+
+// idle runs ticks in which the shooter sends empty inputs (the weapon's clock only advances with
+// the shooter's inputs, as a real client sends one every tick).
+func (d *duel) idle(ticks int) {
+	for i := 0; i < ticks; i++ {
+		d.step(&Input{}, nil)
+	}
+}
+
+func TestMeleeHitsAfterTheWindupForFixedDamage(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -1.8}) // 1.5 m to the near face: in reach
+	d.step(meleeInput(), nil)
+	if len(eventsOf(d.a, protocol.EventKindHit)) != 0 {
+		t.Fatal("a melee blow lands after its wind-up, not on the key press")
+	}
+	d.idle(int(math.Ceil(WeaponMeleeWindup*TickRate)) + 3)
+	hit := eventsOf(d.a, protocol.EventKindHit)
+	hurt := eventsOf(d.b, protocol.EventKindHurt)
+	if len(hit) != 1 || hit[0].Amount != WeaponMeleeDamage || hit[0].Flags&protocol.GameEventFlagMelee == 0 {
+		t.Fatalf("melee hit events = %+v, want one for %v damage flagged melee", hit, float64(WeaponMeleeDamage))
+	}
+	if hit[0].Flags&protocol.GameEventFlagHeadshot != 0 {
+		t.Fatal("melee has no headshots")
+	}
+	if len(hurt) != 1 || hurt[0].Actor != 1 {
+		t.Fatalf("victim hurt events = %+v", hurt)
+	}
+	if d.b.Health.Shield != WeaponMaxShield-WeaponMeleeDamage {
+		t.Fatalf("victim shield %v, want %v", d.b.Health.Shield, WeaponMaxShield-WeaponMeleeDamage)
+	}
+}
+
+func TestMeleeNeedsReachAndFacing(t *testing.T) {
+	far := newDuel(t, nil, Vec3{}, Vec3{Z: -6})
+	far.step(meleeInput(), nil)
+	far.idle(12)
+	if len(eventsOf(far.a, protocol.EventKindHit)) != 0 {
+		t.Fatal("a melee blow reached 6 m")
+	}
+	behind := newDuel(t, nil, Vec3{}, Vec3{Z: 1.5}) // right behind the shooter, who faces -Z
+	behind.step(meleeInput(), nil)
+	behind.idle(12)
+	if len(eventsOf(behind.a, protocol.EventKindHit)) != 0 {
+		t.Fatal("a melee blow hit someone behind the swinger")
+	}
+}
+
+func TestMeleeIsBlockedByWalls(t *testing.T) {
+	lv := FlatLevel()
+	lv.Collision.Boxes = append(lv.Collision.Boxes, Aabb{MinX: -3, MaxX: 3, MinY: 0, MaxY: 4, MinZ: -1.2, MaxZ: -1.0})
+	d := newDuel(t, lv, Vec3{}, Vec3{Z: -1.8})
+	d.step(meleeInput(), nil)
+	d.idle(12)
+	if len(eventsOf(d.a, protocol.EventKindHit)) != 0 {
+		t.Fatal("a melee blow went through a wall")
+	}
+}
+
+func TestMeleeHasACooldownAndLocksFiring(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -1.8})
+	d.step(meleeInput(), nil)
+	// Fire is held while swinging: no bullet may leave.
+	for i := 0; i < int(math.Ceil(WeaponMeleeLock*TickRate))-3; i++ {
+		d.step(aimedShot(bodyPitch), nil)
+	}
+	if got := d.w.shots.recent(nil, d.w.tick); len(got) != 0 {
+		t.Fatalf("fired %d shots while swinging", len(got))
+	}
+	// A second press too soon does nothing; after the cooldown it lands again.
+	d.step(meleeInput(), nil)
+	d.idle(int(math.Ceil(WeaponMeleeCooldown*TickRate)) + 4)
+	if n := len(eventsOf(d.a, protocol.EventKindHit)); n != 1 {
+		t.Fatalf("hits so far %d, want exactly the first swing", n)
+	}
+	d.step(meleeInput(), nil)
+	d.idle(12)
+	if n := len(eventsOf(d.a, protocol.EventKindHit)); n != 2 {
+		t.Fatalf("hits after the cooldown %d, want 2", n)
+	}
+}
+
+func TestMeleeingIsShownToOthers(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -1.8})
+	d.step(meleeInput(), nil)
+	if d.a.Entity.Flags&protocol.EntityFlagMeleeing == 0 {
+		t.Fatal("the swinging player's entity should be flagged meleeing")
+	}
+	d.idle(int(math.Ceil(WeaponMeleeCooldown*TickRate)) + 2)
+	if d.a.Entity.Flags&protocol.EntityFlagMeleeing != 0 {
+		t.Fatal("the flag should clear when the swing is over")
+	}
+}
+
+// idleBoth runs ticks in which both players send empty inputs (players are only simulated when
+// they send input, as a real client does every tick).
+func (d *duel) idleBoth(ticks int) {
+	for i := 0; i < ticks; i++ {
+		d.step(&Input{}, &Input{})
+	}
+}
+
+func TestMeleeKnocksTheVictimBack(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -1.8})
+	start := d.b.State.Z
+	d.step(meleeInput(), nil)
+	d.idleBoth(int(math.Ceil(WeaponMeleeWindup*TickRate)) + 1)
+	if d.b.State.VZ >= -1 && d.b.State.Z >= start-0.01 {
+		t.Fatalf("the victim was not pushed away: z %v (from %v), vz %v", d.b.State.Z, start, d.b.State.VZ)
+	}
+	d.idleBoth(20)
+	if d.b.State.Z > start-0.8 {
+		t.Fatalf("the victim moved only %.2f m away, want a real shove", start-d.b.State.Z)
+	}
+	if math.Abs(d.b.State.X) > 0.3 {
+		t.Fatalf("pushed sideways (x = %v): the shove should be straight away from the attacker", d.b.State.X)
+	}
+	if d.a.State.Z != 0 {
+		t.Fatal("the attacker should not move")
+	}
+}
+
+func TestNoKnockbackWithoutADamagingHit(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -6}) // out of reach
+	d.step(meleeInput(), nil)
+	d.idleBoth(15)
+	if d.b.State.VZ != 0 || d.b.State.Z != -6 {
+		t.Fatalf("a missed swing moved the target: z %v vz %v", d.b.State.Z, d.b.State.VZ)
+	}
+	// A protected player takes no damage and is not shoved.
+	p := newDuel(t, nil, Vec3{}, Vec3{Z: -1.8})
+	p.b.Health.ProtectedFor = 2
+	p.step(meleeInput(), nil)
+	p.idleBoth(15)
+	if p.b.State.VZ != 0 || p.b.State.Z != -1.8 {
+		t.Fatalf("a protected player was shoved: z %v", p.b.State.Z)
 	}
 }

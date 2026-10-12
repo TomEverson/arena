@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"arena/server/internal/protocol"
@@ -24,6 +25,13 @@ type rangeRoom struct {
 	players map[uint32]*Player
 	seq     map[uint32]uint32
 	moverX  []float64 // the strafing target's x after every tick, indexed by tick (entry 0 is a placeholder)
+}
+
+// settle runs ticks with no input, so bullets in flight reach their targets.
+func (r *rangeRoom) settle(ticks int) {
+	for i := 0; i < ticks; i++ {
+		r.step(nil)
+	}
 }
 
 func newRange(t *testing.T) *rangeRoom {
@@ -127,6 +135,7 @@ func TestStrafingTargetStaysInRangeAndStaticOneStaysPut(t *testing.T) {
 func TestShootingATargetReportsItsHealth(t *testing.T) {
 	r := newRange(t)
 	r.step(map[uint32]*Input{1: shoot(-0.05)}) // body of the static target, 10 m ahead
+	r.settle(4)
 	ev := hitEvents(r.players[1])
 	if len(ev) != 1 || ev[0].Other != CombatTargetIdBase || ev[0].Amount != WeaponDamage {
 		t.Fatalf("hit events = %+v", ev)
@@ -178,6 +187,7 @@ func TestKillingATargetAndItsRespawn(t *testing.T) {
 func TestHeadshotsOnTargetsDoMoreDamage(t *testing.T) {
 	r := newRange(t)
 	r.step(map[uint32]*Input{1: shoot(0)}) // level at eye height: the head
+	r.settle(4)
 	ev := hitEvents(r.players[1])
 	if len(ev) != 1 || ev[0].Amount != WeaponDamage*WeaponHeadshotMult || ev[0].Flags&protocol.GameEventFlagHeadshot == 0 {
 		t.Fatalf("headshot event = %+v", ev)
@@ -399,5 +409,81 @@ func TestWallRunTargetFollowsTheWallRunArc(t *testing.T) {
 	}
 	if got := wallRunArc(WallRunMaxTime); got > 1e-9 || got < -1e-9 {
 		t.Fatalf("a pass should end at its starting height, ends %v above", got)
+	}
+}
+
+// A melee blow hurts a practice target in front of the player, with no headshot.
+func TestMeleeHurtsPracticeTargets(t *testing.T) {
+	lv := FlatLevel()
+	lv.Targets = []TargetSpec{{ID: "near", Pos: Vec3{Z: -1.8}}}
+	w := NewWorld(lv)
+	w.SetPractice(true)
+	p := NewPlayer(1)
+	w.Join(context.Background(), p)
+	w.Step()
+	w.SubmitInput(1, Input{Seq: 1, Melee: true})
+	for i := 0; i < 15; i++ {
+		if i > 0 {
+			w.SubmitInput(1, Input{Seq: uint32(i + 1)})
+		}
+		w.Step()
+		for len(p.Out) > 0 {
+			p.Free <- <-p.Out
+		}
+	}
+	hits := 0
+	for i := 0; i < p.eventLen; i++ {
+		e := p.events[(p.eventHead+i)%eventRingSize]
+		if e.Kind == protocol.EventKindHit && e.Amount == WeaponMeleeDamage && e.Flags&protocol.GameEventFlagMelee != 0 {
+			hits++
+		}
+	}
+	if hits != 1 {
+		t.Fatalf("melee hits on the target = %d, want 1", hits)
+	}
+}
+
+// A melee blow knocks a practice target back (and up); a spring brings it home again. A target
+// running along a wall stays on its wall.
+func TestMeleeKnocksPracticeTargetsAboutAndTheyRecover(t *testing.T) {
+	lv := FlatLevel()
+	lv.Targets = []TargetSpec{
+		{ID: "near", Pos: Vec3{Z: -1.8}},
+		{ID: "wall", Pos: Vec3{X: 10, Y: 2.5, Z: -1.8}, Strafe: true, WallRun: true, Range: 0},
+	}
+	w := NewWorld(lv)
+	w.SetPractice(true)
+	p := NewPlayer(1)
+	w.Join(context.Background(), p)
+	w.Step()
+	var seq uint32
+	step := func(in Input) {
+		seq++
+		in.Seq = seq
+		w.SubmitInput(1, in)
+		w.Step()
+		for len(p.Out) > 0 {
+			p.Free <- <-p.Out
+		}
+	}
+	near := &w.targets[0]
+	step(Input{Melee: true})
+	maxPush, maxHop := 0.0, 0.0
+	for i := 0; i < 150; i++ {
+		step(Input{})
+		maxPush = math.Max(maxPush, -(near.Entity.Z - (-1.8)))
+		maxHop = math.Max(maxHop, near.Entity.Y)
+	}
+	if maxPush < 0.6 {
+		t.Fatalf("the target was pushed only %.2f m away", maxPush)
+	}
+	if maxHop < 0.05 {
+		t.Fatalf("the target did not hop (max %.2f m)", maxHop)
+	}
+	if math.Abs(near.Entity.Z-(-1.8)) > 0.02 || near.Entity.Y != 0 {
+		t.Fatalf("the target did not come back: z=%v y=%v", near.Entity.Z, near.Entity.Y)
+	}
+	if got := w.targets[1].kx + w.targets[1].kz; got != 0 {
+		t.Fatalf("a wall runner was knocked off its wall: %v", got)
 	}
 }

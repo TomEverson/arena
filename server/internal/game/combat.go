@@ -188,7 +188,8 @@ func (w *World) rewindView(claimed float64) float64 {
 
 // --- Shots -----------------------------------------------------------------
 
-// resolveShot traces one bullet from shooter against everyone else, as the shooter saw them.
+// resolveShot traces one hitscan shot from shooter against everyone else, as the shooter saw them.
+// (Projectile weapons use fireBullet in bullets.go; the Brick is one. Hitscan stays for weapons that need it.)
 func (w *World) resolveShot(shooter *Player, in *Input, shot *ShotResult) {
 	shooter.Health.ProtectedFor = 0 // firing ends spawn protection
 
@@ -197,57 +198,21 @@ func (w *World) resolveShot(shooter *Player, in *Input, shot *ShotResult) {
 	dx, dy, dz := ViewDirection(in.Yaw+shot.SpreadYaw, in.Pitch+shot.SpreadPitch)
 
 	view := w.rewindView(in.ViewTick)
-	n := 0
-	for _, q := range w.players {
-		if w.practice {
-			break // in the range bullets pass through other players
-		}
-		if q == shooter || !q.Health.Alive || n == len(w.boxes) {
-			continue
-		}
-		box, alive := w.hitboxAt(q, view)
-		if !alive {
-			continue
-		}
-		w.boxes[n] = Hitbox{ID: q.ID, HeadMinY: box.MaxY - CombatHeadSize, Aabb: box}
-		n++
-	}
-	for i := range w.targets {
-		t := &w.targets[i]
-		if !t.Health.Alive || n == len(w.boxes) {
-			continue
-		}
-		box, alive := t.hist.boxAt(view, w.tick, t.live(w.tick))
-		if !alive {
-			continue
-		}
-		w.boxes[n] = Hitbox{ID: t.ID, HeadMinY: box.MaxY - CombatHeadSize, Aabb: box}
-		n++
-	}
+	n := w.fillBoxes(shooter, view)
 	hit := CastRay(&w.level.Collision, w.boxes[:n], ox, oy, oz, dx, dy, dz, WeaponRange)
 	if hit.Kind != RayTarget {
 		return
 	}
-	if uint32(hit.TargetID) >= CombatTargetIdBase {
-		if t := w.targetByID(uint32(hit.TargetID)); t != nil && w.canDamage() {
-			w.damageTarget(shooter, t, Damage(hit.Headshot), hit.Headshot)
-		}
-		return
-	}
-	victim := w.byID(uint32(hit.TargetID))
-	if victim == nil || !victim.Health.Alive || victim.Health.ProtectedFor > 0 || !w.canDamage() {
-		return // protected players soak up the bullet; before the match it is only a warm-up
-	}
-	w.damage(shooter, victim, Damage(hit.Headshot), hit.Headshot)
+	w.applyHit(shooter, hit)
 }
 
 // damage applies a hit: shield first, then health; handles death and the kill reward.
-func (w *World) damage(shooter, victim *Player, amount float64, headshot bool) {
+func (w *World) damage(shooter, victim *Player, amount float64, headshot bool, extra uint8) {
 	h := &victim.Health
 	killed := takeDamage(h, amount)
 	victim.sinceDamage = 0
 
-	var flags uint8
+	flags := extra
 	if headshot {
 		flags |= protocol.GameEventFlagHeadshot
 	}

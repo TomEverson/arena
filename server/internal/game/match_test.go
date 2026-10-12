@@ -65,7 +65,7 @@ func (r *room) phase() uint8 { return r.w.match.phase }
 
 // kill makes killer kill victim now (through the same path real shots use).
 func (r *room) kill(killer, victim uint32) {
-	r.w.damage(r.players[killer], r.players[victim], 1e6, false)
+	r.w.damage(r.players[killer], r.players[victim], 1e6, false, 0)
 }
 
 // startLive joins two players and runs the countdown into a live match.
@@ -383,7 +383,7 @@ func TestMatchCycleDoesNotAllocate(t *testing.T) {
 			}
 		}
 		if tick%90 == 45 {
-			w.damage(players[0], players[1], 1e6, false) // keep kills and the sudden-death path busy
+			w.damage(players[0], players[1], 1e6, false, 0) // keep kills and the sudden-death path busy
 		}
 	}
 	for i := 0; i < 60; i++ {

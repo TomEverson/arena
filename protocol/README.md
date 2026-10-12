@@ -29,8 +29,8 @@ Server to client
 | `pong` | `t, tick` | Echoes the ping; `tick` is the server tick. |
 
 `Input`: `seq, moveX, moveZ, yaw, pitch, jump, jumpHeld, dash, slide, ads, fire, reload, viewTick`. `viewTick` is the (fractional) server tick the sender's screen was showing other players at; the server rewinds to it for lag compensation (capped; 0 means no rewind). `jump` and `dash` mean
-"pressed this tick"; the rest are held states. `Entity`: `id, teamId, x, y, z, yaw, pitch, flags, kind`
-(`flags` is a 16-bit set of `EntityFlags`: crouching, sliding, climbing, dashing, onGround, mantling, dead, protected, wallRunning).
+"pressed this tick"; the rest are held states. `Shot`: `seq, tick, actor, x, y, z, dx, dy, dz` (a bullet fired: the origin is the shooter's eye, the direction has the spread applied; `snapshot.shots` resends recent ones from everyone so every client can draw tracers, numbered across the room). `Input` also carries `melee` (pressed this tick); the weapon state has `meleeT` and `meleeCooldown`, entities a `meleeing` flag, and hit events a `melee` flag. `Entity`: `id, teamId, x, y, z, yaw, pitch, flags, kind`
+(`flags` is a 16-bit set of `EntityFlags`: crouching, sliding, climbing, dashing, onGround, mantling, dead, protected, wallRunning, meleeing).
 
 ## Delivery assumptions
 Messages travel over one WebSocket (TCP): in order, never lost. The fake `--loss` flag drops

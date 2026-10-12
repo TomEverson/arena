@@ -26,7 +26,7 @@ Changing any movement number changes movement: re-record the vectors (`pnpm vect
 
 ## Weapon parameters (`weapon`)
 Damage, health (`maxHealth`, `maxShield`), fire rate (`rpm`), magazine, reload, spread cone values, the 30-entry `recoilPitch`/`recoilYaw`
-tables, ADS zoom and sensitivity. Angles are degrees. Used by `client/src/sim/weapon.ts` now and by the Go
+tables, ADS zoom and sensitivity, and the bullet (`bulletSpeed` m/s, `bulletGravity` m/s²; the `range` is how far it flies). Angles are degrees. Used by `client/src/sim/weapon.ts` now and by the Go
 port in M5.
 
 ## Combat parameters (`combat`)

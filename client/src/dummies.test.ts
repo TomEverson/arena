@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { aliveHitboxes, killDummy, makeDummies, stepDummies, wallRunArc } from "./dummies";
+import {
+  aliveHitboxes,
+  killDummy,
+  knockDummy,
+  makeDummies,
+  stepDummies,
+  wallRunArc,
+} from "./dummies";
 import type { LevelTarget } from "./sim/level";
 import { PARAMS as P } from "./sim/params";
 
@@ -79,5 +86,56 @@ describe("wall-running dummies", () => {
     }
     expect(turned).toBe(true);
     expect(maxY).toBeGreaterThan(2.5 + 0.5);
+  });
+});
+
+describe("knocked dummies", () => {
+  const still: LevelTarget = { id: "s", pos: [0, 0, -10], kind: "static", axis: "x", range: 0 };
+  const mover: LevelTarget = { id: "m", pos: [0, 0, -10], kind: "strafe", axis: "x", range: 3 };
+  const runner: LevelTarget = { id: "w", pos: [0, 2.5, -10], kind: "wallrun", axis: "x", range: 4 };
+
+  it("a shove pushes a static dummy away and up, and a spring brings it home again", () => {
+    const [d] = makeDummies([still]);
+    if (!d) throw new Error("no dummy");
+    knockDummy(d, 0, -1); // away from someone standing at +Z
+    let farthest = 0;
+    let highest = 0;
+    for (let i = 0; i < 150; i++) {
+      stepDummies([d], 1 / 60, false);
+      farthest = Math.max(farthest, -(d.z + 10));
+      highest = Math.max(highest, d.y);
+    }
+    expect(farthest).toBeGreaterThan(0.6);
+    expect(highest).toBeGreaterThan(0.05);
+    expect(d.z).toBeCloseTo(-10, 2);
+    expect(d.y).toBe(0);
+  });
+
+  it("a strafing dummy keeps strafing, and its range is not eaten by the shove", () => {
+    const [d] = makeDummies([mover]);
+    if (!d) throw new Error("no dummy");
+    knockDummy(d, 1, 0); // shoved the way it is moving, past the edge of its range
+    let maxX = -Infinity;
+    for (let i = 0; i < 600; i++) {
+      stepDummies([d], 1 / 60, false);
+      maxX = Math.max(maxX, d.x);
+    }
+    expect(maxX).toBeGreaterThan(3); // the shove carried it past its edge for a moment
+    // Once settled it is back on its script: always within its range.
+    for (let i = 0; i < 200; i++) {
+      stepDummies([d], 1 / 60, false);
+      expect(Math.abs(d.x)).toBeLessThanOrEqual(3 + 1e-6);
+      expect(d.z).toBeCloseTo(-10, 6);
+    }
+  });
+
+  it("a wall runner stays on its wall", () => {
+    const [d] = makeDummies([runner]);
+    if (!d) throw new Error("no dummy");
+    knockDummy(d, 0, -1);
+    for (let i = 0; i < 60; i++) {
+      stepDummies([d], 1 / 60, false);
+      expect(d.z).toBe(-10);
+    }
   });
 });

@@ -4,7 +4,10 @@ import { buildHands } from "./hands";
 import { PALETTE } from "./palette";
 import { type ReloadPose, reloadPose } from "./reloadAnim";
 import { type Brick, BRICK_MAG_HOME, BRICK_MUZZLE, BRICK_SIGHT_Y, buildBrick } from "./rifle";
+import { type Bullet, spawnBullet, stepBullet } from "./sim/bullet";
+import type { Hitbox } from "./sim/hitscan";
 import { WEAPON } from "./sim/params";
+import type { CollisionWorld } from "./sim/types";
 
 /** Visual and audio-free feedback for shooting: crosshair, hit markers, shake, viewmodel, tracers. */
 
@@ -12,9 +15,29 @@ const HIP = new THREE.Vector3(0.2, -0.2, -0.45);
 /** Aiming down sights: the optic's reticle sits exactly at the middle of the screen. */
 const ADS = new THREE.Vector3(0, -BRICK_SIGHT_Y, -0.36);
 const MUZZLE_LOCAL = BRICK_MUZZLE;
-const TRACER_SECONDS = 0.07;
+/** How long the streak behind a flying bullet is, in seconds of flight. */
+const TRAIL_SECONDS = 0.025;
 const IMPACT_SECONDS = 0.12;
 const POOL = 8;
+/** The punching fist in camera space: resting low on the right, wound back, and struck out. */
+const FIST_REST: readonly [number, number, number] = [0.2, -0.32, -0.3];
+const FIST_WIND: readonly [number, number, number] = [0.27, -0.28, -0.12];
+const FIST_STRIKE: readonly [number, number, number] = [0.04, -0.1, -0.72];
+const smooth = (x: number) => {
+  const t = Math.min(1, Math.max(0, x));
+  return t * t * (3 - 2 * t);
+};
+const mix = (
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+  t: number,
+): [number, number, number] => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+  a[2] + (b[2] - a[2]) * t,
+];
+/** How long the melee swing animation lasts (matches the weapon's melee lock). */
+const MELEE_SECONDS = 0.35;
 /** Where the left hand grips the magazine during a reload (gun space). */
 const MAG_GRIP = new THREE.Vector3(-0.01, -0.17, -0.28);
 /** Seconds, for the ammo strip's low-ammo blink. */
@@ -31,11 +54,15 @@ export class Fx {
   private readonly leftHand: THREE.Group;
   private readonly leftHandHome = new THREE.Vector3();
   private readonly reload: ReloadPose = { roll: 0, pitch: 0, drop: 0, mag: 0, hand: 0 };
-  private readonly tracers: { line: THREE.Line; life: number }[] = [];
+  private readonly bullets: { b: Bullet; line: THREE.Line; active: boolean }[] = [];
   private readonly impacts: { mesh: THREE.Mesh; life: number }[] = [];
   private flashLife = 0;
   private kickBack = 0;
   private shake = 0;
+  /** Seconds left of the melee swing animation (0 = none). */
+  private meleeLeft = 0;
+  /** The fist that throws the punch (camera space), shown only while meleeing. */
+  private readonly fist = new THREE.Group();
 
   constructor(
     scene: THREE.Scene,
@@ -54,6 +81,29 @@ export class Fx {
     this.leftHand = buildHands(this.gun).left;
     this.leftHandHome.copy(this.leftHand.position);
     this.gun.position.copy(HIP);
+    // The punching fist: an INK glove on a CONCRETE sleeve with a HAZE cuff, reaching back to the corner.
+    const glove = new THREE.MeshLambertMaterial({ color: PALETTE.INK });
+    const sleeve = new THREE.MeshLambertMaterial({ color: PALETTE.CONCRETE });
+    const cuff = new THREE.MeshLambertMaterial({ color: PALETTE.HAZE });
+    const box = (
+      mat: THREE.Material,
+      w: number,
+      h: number,
+      d: number,
+      x: number,
+      y: number,
+      z: number,
+    ) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z);
+      this.fist.add(m);
+    };
+    box(glove, 0.11, 0.1, 0.14, 0, 0, 0); // the fist
+    box(cuff, 0.1, 0.1, 0.03, 0, 0, 0.09);
+    box(sleeve, 0.1, 0.1, 0.5, 0, 0, 0.36); // the forearm, back toward the camera
+    this.fist.rotation.set(0.15, -0.12, 0);
+    this.fist.visible = false;
+    camera.add(this.fist);
     camera.add(this.gun);
     scene.add(camera);
 
@@ -66,7 +116,7 @@ export class Fx {
       line.visible = false;
       line.frustumCulled = false;
       scene.add(line);
-      this.tracers.push({ line, life: 0 });
+      this.bullets.push({ b: spawnBullet([0, 0, 0], [0, 0, -1], 0), line, active: false });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, 0.12, 0.12),
         new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
@@ -77,32 +127,94 @@ export class Fx {
     }
   }
 
-  /** A bullet was fired and travelled to `hit` (world space). */
-  shot(hit: THREE.Vector3, hitWorld: boolean, ads: boolean): void {
+  /** You fired: muzzle flash, rifle kick and camera shake. (The bullet itself is `fireOwn`.) */
+  shot(ads: boolean): void {
     this.flashLife = 0.04;
     this.brick.shoot();
     this.kickBack = ads ? 0.015 : 0.035;
     this.shake = Math.min(1, this.shake + (ads ? 0.15 : 0.3));
+  }
 
+  /**
+   * Your bullet: drawn leaving the muzzle and heading for where your aim line is about 40 m out,
+   * so it looks like it comes from the gun but flies the true path. `eye` and `dir` are what the
+   * shot was fired with (the game simulates the real bullet; this is only the picture of it).
+   */
+  fireOwn(eye: readonly [number, number, number], dir: readonly [number, number, number]): void {
     this.camera.updateMatrixWorld();
-    const from = this.camera.localToWorld(MUZZLE_LOCAL.clone().add(this.gun.position));
-    const t = this.tracers.find((x) => x.life <= 0);
-    if (t) {
-      const pos = t.line.geometry.getAttribute("position") as THREE.BufferAttribute;
-      pos.setXYZ(0, from.x, from.y, from.z);
-      pos.setXYZ(1, hit.x, hit.y, hit.z);
-      pos.needsUpdate = true;
-      t.line.visible = true;
-      t.life = TRACER_SECONDS;
-    }
-    if (hitWorld) {
-      const i = this.impacts.find((x) => x.life <= 0);
-      if (i) {
-        i.mesh.position.copy(hit);
-        i.mesh.visible = true;
-        i.life = IMPACT_SECONDS;
+    const muzzle = this.camera.localToWorld(MUZZLE_LOCAL.clone().add(this.gun.position));
+    const aim = new THREE.Vector3(eye[0] + dir[0] * 40, eye[1] + dir[1] * 40, eye[2] + dir[2] * 40);
+    const d = aim.sub(muzzle).normalize();
+    this.spawnVisual([muzzle.x, muzzle.y, muzzle.z], [d.x, d.y, d.z]);
+  }
+
+  /** Someone else's bullet, from their eye (the picture only; the server decides hits). */
+  fireRemote(eye: readonly [number, number, number], dir: readonly [number, number, number]): void {
+    this.spawnVisual(
+      [eye[0] + dir[0] * 0.6, eye[1] - 0.2 + dir[1] * 0.6, eye[2] + dir[2] * 0.6],
+      [dir[0], dir[1], dir[2]],
+    );
+  }
+
+  private spawnVisual(
+    origin: readonly [number, number, number],
+    dir: readonly [number, number, number],
+  ): void {
+    const slot = this.bullets.find((x) => !x.active);
+    if (!slot) return;
+    slot.b = spawnBullet(origin, dir);
+    slot.active = true;
+    slot.line.visible = true;
+    this.moveLine(slot);
+  }
+
+  private moveLine(slot: { b: Bullet; line: THREE.Line }): void {
+    const b = slot.b;
+    const speed = Math.hypot(b.vx, b.vy, b.vz) || 1;
+    const tail = Math.min(TRAIL_SECONDS * speed, b.travelled + 0.4); // short while it is new
+    const pos = slot.line.geometry.getAttribute("position") as THREE.BufferAttribute;
+    pos.setXYZ(
+      0,
+      b.x - (b.vx / speed) * tail,
+      b.y - (b.vy / speed) * tail,
+      b.z - (b.vz / speed) * tail,
+    );
+    pos.setXYZ(1, b.x, b.y, b.z);
+    pos.needsUpdate = true;
+  }
+
+  /**
+   * Fly the bullets you can see. `targets` are the boxes the screen shows people in (a bullet that
+   * reaches one ends there with a spark, like a wall); `world` is the level.
+   */
+  stepBullets(frameDt: number, world: CollisionWorld, targets: readonly Hitbox[]): void {
+    for (const slot of this.bullets) {
+      if (!slot.active) continue;
+      const hit = stepBullet(slot.b, frameDt, world, targets);
+      this.moveLine(slot);
+      if (hit.kind === "world" || hit.kind === "target") {
+        const i = this.impacts.find((x) => x.life <= 0);
+        if (i) {
+          i.mesh.position.set(hit.x, hit.y, hit.z);
+          i.mesh.visible = true;
+          i.life = IMPACT_SECONDS;
+        }
+      }
+      if (slot.b.done) {
+        slot.active = false;
+        slot.line.visible = false;
       }
     }
+  }
+
+  /** You swung: the rifle is thrust forward and twisted for a moment (the hands go with it). */
+  melee(): void {
+    this.meleeLeft = MELEE_SECONDS;
+  }
+
+  /** An instant kick of camera shake (e.g. you were just shoved by a melee blow). */
+  bump(strength: number): void {
+    this.shake = Math.min(1, this.shake + strength);
   }
 
   hitMarker(kind: HitKind): void {
@@ -133,6 +245,27 @@ export class Fx {
     const r = reloadPose(reloadT > 0 ? 1 - reloadT / WEAPON.reloadTime : 0, this.reload);
     this.gun.rotation.set(r.pitch, 0, r.roll);
     this.gun.position.y += r.drop;
+    // Melee: the rifle dips down and away while a gloved fist throws a punch (wind back, strike
+    // toward the middle of the screen, return), then the rifle comes back up.
+    this.fist.visible = false;
+    if (this.meleeLeft > 0) {
+      this.meleeLeft = Math.max(0, this.meleeLeft - frameDt);
+      const u = 1 - this.meleeLeft / MELEE_SECONDS;
+      const dip = smooth(u / 0.2) * (1 - smooth((u - 0.8) / 0.2));
+      this.gun.position.y -= 0.34 * dip;
+      this.gun.position.x += 0.1 * dip;
+      this.gun.rotation.x -= 0.5 * dip;
+      const f =
+        u < 0.2
+          ? FIST_REST
+          : u < 0.4
+            ? mix(FIST_REST, FIST_WIND, smooth((u - 0.2) / 0.2))
+            : u < 0.55
+              ? mix(FIST_WIND, FIST_STRIKE, smooth((u - 0.4) / 0.15))
+              : mix(FIST_STRIKE, FIST_REST, smooth((u - 0.55) / 0.45));
+      this.fist.position.set(f[0], f[1], f[2]);
+      this.fist.visible = true;
+    }
     this.brick.mag.position.y = BRICK_MAG_HOME.y + r.mag;
     this.leftHand.position.copy(this.leftHandHome).lerp(MAG_GRIP, r.hand);
     this.leftHand.position.y += r.mag * r.hand;
@@ -140,10 +273,6 @@ export class Fx {
     this.flashLife = Math.max(0, this.flashLife - frameDt);
     this.flashMesh.visible = this.flashLife > 0;
 
-    for (const t of this.tracers) {
-      t.life = Math.max(0, t.life - frameDt);
-      t.line.visible = t.life > 0;
-    }
     for (const i of this.impacts) {
       i.life = Math.max(0, i.life - frameDt);
       i.mesh.visible = i.life > 0;

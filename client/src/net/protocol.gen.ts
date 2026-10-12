@@ -12,6 +12,7 @@ export const EntityFlags = {
   dead: 64,
   protected: 128,
   wallRunning: 256,
+  meleeing: 512,
 } as const;
 
 /** EventKinds bits. */
@@ -25,6 +26,7 @@ export const EventKinds = {
 export const GameEventFlags = {
   headshot: 1,
   killed: 2,
+  melee: 4,
 } as const;
 
 /** MatchPhases bits. */
@@ -65,6 +67,8 @@ export interface Input {
   fire: boolean;
   /** Reload pressed this tick. */
   reload: boolean;
+  /** Melee pressed this tick. */
+  melee: boolean;
   /** The server tick (fractional) at which this player's screen was showing other players, for lag compensation. 0 means the current tick (no rewind). */
   viewTick: number;
 }
@@ -140,6 +144,10 @@ export interface WeaponState {
   /** Consecutive shots (indexes the recoil pattern). */
   burst: number;
   sinceShot: number;
+  /** Seconds until a melee swing lands; 0 when not swinging. */
+  meleeT: number;
+  /** Seconds until the next melee is allowed. */
+  meleeCooldown: number;
   /** Seeded random generator state (bullet spread). */
   rng: number;
 }
@@ -173,6 +181,21 @@ export interface GameEvent {
   health: number;
   /** hit and hurt: the victim's shield after the hit. */
   shield: number;
+}
+
+/** A bullet that was fired, so every client can draw its tracer. Resent in several snapshots; `seq` is global to the room so the client skips ones it has handled. The bullet starts at the shooter's eye with this direction (spread already applied) and flies by the shared bullet physics. */
+export interface Shot {
+  seq: number;
+  /** Server tick the shot was fired. */
+  tick: number;
+  /** Who fired it. */
+  actor: number;
+  x: number;
+  y: number;
+  z: number;
+  dx: number;
+  dy: number;
+  dz: number;
 }
 
 /** Where the room is in its match cycle. */
@@ -261,6 +284,8 @@ export interface SnapshotMessage {
   weapon: WeaponState;
   /** Recent events for you (hits you landed, hits you took, kills anyone made). */
   events: GameEvent[];
+  /** Recent shots fired by anyone (bullets to draw). */
+  shots: Shot[];
   match: MatchInfo;
   /** Everyone's tally, including yours. */
   scores: Score[];

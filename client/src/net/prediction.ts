@@ -104,7 +104,15 @@ export class Predictor {
       const r = stepWeapon(this.weapon, input, weaponContext(this.state), this.dt);
       this.weapon = r.state;
       const s = r.shot;
-      if (s.fired || s.reloadStarted || s.reloadFinished || s.dryFire) this.lastShot = s;
+      if (
+        s.fired ||
+        s.reloadStarted ||
+        s.reloadFinished ||
+        s.dryFire ||
+        s.meleeStarted ||
+        s.meleeStrike
+      )
+        this.lastShot = s;
     }
     this.history.push({ seq: full.seq, input: full, after: this.state, weaponAfter: this.weapon });
     if (this.history.length > MAX_HISTORY) {

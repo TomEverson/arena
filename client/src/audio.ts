@@ -259,6 +259,33 @@ export class AudioEngine {
     this.hiss(o, "lowpass", 900, 150, 0.2, 0.22, 0.01); // the tail
   }
 
+  /** Someone else's rifle shot, placed where it was fired (quieter and duller with distance). */
+  shotAt(at: { x: number; y: number; z: number }): void {
+    if (!this.room()) return;
+    const o = this.dest(at);
+    if (!o) return;
+    this.hiss(o, "bandpass", 2800, 450, 0.09, 0.9, 0, 0.8);
+    this.tone(o, "sine", 160, 45, 0.12, 1.0);
+    this.hiss(o, "lowpass", 800, 140, 0.2, 0.35, 0.01);
+  }
+
+  /** The swing of a melee strike: a short rush of air. */
+  swing(): void {
+    const o = this.dest();
+    if (!o) return;
+    this.hiss(o, "bandpass", 500, 2600, 0.18, 0.4, 0, 1.4);
+    this.tone(o, "sawtooth", 140, 70, 0.14, 0.08);
+  }
+
+  /** A melee blow landing: a thud, and a higher crack when it kills. */
+  meleeHit(killed: boolean): void {
+    const o = this.dest();
+    if (!o) return;
+    this.tone(o, "sine", 150, 45, 0.16, 0.8);
+    this.hiss(o, "lowpass", 1800, 200, 0.12, 0.5);
+    if (killed) this.tone(o, "triangle", 880, 880, 0.2, 0.3, 0.05);
+  }
+
   dryFire(): void {
     const o = this.dest();
     if (!o) return;

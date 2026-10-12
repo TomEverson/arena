@@ -26,6 +26,7 @@ const (
 	EntityFlagDead        uint16 = 64
 	EntityFlagProtected   uint16 = 128
 	EntityFlagWallRunning uint16 = 256
+	EntityFlagMeleeing    uint16 = 512
 )
 
 // EventKinds bits.
@@ -39,6 +40,7 @@ const (
 const (
 	GameEventFlagHeadshot uint8 = 1
 	GameEventFlagKilled   uint8 = 2
+	GameEventFlagMelee    uint8 = 4
 )
 
 // MatchPhases bits.
@@ -79,6 +81,8 @@ type Input struct {
 	Fire bool `json:"fire"`
 	// Reload pressed this tick.
 	Reload bool `json:"reload"`
+	// Melee pressed this tick.
+	Melee bool `json:"melee"`
 	// The server tick (fractional) at which this player's screen was showing other players, for lag compensation. 0 means the current tick (no rewind).
 	ViewTick float64 `json:"viewTick"`
 }
@@ -154,6 +158,10 @@ type WeaponState struct {
 	// Consecutive shots (indexes the recoil pattern).
 	Burst     uint8   `json:"burst"`
 	SinceShot float64 `json:"sinceShot"`
+	// Seconds until a melee swing lands; 0 when not swinging.
+	MeleeT float64 `json:"meleeT"`
+	// Seconds until the next melee is allowed.
+	MeleeCooldown float64 `json:"meleeCooldown"`
 	// Seeded random generator state (bullet spread).
 	Rng uint32 `json:"rng"`
 }
@@ -187,6 +195,21 @@ type GameEvent struct {
 	Health float64 `json:"health"`
 	// hit and hurt: the victim's shield after the hit.
 	Shield float64 `json:"shield"`
+}
+
+// Shot: A bullet that was fired, so every client can draw its tracer. Resent in several snapshots; `seq` is global to the room so the client skips ones it has handled. The bullet starts at the shooter's eye with this direction (spread already applied) and flies by the shared bullet physics.
+type Shot struct {
+	Seq uint32 `json:"seq"`
+	// Server tick the shot was fired.
+	Tick uint32 `json:"tick"`
+	// Who fired it.
+	Actor uint32  `json:"actor"`
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	Z     float64 `json:"z"`
+	Dx    float64 `json:"dx"`
+	Dy    float64 `json:"dy"`
+	Dz    float64 `json:"dz"`
 }
 
 // MatchInfo: Where the room is in its match cycle.
@@ -245,7 +268,9 @@ type Snapshot struct {
 	Weapon   WeaponState  `json:"weapon"`
 	// Recent events for you (hits you landed, hits you took, kills anyone made).
 	Events []GameEvent `json:"events"`
-	Match  MatchInfo   `json:"match"`
+	// Recent shots fired by anyone (bullets to draw).
+	Shots []Shot    `json:"shots"`
+	Match MatchInfo `json:"match"`
 	// Everyone's tally, including yours.
 	Scores []Score `json:"scores"`
 }

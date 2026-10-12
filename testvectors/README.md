@@ -1,6 +1,6 @@
 # testvectors
 
-Shared test vectors for movement (`movement/`), the weapon (`weapon/`) and hitscan (`hitscan/`). They keep client prediction and the authoritative
+Shared test vectors for movement (`movement/`), the weapon (`weapon/`) hitscan (`hitscan/`) bullets (`bullet/`) and melee (`melee/`). They keep client prediction and the authoritative
 server in lockstep: the **same JSON files** are replayed by the TypeScript tests
 (`client/src/sim/vectors/vectors.test.ts`) and the Go tests
 (`server/internal/game/vectors_test.go`).
@@ -47,3 +47,11 @@ through the real greybox level, and three seeded pseudo-random runs of 900 ticks
   multiply-adds. The 1e-6 tolerance absorbs this unless a run sits on a knife-edge; the fuzz
   runs are the likeliest place for a false alarm.
 - Lag compensation and health/respawn rules are server logic with Go unit tests, not vectors; `pnpm combatcheck` exercises them end to end.
+
+## Bullet vectors
+
+`bullet/*.json`: a world, an origin, a direction, a speed and range, the target boxes at each step, and what the bullet looked like after every step until it was done (position, velocity, distance flown, and what the swept path hit). Recorded from `client/src/sim/bullet.ts` by `pnpm vectors`; the Go twin (`server/internal/game/bullet.go`) replays them in `bullet_vectors_test.go`. They cover flight and drop, range expiry, a wall, a thin wall (no tunnelling), the floor, body and head hits, a moving target (led and not), and a slower bullet.
+
+## Melee vectors
+
+`melee/*.json`: a world, target boxes, and a list of swings (eye position and view direction) with the target each should hit, or -1. Recorded from `client/src/sim/melee.ts`; the Go twin (`server/internal/game/melee.go`) replays them in `melee_vectors_test.go`. They cover in front, behind, to the side, out of reach, outside the cone, a wall in between, the nearest of two, and crouched and raised targets.

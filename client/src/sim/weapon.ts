@@ -21,6 +21,8 @@ export interface WeaponInput {
   fire: boolean;
   /** Reload pressed this tick. */
   reload: boolean;
+  /** Melee pressed this tick. */
+  melee: boolean;
   ads: boolean;
 }
 
@@ -44,6 +46,10 @@ export interface ShotResult {
   reloadFinished: boolean;
   /** Tried to fire with an empty magazine. */
   dryFire: boolean;
+  /** A melee swing began this tick. */
+  meleeStarted: boolean;
+  /** A melee swing landed this tick: the caller finds who it hit (see melee.ts). */
+  meleeStrike: boolean;
 }
 
 export function spawnWeapon(seed = 1): WeaponState {
@@ -53,6 +59,8 @@ export function spawnWeapon(seed = 1): WeaponState {
     cooldown: 0,
     burst: 0,
     sinceShot: 1e9,
+    meleeT: 0,
+    meleeCooldown: 0,
     rng: seed >>> 0 || 1,
   };
 }
@@ -91,6 +99,8 @@ const NO_SHOT: ShotResult = {
   reloadStarted: false,
   reloadFinished: false,
   dryFire: false,
+  meleeStarted: false,
+  meleeStrike: false,
 };
 
 export function stepWeapon(
@@ -105,6 +115,21 @@ export function stepWeapon(
   w.sinceShot += dt;
   if (w.sinceShot > W.recoilResetTime) w.burst = 0;
   w.cooldown -= dt;
+  w.meleeCooldown = Math.max(0, w.meleeCooldown - dt);
+
+  // Melee: press to swing; the blow lands after the wind-up, and firing is locked meanwhile.
+  if (w.meleeT > 0) {
+    w.meleeT -= dt;
+    if (w.meleeT <= 0) {
+      w.meleeT = 0;
+      shot.meleeStrike = true;
+    }
+  } else if (input.melee && w.meleeCooldown <= 0) {
+    w.meleeT = W.meleeWindup;
+    w.meleeCooldown = W.meleeCooldown;
+    shot.meleeStarted = true;
+  }
+  const swinging = w.meleeCooldown > W.meleeCooldown - W.meleeLock;
 
   // Reload
   if (w.reloadT > 0) {
@@ -120,7 +145,7 @@ export function stepWeapon(
   }
 
   // Fire
-  if (input.fire && w.reloadT <= 0 && w.cooldown <= 0) {
+  if (input.fire && w.reloadT <= 0 && w.cooldown <= 0 && !swinging) {
     if (w.ammo > 0) {
       const spread = spreadDegrees(w.burst, input.ads, ctx) * DEG;
       const [u, r1] = nextRandom(w.rng);

@@ -4,13 +4,22 @@
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 
+import { bulletScenarios, recordBullet } from "../src/sim/vectors/bullet-scenarios";
 import {
   hitscanScenarios,
   recordHitscan,
   recordWeapon,
   weaponScenarios,
 } from "../src/sim/vectors/combat-scenarios";
-import { HITSCAN_DIR, loadWorld, VECTOR_DIR, WEAPON_DIR } from "../src/sim/vectors/node";
+import { meleeScenarios, recordMelee } from "../src/sim/vectors/melee-scenarios";
+import {
+  BULLET_DIR,
+  HITSCAN_DIR,
+  loadWorld,
+  MELEE_DIR,
+  VECTOR_DIR,
+  WEAPON_DIR,
+} from "../src/sim/vectors/node";
 import { recordScenario } from "../src/sim/vectors/record";
 import { scenarios } from "../src/sim/vectors/scenarios";
 
@@ -40,7 +49,7 @@ for (const sc of scenarios) {
 }
 
 // --- Weapon and hitscan vectors -------------------------------------------
-for (const dir of [WEAPON_DIR, HITSCAN_DIR]) {
+for (const dir of [WEAPON_DIR, HITSCAN_DIR, BULLET_DIR, MELEE_DIR]) {
   mkdirSync(dir, { recursive: true });
   for (const f of readdirSync(dir)) if (f.endsWith(".json")) rmSync(`${dir}/${f}`);
 }
@@ -58,8 +67,18 @@ for (const sc of hitscanScenarios) {
   writeFileSync(`${HITSCAN_DIR}/${sc.name}.json`, `${JSON.stringify(vector)}\n`);
 }
 
+for (const sc of bulletScenarios) {
+  const vector = recordBullet(sc); // verifies as it records
+  writeFileSync(`${BULLET_DIR}/${sc.name}.json`, `${JSON.stringify(vector)}\n`);
+}
+
+for (const sc of meleeScenarios) {
+  const vector = recordMelee(sc); // verifies as it records
+  writeFileSync(`${MELEE_DIR}/${sc.name}.json`, `${JSON.stringify(vector)}\n`);
+}
+
 console.log(`recorded ${scenarios.length} vectors, ${totalTicks} ticks into ${VECTOR_DIR}`);
 console.log("ticks exercised:", coverage);
 console.log(
-  `recorded ${weaponScenarios.length} weapon and ${hitscanScenarios.length} hitscan vectors`,
+  `recorded ${weaponScenarios.length} weapon, ${hitscanScenarios.length} hitscan, ${bulletScenarios.length} bullet and ${meleeScenarios.length} melee vectors`,
 );

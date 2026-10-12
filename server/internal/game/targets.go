@@ -33,10 +33,14 @@ type Target struct {
 	x, y, z float64
 	dir     float64 // +1 or -1 along the strafe axis
 	// runT is how long the current pass along the wall has lasted (wall-running targets).
-	runT   float64
-	Health protocol.PlayerHealth
-	hist   history
-	Entity protocol.Entity
+	runT float64
+	// The knock offset: how far a melee blow has pushed the target from where its script has it
+	// (and hopped it up), and how fast. A spring pulls it back.
+	kx, kz, ky    float64
+	kvx, kvz, kvy float64
+	Health        protocol.PlayerHealth
+	hist          history
+	Entity        protocol.Entity
 }
 
 func newTarget(i int, spec TargetSpec) Target {
@@ -49,6 +53,7 @@ func newTarget(i int, spec TargetSpec) Target {
 // reset brings the target back at its home position with full health.
 func (t *Target) reset() {
 	t.x, t.y, t.z, t.dir, t.runT = t.spec.Pos.X, t.spec.Pos.Y, t.spec.Pos.Z, 1, 0
+	t.kx, t.kz, t.ky, t.kvx, t.kvz, t.kvy = 0, 0, 0, 0, 0, 0
 	if t.spec.WallRun {
 		t.placeOnWall() // starts at one end of its run
 	}
@@ -58,7 +63,7 @@ func (t *Target) reset() {
 
 func (t *Target) syncEntity() {
 	e := &t.Entity
-	e.X, e.Y, e.Z = t.x, t.y, t.z
+	e.X, e.Y, e.Z = t.x+t.kx, t.y+t.ky, t.z+t.kz
 	if t.Health.Alive && t.spec.WallRun {
 		e.Flags = protocol.EntityFlagWallRunning
 	} else if t.Health.Alive {
@@ -69,7 +74,7 @@ func (t *Target) syncEntity() {
 }
 
 func (t *Target) live(tick uint64) histEntry {
-	return histEntry{tick: uint32(tick), valid: true, alive: t.Health.Alive, x: t.x, y: t.y, z: t.z, height: StandHeight}
+	return histEntry{tick: uint32(tick), valid: true, alive: t.Health.Alive, x: t.x + t.kx, y: t.y + t.ky, z: t.z + t.kz, height: StandHeight}
 }
 
 // SetPractice makes this world a practice range: the level's targets appear, players
@@ -109,11 +114,15 @@ func (w *World) stepTargets() {
 			}
 			continue
 		}
+		knocked := t.stepKnock()
 		if t.spec.WallRun {
 			t.stepWallRun()
 			continue
 		}
 		if !t.spec.Strafe {
+			if knocked {
+				t.syncEntity()
+			}
 			continue
 		}
 		pos, home := &t.z, t.spec.Pos.Z
@@ -128,6 +137,43 @@ func (w *World) stepTargets() {
 		}
 		t.syncEntity()
 	}
+}
+
+// knockSpring and knockDamping pull a knocked target back to where its script has it (slightly
+// underdamped, so it settles with a little give).
+const (
+	knockSpring  = 25.0
+	knockDamping = 7.0
+)
+
+// knock gives the target a shove: horizontal speed away from the attacker, and a hop.
+func (t *Target) knock(dirX, dirZ float64) {
+	t.kvx += dirX * WeaponMeleeKnockback
+	t.kvz += dirZ * WeaponMeleeKnockback
+	t.kvy = math.Max(t.kvy, WeaponMeleeKnockUp)
+}
+
+// stepKnock moves the knock offset one tick (spring back, hop under gravity) and reports whether
+// the target is, or was just, displaced.
+func (t *Target) stepKnock() bool {
+	if t.kx == 0 && t.kz == 0 && t.ky == 0 && t.kvx == 0 && t.kvz == 0 && t.kvy == 0 {
+		return false
+	}
+	t.kvx += (-knockSpring*t.kx - knockDamping*t.kvx) * TickDT
+	t.kvz += (-knockSpring*t.kz - knockDamping*t.kvz) * TickDT
+	t.kx += t.kvx * TickDT
+	t.kz += t.kvz * TickDT
+	if t.ky > 0 || t.kvy > 0 {
+		t.kvy -= Gravity * TickDT
+		t.ky += t.kvy * TickDT
+		if t.ky <= 0 {
+			t.ky, t.kvy = 0, 0
+		}
+	}
+	if math.Abs(t.kx) < 1e-4 && math.Abs(t.kz) < 1e-4 && math.Abs(t.kvx) < 1e-3 && math.Abs(t.kvz) < 1e-3 && t.ky == 0 {
+		t.kx, t.kz, t.kvx, t.kvz = 0, 0, 0, 0
+	}
+	return true
 }
 
 // wallRunArc is how far above its wall-run line a wall runner is `tau` seconds into a pass: the
@@ -178,9 +224,9 @@ func (w *World) targetByID(id uint32) *Target {
 }
 
 // damageTarget applies a hit to a target and tells the shooter (and, on a kill, everyone).
-func (w *World) damageTarget(shooter *Player, t *Target, amount float64, headshot bool) {
+func (w *World) damageTarget(shooter *Player, t *Target, amount float64, headshot bool, extra uint8) {
 	killed := takeDamage(&t.Health, amount)
-	var flags uint8
+	flags := extra
 	if headshot {
 		flags |= protocol.GameEventFlagHeadshot
 	}

@@ -66,6 +66,7 @@ try {
   // A third player walks in mid-match.
   await sleep(4000);
   const c = new BotClient("C", port, room, world, () => ({}));
+  await until("C to be welcomed", () => c.id >= 0, 5000);
   await until("C on the scoreboard", () => a.scores.length === 3, 5000);
   const late = a.scores.find((s) => s.id === c.id);
   note(`C joined mid-match: on the scoreboard with ${late?.kills} kills`);

@@ -10,8 +10,9 @@ import { runWeaponSteps, VECTOR_DT } from "./combat-format";
 import type { VectorWorld } from "./format";
 import { loadWorld } from "./node";
 
+const P_WINDUP = 0.12; // WEAPON.meleeWindup, for the check below
 const STILL: WeaponContext = { hSpeed: 0, onGround: true, crouching: false, sliding: false };
-const HOLD: WeaponInput = { fire: true, reload: false, ads: false };
+const HOLD: WeaponInput = { fire: true, reload: false, melee: false, ads: false };
 const check = (cond: boolean, msg: string) => {
   if (!cond) throw new Error(`verify failed: ${msg}`);
 };
@@ -44,7 +45,7 @@ function fuzzSteps(seed: number, ticks: number): WeaponVector["steps"] {
     left -= n;
     steps.push({
       ticks: n,
-      input: { fire: rnd() < 0.7, reload: rnd() < 0.08, ads: rnd() < 0.3 },
+      input: { fire: rnd() < 0.7, reload: rnd() < 0.08, melee: rnd() < 0.06, ads: rnd() < 0.3 },
       ctx: {
         hSpeed: rnd() < 0.4 ? 0 : rnd() * 15,
         onGround: rnd() < 0.8,
@@ -97,9 +98,9 @@ export const weaponScenarios: WeaponScenario[] = [
     seed: 5,
     steps: [
       { ticks: 30, input: HOLD, ctx: STILL },
-      { ticks: 1, input: { fire: false, reload: true, ads: false }, ctx: STILL },
+      { ticks: 1, input: { fire: false, reload: true, melee: false, ads: false }, ctx: STILL },
       { ticks: 20, input: HOLD, ctx: STILL }, // held fire during reload does nothing
-      { ticks: 120, input: { fire: false, reload: false, ads: false }, ctx: STILL },
+      { ticks: 120, input: { fire: false, reload: false, melee: false, ads: false }, ctx: STILL },
       { ticks: 30, input: HOLD, ctx: STILL },
     ],
     verify: (_t, ev) => {
@@ -114,12 +115,43 @@ export const weaponScenarios: WeaponScenario[] = [
     },
   },
   {
+    name: "weapon-melee",
+    description:
+      "A melee swing: it lands after the wind-up, firing is locked while it plays out, and the next swing waits for the cooldown.",
+    seed: 3,
+    steps: [
+      { ticks: 1, input: { fire: false, reload: false, melee: true, ads: false }, ctx: STILL },
+      { ticks: 10, input: HOLD, ctx: STILL }, // fire is held: locked out while swinging
+      { ticks: 1, input: { fire: false, reload: false, melee: true, ads: false }, ctx: STILL }, // too soon
+      { ticks: 60, input: { fire: false, reload: false, melee: false, ads: false }, ctx: STILL },
+      { ticks: 1, input: { fire: false, reload: false, melee: true, ads: false }, ctx: STILL }, // cooled down
+      { ticks: 30, input: HOLD, ctx: STILL },
+    ],
+    verify: (_t, ev) => {
+      const started = ev.filter((e) => e.meleeStarted);
+      const struck = ev.filter((e) => e.meleeStrike);
+      check(started.length === 2 && struck.length === 2, "two swings, two blows");
+      const first = started[0];
+      const blow = struck[0];
+      check(
+        !!first && !!blow && blow.tick - first.tick === Math.ceil(P_WINDUP * 60),
+        "the blow lands after the wind-up",
+      );
+      const firedEarly = ev.some((e) => e.fired && e.tick < 1 + Math.round(0.35 * 60));
+      check(!firedEarly, "no shots while swinging");
+      check(
+        ev.some((e) => e.fired),
+        "firing works again afterwards",
+      );
+    },
+  },
+  {
     name: "weapon-tap-fire-resets-recoil",
     description: "Taps separated by pauses restart the recoil pattern each time.",
     seed: 9,
     steps: [
       { ticks: 12, input: HOLD, ctx: STILL },
-      { ticks: 40, input: { fire: false, reload: false, ads: false }, ctx: STILL },
+      { ticks: 40, input: { fire: false, reload: false, melee: false, ads: false }, ctx: STILL },
       { ticks: 12, input: HOLD, ctx: STILL },
     ],
     verify: (_t, ev) => {

@@ -35,7 +35,7 @@ FFA is teams of one: every player's `teamId` is unique. This keeps the data mode
 - Health and shield pickups sit at fixed spots on a respawn timer. They give players a reason to contest certain locations.
 
 ### Weapons
-- **One weapon for everyone: an assault rifle.** Hitscan, ADS, hipfire spread, a fixed per-gun recoil pattern players can learn.
+- **One weapon for everyone: an assault rifle (the Brick).** A **projectile** weapon (300 m/s, a little drop; you lead moving targets), ADS, hipfire spread, a fixed per-gun recoil pattern players can learn.
 - Target time-to-kill: about 1.5-2 seconds on a full 150 total health.
 - First numbers (M2): 600 rpm, 9 damage (x1.5 head), 30-round magazine, 1.8 s reload; full tuning in `client/src/sim/params.ts` (`WEAPON`).
 - ADS: zoomed (0.7x FOV), 0.65x ground speed, tight spread. Hipfire spread grows with movement, air time and sustained fire.

@@ -41,6 +41,8 @@ func TestStepDoesNotAllocateWithMovingPlayers(t *testing.T) {
 				Dash:     k%53 == 0,
 				Slide:    k%90 < 30,
 				ADS:      k%70 < 10,
+				Fire:     k%2 == 0,
+				Melee:    k%61 == 0,
 			})
 		}
 		w.Step()

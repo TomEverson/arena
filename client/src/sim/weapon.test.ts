@@ -16,7 +16,7 @@ import {
 } from "./weapon";
 
 const DT = 1 / 60;
-const idle: WeaponInput = { fire: false, reload: false, ads: false };
+const idle: WeaponInput = { fire: false, reload: false, melee: false, ads: false };
 const still = { hSpeed: 0, onGround: true, crouching: false, sliding: false };
 
 function fire(

@@ -11,12 +11,16 @@ export const SMOOTH_TIME = 0.1;
  * so the view does not jump, then decays to zero.
  */
 export class CorrectionSmoother {
+  /** Corrections bigger than this teleport; a melee knockback raises it for a moment. */
+  snapDistance = SNAP_DISTANCE;
+  /** How quickly a correction fades; a knockback blends more gently. */
+  smoothTime = SMOOTH_TIME;
   x = 0;
   y = 0;
   z = 0;
 
   onCorrection(c: Correction): void {
-    if (c.error > SNAP_DISTANCE) {
+    if (c.error > this.snapDistance) {
       this.x = this.y = this.z = 0;
       return;
     }
@@ -26,7 +30,7 @@ export class CorrectionSmoother {
   }
 
   update(frameDt: number): void {
-    const k = Math.exp(-frameDt / SMOOTH_TIME);
+    const k = Math.exp(-frameDt / this.smoothTime);
     this.x *= k;
     this.y *= k;
     this.z *= k;

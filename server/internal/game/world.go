@@ -132,6 +132,7 @@ func NewPlayer(id uint32) *Player {
 			Type:     protocol.ServerTypeSnapshot,
 			Entities: make([]Entity, 0, MaxPlayers),
 			Events:   make([]protocol.GameEvent, 0, eventRingSize),
+			Shots:    make([]protocol.Shot, 0, shotRingSize),
 			Scores:   make([]protocol.Score, 0, MaxPlayers),
 		}
 	}
@@ -188,7 +189,10 @@ type World struct {
 	players   []*Player // cap MaxPlayers, never grows
 	inbox     chan command
 	nextSpawn int
-	boxes     [MaxPlayers]Hitbox // scratch: target hitboxes for one shot
+	boxes     [MaxPlayers + maxTargets]Hitbox // scratch: target hitboxes for one bullet step
+
+	bullets [maxBullets]liveBullet // projectiles in flight (see bullets.go)
+	shots   shotLog                // recent shots, for clients to draw tracers
 
 	cfg   MatchConfig
 	match matchState
@@ -296,6 +300,7 @@ func (w *World) Step() {
 	}
 	// Positions at the end of this tick, for lag compensation of later shots.
 	w.stepTargets()
+	w.stepBullets()
 	for _, p := range w.players {
 		w.recordHistory(p)
 	}
@@ -335,7 +340,10 @@ func (w *World) stepPlayer(p *Player) {
 		ctx := WeaponContext{HSpeed: hSpeed(&p.State), OnGround: p.State.OnGround, Crouching: p.State.Crouching, Sliding: p.State.Sliding}
 		shot := StepWeapon(&p.Weapon, &in, &ctx, TickDT)
 		if shot.Fired {
-			w.resolveShot(p, &in, &shot)
+			w.fireBullet(p, &in, &shot)
+		}
+		if shot.MeleeStrike {
+			w.resolveMelee(p, &in)
 		}
 		p.Entity.Yaw = in.Yaw
 		p.Entity.Pitch = in.Pitch
@@ -368,6 +376,9 @@ func (p *Player) syncEntity() {
 	}
 	if s.WallRunning {
 		f |= protocol.EntityFlagWallRunning
+	}
+	if p.Weapon.MeleeCooldown > WeaponMeleeCooldown-WeaponMeleeLock {
+		f |= protocol.EntityFlagMeleeing
 	}
 	if !p.Health.Alive {
 		f |= protocol.EntityFlagDead
@@ -471,6 +482,7 @@ func (w *World) sendSnapshots() {
 		s.Scores = w.scoresInto(s.Scores[:0])
 		s.Entities = w.entitiesFor(p, s.Entities[:0])
 		s.Events = p.recentEvents(s.Events[:0], w.tick)
+		s.Shots = w.shots.recent(s.Shots[:0], w.tick)
 		select {
 		case p.Out <- s:
 		default:

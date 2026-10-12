@@ -40,6 +40,10 @@ type ShotResult struct {
 	ReloadFinished bool    `json:"reloadFinished"`
 	// DryFire means the trigger was pulled on an empty magazine.
 	DryFire bool `json:"dryFire"`
+	// MeleeStarted: a melee swing began this tick. MeleeStrike: it landed this tick (the caller
+	// finds who it hit, see melee.go).
+	MeleeStarted bool `json:"meleeStarted"`
+	MeleeStrike  bool `json:"meleeStrike"`
 }
 
 // SpawnWeapon returns a full magazine with the given random seed.
@@ -96,6 +100,21 @@ func StepWeapon(w *WeaponState, in *Input, ctx *WeaponContext, dt float64) ShotR
 		w.Burst = 0
 	}
 	w.Cooldown -= dt
+	w.MeleeCooldown = math.Max(0, w.MeleeCooldown-dt)
+
+	// Melee: press to swing; the blow lands after the wind-up, and firing is locked meanwhile.
+	if w.MeleeT > 0 {
+		w.MeleeT -= dt
+		if w.MeleeT <= 0 {
+			w.MeleeT = 0
+			shot.MeleeStrike = true
+		}
+	} else if in.Melee && w.MeleeCooldown <= 0 {
+		w.MeleeT = WeaponMeleeWindup
+		w.MeleeCooldown = WeaponMeleeCooldown
+		shot.MeleeStarted = true
+	}
+	swinging := w.MeleeCooldown > WeaponMeleeCooldown-WeaponMeleeLock
 
 	// Reload
 	if w.ReloadT > 0 {
@@ -111,7 +130,7 @@ func StepWeapon(w *WeaponState, in *Input, ctx *WeaponContext, dt float64) ShotR
 	}
 
 	// Fire
-	if in.Fire && w.ReloadT <= 0 && w.Cooldown <= 0 {
+	if in.Fire && w.ReloadT <= 0 && w.Cooldown <= 0 && !swinging {
 		if w.Ammo > 0 {
 			spread := SpreadDegrees(w.Burst, in.ADS, ctx) * degToRad
 			u, r1 := nextRandom(w.Rng)

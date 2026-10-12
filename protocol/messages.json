@@ -45,6 +45,10 @@
           "type": "bool",
           "doc": "Reload pressed this tick."
         },
+        "melee": {
+          "type": "bool",
+          "doc": "Melee pressed this tick."
+        },
         "viewTick": {
           "type": "f64",
           "doc": "The server tick (fractional) at which this player's screen was showing other players, for lag compensation. 0 means the current tick (no rewind)."
@@ -153,6 +157,14 @@
           "doc": "Consecutive shots (indexes the recoil pattern)."
         },
         "sinceShot": "f64",
+        "meleeT": {
+          "type": "f64",
+          "doc": "Seconds until a melee swing lands; 0 when not swinging."
+        },
+        "meleeCooldown": {
+          "type": "f64",
+          "doc": "Seconds until the next melee is allowed."
+        },
         "rng": {
           "type": "u32",
           "doc": "Seeded random generator state (bullet spread)."
@@ -210,6 +222,26 @@
         }
       }
     },
+    "Shot": {
+      "doc": "A bullet that was fired, so every client can draw its tracer. Resent in several snapshots; `seq` is global to the room so the client skips ones it has handled. The bullet starts at the shooter's eye with this direction (spread already applied) and flies by the shared bullet physics.",
+      "fields": {
+        "seq": "u32",
+        "tick": {
+          "type": "u32",
+          "doc": "Server tick the shot was fired."
+        },
+        "actor": {
+          "type": "u32",
+          "doc": "Who fired it."
+        },
+        "x": "f64",
+        "y": "f64",
+        "z": "f64",
+        "dx": "f64",
+        "dy": "f64",
+        "dz": "f64"
+      }
+    },
     "MatchInfo": {
       "doc": "Where the room is in its match cycle.",
       "fields": {
@@ -262,7 +294,8 @@
       "mantling": 32,
       "dead": 64,
       "protected": 128,
-      "wallRunning": 256
+      "wallRunning": 256,
+      "meleeing": 512
     },
     "EventKinds": {
       "hit": 1,
@@ -271,7 +304,8 @@
     },
     "GameEventFlags": {
       "headshot": 1,
-      "killed": 2
+      "killed": 2,
+      "melee": 4
     },
     "MatchPhases": {
       "waiting": 0,
@@ -365,6 +399,10 @@
         "events": {
           "type": "[GameEvent]",
           "doc": "Recent events for you (hits you landed, hits you took, kills anyone made)."
+        },
+        "shots": {
+          "type": "[Shot]",
+          "doc": "Recent shots fired by anyone (bullets to draw)."
         },
         "match": "MatchInfo",
         "scores": {

@@ -22,6 +22,16 @@ export interface Dummy extends Health {
   x: number;
   y: number;
   z: number;
+  /** Where the script has it (the strafe), before any knock offset is added. */
+  bx: number;
+  bz: number;
+  /** The knock offset and its speed: a melee blow shoves the dummy, and a spring brings it back. */
+  kx: number;
+  kz: number;
+  ky: number;
+  kvx: number;
+  kvz: number;
+  kvy: number;
   dir: 1 | -1;
   /** Seconds into the current pass along the wall (wallrun targets). */
   runT: number;
@@ -48,6 +58,14 @@ export function makeDummies(targets: readonly LevelTarget[]): Dummy[] {
     x: t.pos[0],
     y: t.pos[1],
     z: t.pos[2],
+    bx: t.pos[0],
+    bz: t.pos[2],
+    kx: 0,
+    kz: 0,
+    ky: 0,
+    kvx: 0,
+    kvz: 0,
+    kvy: 0,
     dir: 1 as const,
     runT: 0,
     alive: true,
@@ -104,8 +122,10 @@ export function resetDummies(dummies: Dummy[]): void {
     d.respawnIn = 0;
     d.health = W.maxHealth;
     d.shield = W.maxShield;
-    d.x = d.homeX;
-    d.z = d.homeZ;
+    d.x = d.bx = d.homeX;
+    d.z = d.bz = d.homeZ;
+    d.y = d.homeY;
+    d.kx = d.kz = d.ky = d.kvx = d.kvz = d.kvy = 0;
     d.dir = 1;
     d.runT = 0;
     placeOnWall(d);
@@ -121,6 +141,48 @@ export function killDummy(d: Dummy): void {
 }
 
 /** Move strafing dummies and respawn dead ones. `frozen` is true during hitstop. */
+/** A melee blow's shove: speed away from the attacker (a unit direction in XZ), and a hop. */
+export function knockDummy(d: Dummy, dirX: number, dirZ: number): void {
+  if (d.kind === "wallrun") return; // it stays on its wall
+  d.kvx += dirX * W.meleeKnockback;
+  d.kvz += dirZ * W.meleeKnockback;
+  d.kvy = Math.max(d.kvy, W.meleeKnockUp);
+}
+
+/** The server's numbers (server/internal/game/targets.go): a slightly underdamped spring back to the script. */
+const KNOCK_SPRING = 25;
+const KNOCK_DAMPING = 7;
+
+/** Move the knock offset one step and put the dummy at script plus offset. */
+function stepKnock(d: Dummy, dt: number): void {
+  if (d.kx === 0 && d.kz === 0 && d.ky === 0 && d.kvx === 0 && d.kvz === 0 && d.kvy === 0) {
+    d.x = d.bx;
+    d.z = d.bz;
+    return;
+  }
+  d.kvx += (-KNOCK_SPRING * d.kx - KNOCK_DAMPING * d.kvx) * dt;
+  d.kvz += (-KNOCK_SPRING * d.kz - KNOCK_DAMPING * d.kvz) * dt;
+  d.kx += d.kvx * dt;
+  d.kz += d.kvz * dt;
+  if (d.ky > 0 || d.kvy > 0) {
+    d.kvy -= P.gravity * dt;
+    d.ky += d.kvy * dt;
+    if (d.ky <= 0) d.ky = d.kvy = 0;
+  }
+  if (
+    Math.abs(d.kx) < 1e-4 &&
+    Math.abs(d.kz) < 1e-4 &&
+    Math.abs(d.kvx) < 1e-3 &&
+    Math.abs(d.kvz) < 1e-3 &&
+    d.ky === 0
+  ) {
+    d.kx = d.kz = d.kvx = d.kvz = 0;
+  }
+  d.x = d.bx + d.kx;
+  d.z = d.bz + d.kz;
+  d.y = d.homeY + d.ky;
+}
+
 export function stepDummies(dummies: Dummy[], dt: number, frozen: boolean): void {
   if (frozen) return;
   for (const d of dummies) {
@@ -133,14 +195,19 @@ export function stepDummies(dummies: Dummy[], dt: number, frozen: boolean): void
         d.firstHitAt = null;
         d.hits = 0;
         d.headshots = 0;
-        d.x = d.homeX;
-        d.z = d.homeZ;
+        d.x = d.bx = d.homeX;
+        d.z = d.bz = d.homeZ;
+        d.y = d.homeY;
+        d.kx = d.kz = d.ky = d.kvx = d.kvz = d.kvy = 0;
         d.runT = 0;
         placeOnWall(d);
       }
       continue;
     }
-    if (d.kind === "static") continue;
+    if (d.kind === "static") {
+      stepKnock(d, dt);
+      continue;
+    }
     if (d.kind === "wallrun") {
       d.runT += dt;
       if (d.runT >= P.wallRunMaxTime) {
@@ -151,7 +218,7 @@ export function stepDummies(dummies: Dummy[], dt: number, frozen: boolean): void
       continue;
     }
     const home = d.axis === "x" ? d.homeX : d.homeZ;
-    let p = (d.axis === "x" ? d.x : d.z) + d.dir * COMBAT.targetSpeed * dt;
+    let p = (d.axis === "x" ? d.bx : d.bz) + d.dir * COMBAT.targetSpeed * dt;
     if (p > home + d.range) {
       p = home + d.range;
       d.dir = -1;
@@ -159,8 +226,9 @@ export function stepDummies(dummies: Dummy[], dt: number, frozen: boolean): void
       p = home - d.range;
       d.dir = 1;
     }
-    if (d.axis === "x") d.x = p;
-    else d.z = p;
+    if (d.axis === "x") d.bx = p;
+    else d.bz = p;
+    stepKnock(d, dt);
   }
 }
 

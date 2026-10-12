@@ -8,6 +8,7 @@ import {
   type Dummy,
   DUMMY_HEIGHT,
   killDummy,
+  knockDummy,
   makeDummies,
   resetDummies,
   stepDummies,
@@ -23,7 +24,7 @@ import { MatchHud } from "./matchHud";
 import { canAct } from "./matchui";
 import { NetClient } from "./net/client";
 import { ServerClock } from "./net/clock";
-import { EventTracker } from "./net/events";
+import { EventTracker, ShotTracker } from "./net/events";
 import { INTERP_TICKS, RemoteTracks } from "./net/interpolation";
 import { Predictor } from "./net/prediction";
 import {
@@ -34,6 +35,7 @@ import {
   type MatchInfo,
   type PlayerHealth,
   type Score,
+  type Shot,
 } from "./net/protocol.gen";
 import {
   closeReason,
@@ -43,13 +45,15 @@ import {
   roomFromUrl,
   roomLink,
 } from "./net/rooms";
-import { CorrectionSmoother } from "./net/smoothing";
+import { CorrectionSmoother, SMOOTH_TIME, SNAP_DISTANCE } from "./net/smoothing";
 import { PALETTE } from "./palette";
 import { PracticeStats } from "./practiceStats";
 import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
-import { castRay, type Hitbox } from "./sim/hitscan";
+import { type Bullet, spawnBullet, stepBullet } from "./sim/bullet";
+import type { Hitbox } from "./sim/hitscan";
 import { buildCollisionWorld, type Level, parseLevel } from "./sim/level";
+import { findMeleeTarget } from "./sim/melee";
 import { bodyHeight, eyeHeight, hSpeed, spawnState, stepPlayer } from "./sim/movement";
 import { COMBAT, PARAMS, WEAPON } from "./sim/params";
 import { emptyInput, type PlayerState } from "./sim/types";
@@ -150,11 +154,15 @@ function shotSounds(shot: ShotResult): void {
   if (shot.dryFire) audio.dryFire();
   if (shot.reloadStarted) audio.reloadStart();
   if (shot.reloadFinished) audio.reloadDone();
+  if (shot.meleeStarted) {
+    audio.swing();
+    fx.melee();
+  }
 }
 
 // --- Input -----------------------------------------------------------------
 const held = new Set<string>();
-const pressed = { jump: false, dash: false, reload: false };
+const pressed = { jump: false, dash: false, reload: false, melee: false };
 
 window.addEventListener("keydown", (e) => {
   if (e.code === "Tab") e.preventDefault(); // Tab shows the scoreboard, not the browser's focus ring
@@ -163,6 +171,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "Space") pressed.jump = true;
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") pressed.dash = true;
   if (e.code === "KeyR") pressed.reload = true;
+  if (e.code === "KeyV") pressed.melee = true;
   if (e.code === "Enter") net?.sendRematch(); // only counts while the results are showing
   if (e.code === "KeyL") copyInviteLink();
   if (e.code === "KeyM") audio.toggleMute();
@@ -218,7 +227,15 @@ const smoother = new CorrectionSmoother();
 const clock = new ServerClock();
 const remotes = new RemoteTracks();
 const remoteViews = new RemoteViews(scene);
+/** After a melee hit lands on you, corrections blend more gently for a moment (the shove arrives). */
+const KNOCK_WINDOW_MS = 500;
+const KNOCK_SNAP_DISTANCE = 6;
+const KNOCK_SMOOTH_TIME = 0.16;
+let knockUntil = 0;
 const events = new EventTracker();
+const shotFeed = new ShotTracker();
+/** Other players' shots waiting for the screen to reach the moment they were fired. */
+const pendingShots: Shot[] = [];
 const combatHud = new CombatHud(
   (kind) => fx.hitMarker(kind),
   (e) => showServerHit(e),
@@ -306,7 +323,10 @@ function showServerHit(e: GameEvent): void {
     tick: e.tick,
   });
   remoteViews.flash(e.other);
-  audio.hit((e.flags & GameEventFlags.headshot) !== 0, (e.flags & GameEventFlags.killed) !== 0);
+  if ((e.flags & GameEventFlags.melee) !== 0)
+    audio.meleeHit((e.flags & GameEventFlags.killed) !== 0);
+  else
+    audio.hit((e.flags & GameEventFlags.headshot) !== 0, (e.flags & GameEventFlags.killed) !== 0);
   hitFeedback.onHit(
     {
       targetId: e.other,
@@ -368,9 +388,20 @@ function startNet(code: string): void {
       health = s.health;
       match = s.match;
       scores = s.scores;
+      for (const sh of shotFeed.fresh(s.shots)) if (sh.actor !== myId) pendingShots.push(sh);
       for (const e of events.fresh(s.events)) {
         combatHud.onEvent(e);
-        if (e.kind === EventKinds.hurt && e.other === myId) audio.hurt(e.amount);
+        if (e.kind === EventKinds.hurt && e.other === myId) {
+          audio.hurt(e.amount);
+          if ((e.flags & GameEventFlags.melee) !== 0) {
+            // Shoved: the next correction is the knockback arriving. Blend it gently (and let it
+            // be big) instead of snapping, and kick the camera now.
+            knockUntil = performance.now() + KNOCK_WINDOW_MS;
+            smoother.snapDistance = KNOCK_SNAP_DISTANCE;
+            smoother.smoothTime = KNOCK_SMOOTH_TIME;
+            fx.bump(0.7);
+          }
+        }
         if (e.kind === EventKinds.kill && e.other === myId) audio.death();
       }
       // We only simulate while alive and while the match lets players act (not in the countdown or results).
@@ -473,46 +504,69 @@ function remoteHitboxes(renderTick: number): Hitbox[] {
 function fireShotOnline(shot: ShotResult, ads: boolean): void {
   const origin: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
   const dir = viewDirection(look.yaw + shot.spreadYaw, look.pitch + shot.spreadPitch);
-  const targets = remoteHitboxes(clock.tickAt(performance.now()) - INTERP_TICKS);
-  const hit = castRay(world, targets, origin, dir);
-  fx.shot(new THREE.Vector3(hit.x, hit.y, hit.z), hit.kind === "world", ads);
+  fx.shot(ads);
+  fx.fireOwn(origin, dir); // the picture of the bullet; the server flies the real one
   look.yaw += shot.kickYaw;
   look.pitch = clampPitch(look.pitch + shot.kickPitch);
 }
+
+/** Offline: bullets in flight, flown by the sim tick against the dummies. */
+const localBullets: Bullet[] = [];
 
 function fireShot(shot: ShotResult, ads: boolean): void {
   shotsFired++;
   practiceStats.onShot();
   const origin: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
   const dir = viewDirection(look.yaw + shot.spreadYaw, look.pitch + shot.spreadPitch);
-  const hit = castRay(world, aliveHitboxes(dummies), origin, dir);
-  fx.shot(new THREE.Vector3(hit.x, hit.y, hit.z), hit.kind === "world", ads);
+  fx.shot(ads);
+  fx.fireOwn(origin, dir);
+  if (localBullets.length < 64) localBullets.push(spawnBullet(origin, dir));
 
-  const d = hit.kind === "target" ? dummies[hit.targetId] : undefined;
+  // View kick: the player counters it with the mouse.
+  look.yaw += shot.kickYaw;
+  look.pitch = clampPitch(look.pitch + shot.kickPitch);
+}
+
+/** Fly the offline bullets one tick; a bullet that reaches a dummy hurts it. */
+function stepLocalBullets(): void {
+  for (let i = localBullets.length - 1; i >= 0; i--) {
+    const b = localBullets[i];
+    if (!b) continue;
+    const hit = stepBullet(b, DT, world, aliveHitboxes(dummies));
+    if (hit.kind === "target") onLocalBulletHit(hit.targetId, hit.headshot);
+    if (b.done) localBullets.splice(i, 1);
+  }
+}
+
+/** An offline bullet hit dummy `id`: damage, stats, hit marker, sound, health bar. */
+function onLocalBulletHit(id: number, headshot: boolean, amount?: number): void {
+  const d = dummies[id];
   if (d?.alive) {
     if (d.firstHitAt === null) {
       d.firstHitAt = simTicks * DT;
       d.shotsAtFirstHit = shotsFired;
     }
     d.hits++;
-    if (hit.headshot) d.headshots++;
-    const result = applyDamage(d, damageFor(hit.headshot));
+    if (headshot) d.headshots++;
+    const dmg = amount ?? damageFor(headshot);
+    const result = applyDamage(d, dmg);
     practiceStats.onHit({
       targetId: d.id,
-      damage: damageFor(hit.headshot),
-      headshot: hit.headshot,
+      damage: dmg,
+      headshot,
       killed: result.killed,
       tick: simTicks,
     });
     dummyViews.flash(d.id);
-    audio.hit(hit.headshot, result.killed);
+    if (amount === undefined) audio.hit(headshot, result.killed);
+    else audio.meleeHit(result.killed);
     hitFeedback.onHit(
       {
         targetId: d.id,
         health: d.health,
         shield: d.shield,
-        damage: damageFor(hit.headshot),
-        headshot: hit.headshot,
+        damage: dmg,
+        headshot,
         killed: result.killed,
       },
       performance.now(),
@@ -524,13 +578,26 @@ function fireShot(shot: ShotResult, ads: boolean): void {
       fx.hitMarker("kill");
       hitstopTicks = HITSTOP_TICKS;
     } else {
-      fx.hitMarker(hit.headshot ? "head" : "body");
+      fx.hitMarker(headshot ? "head" : "body");
     }
   }
+}
 
-  // View kick: the player counters it with the mouse.
-  look.yaw += shot.kickYaw;
-  look.pitch = clampPitch(look.pitch + shot.kickPitch);
+/** Offline: a melee blow landed. */
+function localMelee(): void {
+  const eye: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
+  const dir = viewDirection(look.yaw, look.pitch);
+  const hit = findMeleeTarget(world, aliveHitboxes(dummies), eye, dir);
+  if (hit.targetId >= 0) {
+    onLocalBulletHit(hit.targetId, false, WEAPON.meleeDamage);
+    const d = dummies[hit.targetId];
+    if (d?.alive) {
+      const ax = d.x - player.x;
+      const az = d.z - player.z;
+      const l = Math.hypot(ax, az);
+      if (l > 1e-6) knockDummy(d, ax / l, az / l);
+    }
+  }
 }
 
 const sim = new FixedTimestep(() => {
@@ -548,6 +615,7 @@ const sim = new FixedTimestep(() => {
     ads,
     fire: held.has("Mouse0"),
     reload: pressed.reload,
+    melee: pressed.melee,
   };
   prevPlayer = player;
   if (predictor) {
@@ -566,6 +634,7 @@ const sim = new FixedTimestep(() => {
     // Offline practice: local movement, local weapon, local dummies.
     player = stepPlayer(player, input, world, DT);
     stepDummies(dummies, DT, hitstopTicks > 0);
+    stepLocalBullets();
     if (hitstopTicks > 0) hitstopTicks--;
     const res = stepWeapon(
       weapon,
@@ -580,12 +649,14 @@ const sim = new FixedTimestep(() => {
     );
     weapon = res.state;
     shotSounds(res.shot);
+    if (res.shot.meleeStrike) localMelee();
     if (res.shot.fired) fireShot(res.shot, ads);
   } // else: still connecting, wait for the first snapshot
 
   pressed.jump = false;
   pressed.dash = false;
   pressed.reload = false;
+  pressed.melee = false;
 });
 
 function netHud(): string {
@@ -605,6 +676,10 @@ function netHud(): string {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 let eye = PARAMS.standEye;
 let lastFrame = 0;
+/** Frames per second, averaged over half a second so the number is readable. */
+let fps = 0;
+let fpsFrames = 0;
+let fpsSince = 0;
 
 /** How far the camera banks away from the wall while wall running (radians, about 4 degrees). */
 const WALL_ROLL = 0.07;
@@ -633,6 +708,12 @@ function updateSound(frameDt: number, renderTick: number, cam: THREE.Perspective
 function frame(nowMs: number): void {
   const frameDt = Math.min(0.1, (nowMs - lastFrame) / 1000);
   lastFrame = nowMs;
+  fpsFrames++;
+  if (nowMs - fpsSince >= 500) {
+    fps = (fpsFrames * 1000) / (nowMs - fpsSince);
+    fpsFrames = 0;
+    fpsSince = nowMs;
+  }
   const alpha = sim.advance(nowMs);
   const cam = view.camera;
 
@@ -648,6 +729,11 @@ function frame(nowMs: number): void {
   // Smooth the eye height so slide transitions don't pop.
   const dead = health !== null && !health.alive;
   eye += ((dead ? 0.35 : eyeHeight(player)) - eye) * (1 - Math.exp(-frameDt * 18));
+  if (knockUntil !== 0 && nowMs > knockUntil) {
+    knockUntil = 0;
+    smoother.snapDistance = SNAP_DISTANCE;
+    smoother.smoothTime = SMOOTH_TIME;
+  }
   smoother.update(frameDt);
   cam.position.set(
     lerp(prevPlayer.x, player.x, alpha) + smoother.x,
@@ -673,7 +759,9 @@ function frame(nowMs: number): void {
   // and wall running pose it in ways that would otherwise put legs and torso in the way of the
   // view while you look ahead. A little hysteresis stops it flickering at the edge.
   selfBodyShown = look.pitch < (selfBodyShown ? SELF_BODY_SHOW_PITCH + 0.05 : SELF_BODY_SHOW_PITCH);
-  selfBody.root.visible = selfBodyShown || dead;
+  // Not while dashing, sliding or mantling either: those poses throw the torso about.
+  const posed = player.dashTime > 0 || player.sliding || player.mantling;
+  selfBody.root.visible = (selfBodyShown && !posed) || dead;
 
   // Other players: where they were INTERP_TICKS ago, interpolated between snapshots.
   const renderTick = clock.tickAt(nowMs) - INTERP_TICKS;
@@ -686,6 +774,19 @@ function frame(nowMs: number): void {
       : [],
     frameDt,
     cam.position,
+  );
+  // Other players' bullets start when the screen reaches the moment they were fired, and every
+  // bullet on screen flies on (it ends at a wall or at a person, like the real one).
+  while (clock.ready && pendingShots[0] && pendingShots[0].tick <= renderTick) {
+    const sh = pendingShots.shift() as Shot;
+    fx.fireRemote([sh.x, sh.y, sh.z], [sh.dx, sh.dy, sh.dz]);
+    audio.shotAt({ x: sh.x, y: sh.y, z: sh.z });
+  }
+  if (pendingShots.length > 64) pendingShots.splice(0, pendingShots.length - 64);
+  fx.stepBullets(
+    frameDt,
+    world,
+    netMode === "online" && clock.ready ? remoteHitboxes(renderTick) : aliveHitboxes(dummies),
   );
   updateSound(frameDt, renderTick, cam);
   const activeWeapon = predictor ? predictor.weapon : weapon;
@@ -756,8 +857,8 @@ function frame(nowMs: number): void {
     `jumps ${"●".repeat(player.airJumps)}${"○".repeat(PARAMS.maxAirJumps - player.airJumps)}  dash ${"●".repeat(Math.floor(player.dashCharges))}${"○".repeat(PARAMS.dashCharges - Math.floor(player.dashCharges))}  ` +
     `(${(player.dashCharges % 1).toFixed(2)})\n` +
     `${killLog}\n` +
-    `WASD move · Space jump (hold at green walls to climb; beside any other wall at speed you run along it, jump again to kick off) · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
-    `render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks}\n` +
+    `WASD move · Space jump (hold at green walls to climb; beside any other wall at speed you run along it, jump again to kick off) · V melee · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
+    `${fps.toFixed(0)} fps (${fps > 0 ? (1000 / fps).toFixed(1) : "-"} ms) | render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks}\n` +
     netHud();
   requestAnimationFrame(frame);
 }

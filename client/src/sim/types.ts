@@ -51,4 +51,5 @@ export const emptyInput = (): PlayerInput => ({
   ads: false,
   fire: false,
   reload: false,
+  melee: false,
 });

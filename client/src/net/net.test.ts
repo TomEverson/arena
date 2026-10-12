@@ -118,6 +118,16 @@ describe("CorrectionSmoother", () => {
     s.onCorrection(correction(SNAP_DISTANCE + 5));
     expect(s.x).toBe(0);
   });
+
+  it("can be told to blend a big shove (a melee knockback) more gently instead of snapping", () => {
+    const s = new CorrectionSmoother();
+    s.snapDistance = 6;
+    s.smoothTime = 0.2;
+    s.onCorrection(correction(SNAP_DISTANCE + 1)); // would have snapped by default
+    expect(s.x).toBeCloseTo(SNAP_DISTANCE + 1, 9);
+    for (let i = 0; i < 12; i++) s.update(1 / 60); // 0.2 s: down to about 1/e, slower than the default
+    expect(s.x).toBeGreaterThan((SNAP_DISTANCE + 1) * Math.exp(-0.2 / SMOOTH_TIME));
+  });
 });
 
 describe("EventTracker", () => {
