@@ -49,13 +49,33 @@ export interface Brick {
   readonly strips: readonly THREE.Mesh[];
   /** A shot was fired: the slide kicks back. */
   shoot(): void;
-  /** How far aimed down sights the gun is (0 hip, 1 aimed): lets a gun tidy its view (the sniper hides its scope's far end). */
+  /** How far aimed down sights the gun is (0 hip, 1 aimed): lets a gun clear its sight window (see `sightMask`). */
   aim?(t: number): void;
   /**
    * Per frame. `ammo` is the share of a full magazine left (0..1); `time` is seconds, for the
    * blink. Also settles the slide.
    */
   update(dt: number, ammo: number, time: number): void;
+}
+
+/** How far aimed (0..1) before a gun's sight window clears. */
+export const SIGHT_CLEAR_AT = 0.3;
+
+/**
+ * An invisible pane filling a sight's window. It draws nothing but is drawn first and fills the
+ * depth buffer, so the parts of the gun behind it (rail, slide, barrel) are not drawn there and
+ * the world shows through the sight instead. Only right when looking down the sight: show it
+ * while aimed and hide it otherwise.
+ */
+export function sightMask(w: number, h: number, [x, y, z]: [number, number, number]): THREE.Mesh {
+  const mask = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ colorWrite: false }),
+  );
+  mask.position.set(x, y, z);
+  mask.renderOrder = -1;
+  mask.visible = false;
+  return mask;
 }
 
 function box(
@@ -119,6 +139,8 @@ export function buildBrick(): Brick {
   reticle.position.set(0, BRICK_SIGHT_Y, -0.2);
   reticle.add(new THREE.Mesh(new THREE.CircleGeometry(0.0035, 12), lens)); // a single dot
   root.add(reticle);
+  const mask = sightMask(0.06, 0.05, [0, BRICK_SIGHT_Y, -0.205]);
+  root.add(mask);
 
   // The slide on the rail: kicks back on every shot.
   const slide = new THREE.Group();
@@ -156,6 +178,9 @@ export function buildBrick(): Brick {
     strips: stripMeshes,
     shoot() {
       kick = 1;
+    },
+    aim(t) {
+      mask.visible = t >= SIGHT_CLEAR_AT;
     },
     update(dt, ammo, time) {
       kick = Math.max(0, kick - dt * SLIDE_RECOVER);

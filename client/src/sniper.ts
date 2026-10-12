@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 import { PALETTE } from "./palette";
-import { type Brick, BRICK_MAG_HOME } from "./rifle";
+import { type Brick, BRICK_MAG_HOME, SIGHT_CLEAR_AT, sightMask } from "./rifle";
 
 /**
  * "Needle": the sniper rifle (weapon slot 2). A long, slim rifle built from boxes like the
@@ -71,38 +71,44 @@ export function buildSniper(): Brick {
 
   // The scope: a hollow tube (so you can see through it), on two rings, with a thin reticle at the
   // eyepiece. Four bars make each square section; the window is 0.074 m across.
-  const tube = (
-    z: number,
-    depth: number,
-    outer: number,
-    mat: THREE.Material,
-    parent: THREE.Object3D = root,
-  ) => {
+  const tube = (z: number, depth: number, outer: number, mat: THREE.Material) => {
     const t = 0.008;
     const y = SNIPER_SIGHT_Y;
-    box(parent, mat, [outer, t, depth], [0, y + (outer - t) / 2, z]);
-    box(parent, mat, [outer, t, depth], [0, y - (outer - t) / 2, z]);
-    box(parent, mat, [t, outer - 2 * t, depth], [(outer - t) / 2, y, z]);
-    box(parent, mat, [t, outer - 2 * t, depth], [-(outer - t) / 2, y, z]);
+    box(root, mat, [outer, t, depth], [0, y + (outer - t) / 2, z]);
+    box(root, mat, [outer, t, depth], [0, y - (outer - t) / 2, z]);
+    box(root, mat, [t, outer - 2 * t, depth], [(outer - t) / 2, y, z]);
+    box(root, mat, [t, outer - 2 * t, depth], [-(outer - t) / 2, y, z]);
   };
   // The scope body is four thin corner rods between two thin rings, not a solid tube: looking
   // through it, the view is open and the frame only edges it.
-  // The far end (rods and objective ring) hides when you aim, leaving a clean window at the eye.
-  const scopeFar = new THREE.Group();
-  root.add(scopeFar);
+  // Aimed, the eye sits at the eyepiece and the rest of the gun (rail, mounts, barrel) would fill
+  // the lower half of the window: a mask across the eyepiece keeps the window clear.
+  // The rods run back past the eyepiece, so they hide too when aimed (they would sit in the corners of the view).
+  const rods = new THREE.Group();
+  root.add(rods);
   for (const sx of [-1, 1]) {
     for (const sy of [-1, 1]) {
-      box(scopeFar, ink, [0.01, 0.01, 0.32], [sx * 0.04, SNIPER_SIGHT_Y + sy * 0.04, -0.34]);
+      box(rods, ink, [0.01, 0.01, 0.32], [sx * 0.04, SNIPER_SIGHT_Y + sy * 0.04, -0.34]);
     }
   }
-  tube(-0.5, 0.02, 0.11, body, scopeFar); // objective ring
+  tube(-0.5, 0.02, 0.11, body); // objective ring
   tube(-0.22, 0.02, 0.1, body); // eyepiece ring
   box(root, ink, [0.02, 0.05, 0.04], [0, 0.085, -0.26]); // rings
   box(root, ink, [0.02, 0.05, 0.04], [0, 0.085, -0.42]);
   // The reticle: thin crosshair bars across the window and a SIGNAL dot, near the eye end.
-  box(root, ink, [0.074, 0.0016, 0.002], [0, SNIPER_SIGHT_Y, -0.2]);
-  box(root, ink, [0.0016, 0.074, 0.002], [0, SNIPER_SIGHT_Y, -0.2]);
-  box(root, glass, [0.004, 0.004, 0.003], [0, SNIPER_SIGHT_Y, -0.2005]);
+  // Four hairlines that stop short of the middle and a small SIGNAL dot, unlit so they stay crisp:
+  // the target is never hidden behind the reticle.
+  const hair = new THREE.MeshBasicMaterial({ color: PALETTE.INK });
+  const dot = new THREE.MeshBasicMaterial({ color: PALETTE.SIGNAL });
+  const [reach, gap, thick] = [0.042, 0.004, 0.0006];
+  for (const side of [-1, 1]) {
+    const mid = (side * (reach + gap)) / 2;
+    box(root, hair, [reach - gap, thick, 0.001], [mid, SNIPER_SIGHT_Y, -0.2]);
+    box(root, hair, [thick, reach - gap, 0.001], [0, SNIPER_SIGHT_Y + mid, -0.2]);
+  }
+  box(root, dot, [0.001, 0.001, 0.001], [0, SNIPER_SIGHT_Y, -0.2]);
+  const mask = sightMask(0.084, 0.084, [0, SNIPER_SIGHT_Y, -0.209]);
+  root.add(mask);
 
   // The bolt: a handle on the right side that kicks back and forward after every shot.
   const bolt = new THREE.Group();
@@ -140,7 +146,8 @@ export function buildSniper(): Brick {
       cycle = 1;
     },
     aim(t) {
-      scopeFar.visible = t < 0.3;
+      mask.visible = t >= SIGHT_CLEAR_AT;
+      rods.visible = !mask.visible;
     },
     update(dt, ammo, time) {
       cycle = Math.max(0, cycle - dt / BOLT_SECONDS);
