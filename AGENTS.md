@@ -16,7 +16,8 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
 ## Hard rules
 1. **No allocations in the server tick loop** (`World.Step` and everything it calls). `TestStepDoesNotAllocate` must stay green.
 2. **The movement function lives only in the designated files** (`server/internal/game/movement.go`,
-   `client/src/sim/movement.ts`). Do not duplicate movement math elsewhere. (`client/src/flycam.ts` is a debug camera, not player movement.)
+   `client/src/sim/` : movement.ts, collision.ts, params.ts, types.ts, level.ts). Do not duplicate movement math elsewhere.
+   Combat math (fire rate, spread, recoil, damage, hitscan) likewise lives only in `client/src/sim/weapon.ts` and `hitscan.ts` (Go twin: `server/internal/game/weapon*.go`, M5). Keep both pure and deterministic: no `Math.random`, seeded RNG only.
 3. **Never hand-edit generated code.** Change the generator/source (future: `protocol/`) and regenerate.
 4. **Any change to movement must update `testvectors/`** in the same commit, and both Go and TS tests must pass.
 5. **Every entity carries a `teamId`** from the start. Teams of 1 today; design for teams of 4-6. Never assume team == player.

@@ -1,22 +1,132 @@
 {
   "name": "example",
   "version": 1,
-  "bounds": { "min": [-50, -5, -50], "max": [50, 30, 50] },
+  "bounds": {
+    "min": [
+      -50,
+      -5,
+      -50
+    ],
+    "max": [
+      50,
+      30,
+      50
+    ]
+  },
   "boxes": [
-    { "id": "floor", "pos": [0, -0.5, 0], "size": [100, 1, 100] },
-    { "id": "crate-a", "pos": [-6, 1.5, -8], "size": [3, 3, 3] },
-    { "id": "wall-north", "pos": [0, 2, -30], "size": [40, 4, 1] }
+    {
+      "id": "floor",
+      "pos": [
+        0,
+        -0.5,
+        0
+      ],
+      "size": [
+        100,
+        1,
+        100
+      ]
+    },
+    {
+      "id": "crate-a",
+      "pos": [
+        -6,
+        1.5,
+        -8
+      ],
+      "size": [
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "id": "wall-north",
+      "pos": [
+        0,
+        2,
+        -30
+      ],
+      "size": [
+        40,
+        4,
+        1
+      ]
+    }
   ],
   "ramps": [
-    { "id": "ramp-1", "pos": [12, 0, 0], "size": [6, 3, 10], "rotationY": 0, "slopeAxis": "z" }
+    {
+      "id": "ramp-1",
+      "pos": [
+        12,
+        1.5,
+        0
+      ],
+      "size": [
+        6,
+        3,
+        10
+      ],
+      "rises": "+z"
+    }
   ],
   "controlPoints": [
-    { "id": "cp-center", "pos": [0, 0, 0], "radius": 6 },
-    { "id": "cp-east", "pos": [30, 0, 0], "radius": 5 },
-    { "id": "cp-west", "pos": [-30, 0, 0], "radius": 5 }
+    {
+      "id": "cp-center",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "radius": 6
+    },
+    {
+      "id": "cp-east",
+      "pos": [
+        30,
+        0,
+        0
+      ],
+      "radius": 5
+    },
+    {
+      "id": "cp-west",
+      "pos": [
+        -30,
+        0,
+        0
+      ],
+      "radius": 5
+    }
   ],
   "spawnZones": [
-    { "id": "spawn-a", "teamSlot": 0, "pos": [-40, 0, 20], "size": [8, 1, 8] },
-    { "id": "spawn-b", "teamSlot": 1, "pos": [40, 0, -20], "size": [8, 1, 8] }
+    {
+      "id": "spawn-a",
+      "teamSlot": 0,
+      "pos": [
+        -40,
+        0,
+        20
+      ],
+      "size": [
+        8,
+        1,
+        8
+      ]
+    },
+    {
+      "id": "spawn-b",
+      "teamSlot": 1,
+      "pos": [
+        40,
+        0,
+        -20
+      ],
+      "size": [
+        8,
+        1,
+        8
+      ]
+    }
   ]
 }

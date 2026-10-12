@@ -1,8 +1,20 @@
 import * as THREE from "three";
 
-/** Internal render resolution (16:9). Upscaled with nearest-neighbor to the window. */
-export const RENDER_WIDTH = 427;
-export const RENDER_HEIGHT = 240;
+/**
+ * Internal render height in pixels (16:9), upscaled with nearest-neighbor to the window.
+ * Lower = chunkier. Try ?res=240 (very chunky), 360, 480, 540, 720 (default, barely pixelated).
+ */
+const DEFAULT_RENDER_HEIGHT = 720;
+
+function requestedHeight(): number {
+  const raw =
+    typeof location === "undefined" ? null : new URLSearchParams(location.search).get("res");
+  const n = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? Math.min(1080, Math.max(120, n)) : DEFAULT_RENDER_HEIGHT;
+}
+
+export const RENDER_HEIGHT = requestedHeight();
+export const RENDER_WIDTH = Math.round((RENDER_HEIGHT * 16) / 9);
 
 /**
  * Renders the scene into a small render target, then blits it to the canvas

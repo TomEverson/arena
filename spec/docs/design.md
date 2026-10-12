@@ -31,6 +31,9 @@ FFA is teams of one: every player's `teamId` is unique. This keeps the data mode
 ### Weapons
 - **One weapon for everyone: an assault rifle.** Hitscan, ADS, hipfire spread, a fixed per-gun recoil pattern players can learn.
 - Target time-to-kill: about 1.5-2 seconds on a full 150 total health.
+- First numbers (M2): 600 rpm, 9 damage (x1.5 head), 30-round magazine, 1.8 s reload; full tuning in `client/src/sim/params.ts` (`WEAPON`).
+- ADS: zoomed (0.7x FOV), 0.65x ground speed, tight spread. Hipfire spread grows with movement, air time and sustained fire.
+- Recoil: a fixed 30-entry pattern kicks the player's view; the player counters it with the mouse.
 - Server-side hit detection with lag compensation.
 - Deferred: secondary weapon, power-weapon pickup, any loadout choice.
 

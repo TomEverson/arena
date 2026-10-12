@@ -21,8 +21,8 @@ In dev, Vite serves the client on :5173 and proxies `/ws` and `/healthz` to the 
 ## Client
 - `FixedTimestep` (`client/src/loop.ts`) simulates at 60 Hz in an accumulator; rendering runs per
   animation frame with an interpolation alpha between the previous and current sim state.
-- `RetroRenderer` draws to a 427x240 render target (nearest filter) and blits it letterboxed.
-- Fly camera (`flycam.ts`) is a debug tool, not player movement.
+- `RetroRenderer` draws to a low-res 16:9 render target (default 1280x720, set with `?res=<height>`; nearest filter) and blits it letterboxed.
+- Player controller (`main.ts`) feeds one input per tick into `stepPlayer` (`client/src/sim/`) and interpolates the camera.
 
 ## Prediction (planned)
 Client predicts movement with the same function as the server (`sim/movement.ts` / `game/movement.go`),
