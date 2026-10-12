@@ -263,8 +263,8 @@ function showServerHit(e: GameEvent): void {
   );
 }
 
-/** How far above the top of a head the health bar sits (metres). 0 puts it right on the head. */
-const HEAD_GAP = 0;
+/** How far above the top of a head the health bar sits (metres), a little clear of it. */
+const HEAD_GAP = 0.15;
 
 /** Where a target's head is on screen right now (for the marker that follows them), or null. */
 function headAnchor(id: number): { x: number; y: number } | null {
@@ -574,6 +574,7 @@ function frame(nowMs: number): void {
         })
       : [],
     frameDt,
+    cam.position,
   );
   const activeWeapon = predictor ? predictor.weapon : weapon;
   const spread = spreadDegrees(activeWeapon.burst, adsHeld, {
