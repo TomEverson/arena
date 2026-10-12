@@ -635,7 +635,14 @@ function frame(nowMs: number): void {
     crouching: player.crouching,
     sliding: player.sliding,
   });
-  const shake = fx.update(frameDt, adsT, spread, fov, activeWeapon.reloadT);
+  const shake = fx.update(
+    frameDt,
+    adsT,
+    spread,
+    fov,
+    activeWeapon.reloadT,
+    activeWeapon.ammo / WEAPON.magSize,
+  );
   // Wall run: bank the camera away from the wall (positive roll tilts the head left).
   const wallOnRight =
     -player.wallNormalX * Math.cos(look.yaw) + player.wallNormalZ * Math.sin(look.yaw);

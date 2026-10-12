@@ -103,6 +103,15 @@ Built from boxes and low-poly (8-sided) cylinders and spheres, animated in code 
 - **Animations:** idle breathing and arm sway; walk cycle tied to distance moved (faces the walking direction); standing characters turn to face the player; hit flinch; fall backward on death; grow up from the floor on respawn.
 - **Character viewer:** with the dev server running, open `http://localhost:5173/figure.html` (add `?res=240` for the retro look). 1 idle, 2 walk, 3 run, Space jump, C slide, H hit, K kill, B show hitbox (switches to the 1.0 m slide box while sliding), O orbit, arrows rotate and zoom. Dev only, not part of the game build.
 
+## The rifle: Brick
+
+`client/src/rifle.ts`. One model for both views (first-person viewmodel in `fx.ts`, third-person body in `character.ts`), built from boxes. Inspired by the R-99's silhouette: a compact, fat SMG body, magazine just ahead of the grip, a big angular shroud with vent slots, a small optic on a top rail.
+
+- **Colors:** GRAPHITE body, CONCRETE shroud, rail and side plates, INK details. One SIGNAL accent: the **ammo strip**, a light on each side of the receiver that shrinks as the magazine empties and turns HAZARD and blinks at 25% or less. HAZARD is otherwise only the muzzle flash.
+- **Moving parts:** a slide on the top rail kicks back on each shot; the magazine is its own group, pulled out and slotted back in during the reload (`reloadAnim.ts`).
+- **Preview:** `/figure.html`, model "Brick (rifle)": idle, fire loop, reload loop, strip drain, low-ammo blink.
+- **To tune:** the numbers in `buildBrick` (sizes and positions), `LOW_AMMO` and `SLIDE_KICK`.
+
 ## First-person arms
 
 `client/src/hands.ts`: two box arms attached to the gun (INK gloves, CONCRETE sleeves, HAZE cuffs), so they follow aiming, recoil and future viewmodel animations. Each arm is set by a hand position plus two angles (`pitch` tips the elbow down, `yaw` swings it sideways) and a forearm length; tweak those numbers to change the pose.

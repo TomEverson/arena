@@ -2,8 +2,10 @@ import * as THREE from "three";
 
 import { type BodyState, CharacterBody } from "./character";
 import { PALETTE } from "./palette";
+import { type ReloadPose, reloadPose } from "./reloadAnim";
 import { FX_MODES, type FxMode, RetroRenderer } from "./render";
-import { COMBAT, PARAMS as P } from "./sim/params";
+import { BRICK_MAG_HOME, BRICK_MUZZLE, buildBrick } from "./rifle";
+import { COMBAT, PARAMS as P, WEAPON } from "./sim/params";
 
 /**
  * Dev-only character viewer and animation test stage (open /figure.html while `pnpm dev`
@@ -25,12 +27,13 @@ const fireCheck = document.getElementById("fire") as HTMLInputElement;
 const panel = document.getElementById("panel") as HTMLDivElement;
 
 /**
- * The models you can preview. Add a row (and a builder) here when there is another one; the
- * selector in the panel lists whatever is in this table.
+ * The models you can preview: characters (walk, jump, aim...) and weapons (fire, reload...).
+ * Add a row when there is another one; the selector in the panel lists whatever is in this table.
  */
-const MODELS: { id: string; name: string; build: (scene: THREE.Scene) => CharacterBody }[] = [
-  { id: "dummy", name: "Dummy", build: (sc) => new CharacterBody(sc) },
-];
+const MODELS = [
+  { id: "dummy", name: "Dummy", kind: "character" },
+  { id: "brick", name: "Brick (rifle)", kind: "weapon" },
+] as const;
 
 const scene = new THREE.Scene();
 scene.background = PALETTE.HAZE;
@@ -61,8 +64,22 @@ wall.visible = false;
 wallStripe.visible = false;
 scene.add(wall, wallStripe);
 
-let model = MODELS[0] as (typeof MODELS)[number];
-let body = model.build(scene);
+let model: (typeof MODELS)[number] = MODELS[0];
+const body = new CharacterBody(scene);
+
+// The weapon preview: the rifle floating at about chest height, muzzle to the right.
+const brick = buildBrick();
+brick.root.position.set(0, 1.0, 0);
+brick.root.rotation.y = -Math.PI / 2;
+brick.root.visible = false;
+const brickFlash = new THREE.Mesh(
+  new THREE.BoxGeometry(0.09, 0.09, 0.05),
+  new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
+);
+brickFlash.position.copy(BRICK_MUZZLE);
+brickFlash.visible = false;
+brick.root.add(brickFlash);
+scene.add(brick.root);
 const view = new RetroRenderer(canvas, scene);
 window.addEventListener("resize", () => view.resize());
 
@@ -106,15 +123,29 @@ const ANIMATIONS = [
   ["hit", "Hit (flinch)"],
   ["die", "Die"],
 ] as const;
-type AnimId = (typeof ANIMATIONS)[number][0];
+const WEAPON_ANIMATIONS = [
+  ["w-idle", "Idle (full)"],
+  ["w-fire", "Fire (loop)"],
+  ["w-reload", "Reload (loop)"],
+  ["w-drain", "Ammo strip (drain)"],
+  ["w-low", "Low ammo (blink)"],
+] as const;
+type WeaponAnimId = (typeof WEAPON_ANIMATIONS)[number][0];
+type AnimId = (typeof ANIMATIONS)[number][0] | (typeof WEAPON_ANIMATIONS)[number][0];
 /** One-shot animations repeat on their own while selected, so there is always something to see. */
 const REPEATING = new Set<AnimId>(["jump", "doublejump", "dash", "hit"]);
 const REPEAT_SECONDS = 1.8;
 const FIRE_SECONDS = 60 / 600; // the rifle's 600 rpm
 
 for (const m of MODELS) modelSelect.add(new Option(m.name, m.id));
-for (const [id, name] of ANIMATIONS) animSelect.add(new Option(name, id));
-animSelect.value = "walk";
+/** Fill the animation list for the current kind of model. */
+function fillAnimations(): void {
+  animSelect.length = 0;
+  const list = model.kind === "weapon" ? WEAPON_ANIMATIONS : ANIMATIONS;
+  for (const [id, name] of list) animSelect.add(new Option(name, id));
+  animSelect.value = model.kind === "weapon" ? "w-fire" : "walk";
+}
+fillAnimations();
 for (const m of FX_MODES) fxSelect.add(new Option(m.name, m.id));
 fxSelect.value = view.effect;
 
@@ -148,6 +179,12 @@ let deadT = 0;
 let dashT = 0;
 let airJumpAt = -1; // seconds until the double jump's second kick (-1 = none planned)
 let repeatT = 0;
+let weaponT = 0;
+let flashLeft = 0;
+let ammo = 1;
+let weaponAnim: WeaponAnimId = "w-fire";
+const weaponPose: ReloadPose = { roll: 0, pitch: 0, drop: 0, mag: 0, hand: 0 };
+const RELOAD_LOOP = WEAPON.reloadTime + 0.8;
 let fireT = 0;
 
 // Camera: drag to turn it around the character, scroll or arrows to zoom.
@@ -189,6 +226,12 @@ function slide(): void {
 /** Start an animation (also the "Play again" button and the repeat timer). */
 function play(id: AnimId): void {
   animSelect.value = id;
+  if (id.startsWith("w-")) {
+    weaponAnim = id as WeaponAnimId;
+    weaponT = 0;
+    ammo = id === "w-low" ? 0.2 : 1;
+    return;
+  }
   repeatT = 0;
   resetStance();
   if (gait === "crouch") gait = "run"; // a crouch walk does not carry over to the next animation
@@ -241,19 +284,28 @@ replayButton.addEventListener("click", () => {
 modelSelect.addEventListener("change", () => {
   const next = MODELS.find((m) => m.id === modelSelect.value);
   if (!next) return;
-  scene.remove(body.root);
   model = next;
-  body = model.build(scene);
+  state.x = 0;
+  resetStance();
+  distance = model.kind === "weapon" ? 1.5 : 4; // a rifle is small: come closer
+  body.root.visible = model.kind === "character";
+  brick.root.visible = model.kind === "weapon";
+  fillAnimations();
+  play(animSelect.value as AnimId);
   modelSelect.blur();
 });
 fxSelect.addEventListener("change", () => {
   view.setEffect(fxSelect.value as FxMode);
   fxSelect.blur();
 });
-hitboxCheck.addEventListener("change", () => (hitbox.visible = hitboxCheck.checked));
 
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
+  if (model.kind === "character") characterKeys(e);
+  generalKeys(e);
+});
+
+function characterKeys(e: KeyboardEvent): void {
   if (e.code === "Digit1") play("idle");
   if (e.code === "Digit2") play("walk");
   if (e.code === "Digit3") play("run");
@@ -270,12 +322,15 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyE") play("shoot");
   if (e.code === "KeyH") play("hit");
   if (e.code === "KeyK") play("die");
-  if (e.code === "KeyB") hitbox.visible = hitboxCheck.checked = !hitbox.visible;
+}
+
+function generalKeys(e: KeyboardEvent): void {
+  if (e.code === "KeyB") hitboxCheck.checked = !hitboxCheck.checked;
   if (e.code === "ArrowLeft") angle -= 0.3;
   if (e.code === "ArrowRight") angle += 0.3;
   if (e.code === "ArrowUp") distance = Math.max(1.5, distance - 0.5);
   if (e.code === "ArrowDown") distance = Math.min(12, distance + 0.5);
-});
+}
 
 // Drag to turn the camera (not when the drag starts on the panel), wheel to zoom.
 let dragging = false;
@@ -302,6 +357,34 @@ canvas.addEventListener(
   },
   { passive: false },
 );
+
+/** The weapon preview: fire, reload and ammo strip loops. */
+function stepWeapon(dt: number): void {
+  weaponT += dt;
+  brickFlash.visible = false;
+  brick.mag.position.y = BRICK_MAG_HOME.y;
+  if (weaponAnim === "w-fire") {
+    ammo = Math.max(0, ammo);
+    if (weaponT >= FIRE_SECONDS) {
+      weaponT -= FIRE_SECONDS;
+      brick.shoot();
+      ammo -= 1 / WEAPON.magSize;
+      if (ammo <= 0.001) ammo = 1; // refill, so it keeps firing
+      flashLeft = 0.04;
+    }
+  } else if (weaponAnim === "w-reload") {
+    const t = weaponT % RELOAD_LOOP;
+    const progress = Math.min(1, t / WEAPON.reloadTime);
+    const r = reloadPose(progress, weaponPose);
+    brick.mag.position.y = BRICK_MAG_HOME.y + r.mag;
+    ammo = progress < 0.74 ? 0 : 1; // the strip refills when the new magazine seats
+  } else if (weaponAnim === "w-drain") {
+    ammo = 1 - (weaponT % 4) / 4;
+  }
+  flashLeft = Math.max(0, flashLeft - dt);
+  brickFlash.visible = flashLeft > 0;
+  brick.update(dt, ammo, performance.now() / 1000);
+}
 
 function stepFakePlayer(dt: number): void {
   if (!state.alive) {
@@ -361,11 +444,12 @@ let last = performance.now();
 function frame(now: number): void {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  stepFakePlayer(dt);
+  if (model.kind === "weapon") stepWeapon(dt);
+  else stepFakePlayer(dt);
 
   const cam = view.camera;
   // Aim at the middle of the body, which is higher during the wall run and the jumps.
-  focusY = 0.9 + state.y * 0.8;
+  focusY = model.kind === "weapon" ? 1.0 : 0.9 + state.y * 0.8;
   cam.position.set(
     state.x + Math.sin(angle) * Math.cos(elevation) * distance,
     focusY + Math.sin(elevation) * distance,
@@ -373,6 +457,7 @@ function frame(now: number): void {
   );
   cam.lookAt(state.x, focusY, 0);
   hitbox.position.set(state.x, state.y, state.z);
+  hitbox.visible = hitboxCheck.checked && model.kind === "character";
   const low = state.sliding;
   const crouched = state.crouching === true && !low;
   for (const l of standBox) l.visible = !low && !crouched;
@@ -383,7 +468,7 @@ function frame(now: number): void {
   // A standing character faces +Z (toward the starting camera) instead of following the camera,
   // so you can walk round it and see it from the side.
   facing.set(state.x, 1, 50);
-  body.update(state, dt, facing);
+  if (model.kind === "character") body.update(state, dt, facing);
   view.render();
 
   const doing = !state.alive
@@ -401,6 +486,14 @@ function frame(now: number): void {
             : state.crouching
               ? "crouch"
               : gait;
+  if (model.kind === "weapon") {
+    help.textContent =
+      `${model.name}: ammo ${Math.round(ammo * WEAPON.magSize)} / ${WEAPON.magSize}\n` +
+      "pick Fire, Reload or the ammo strip in the panel\n" +
+      "drag turn camera · scroll/arrows zoom · ?res=240 retro look";
+    requestAnimationFrame(frame);
+    return;
+  }
   help.textContent =
     `${model.name}: ${doing}${aimCheck.checked ? " + aim" : ""}${fireCheck.checked ? " + fire" : ""}  ${speed.toFixed(1)} m/s\n` +
     "1 idle · 2 walk · 3 run · Space jump · D double jump · C crouch · S slide · F dash · W wall run · A aim · E shoot · H hit · K kill\n" +

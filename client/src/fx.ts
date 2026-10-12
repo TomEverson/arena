@@ -3,18 +3,22 @@ import * as THREE from "three";
 import { buildHands } from "./hands";
 import { PALETTE } from "./palette";
 import { type ReloadPose, reloadPose } from "./reloadAnim";
+import { type Brick, BRICK_MAG_HOME, BRICK_MUZZLE, BRICK_SIGHT_Y, buildBrick } from "./rifle";
 import { WEAPON } from "./sim/params";
 
 /** Visual and audio-free feedback for shooting: crosshair, hit markers, shake, viewmodel, tracers. */
 
 const HIP = new THREE.Vector3(0.2, -0.2, -0.45);
-const ADS = new THREE.Vector3(0, -0.145, -0.36);
-const MUZZLE_LOCAL = new THREE.Vector3(0, 0.0, -0.58);
+/** Aiming down sights: the optic's reticle sits exactly at the middle of the screen. */
+const ADS = new THREE.Vector3(0, -BRICK_SIGHT_Y, -0.36);
+const MUZZLE_LOCAL = BRICK_MUZZLE;
 const TRACER_SECONDS = 0.07;
 const IMPACT_SECONDS = 0.12;
 const POOL = 8;
 /** Where the left hand grips the magazine during a reload (gun space). */
 const MAG_GRIP = new THREE.Vector3(-0.01, -0.17, -0.28);
+/** Seconds, for the ammo strip's low-ammo blink. */
+const clockSeconds = () => performance.now() / 1000;
 
 export type HitKind = "body" | "head" | "kill";
 
@@ -23,7 +27,7 @@ export class Fx {
   private readonly marker = document.getElementById("hitmarker") as HTMLDivElement;
   private readonly gun = new THREE.Group();
   private readonly flashMesh: THREE.Mesh;
-  private readonly mag: THREE.Mesh;
+  private readonly brick: Brick;
   private readonly leftHand: THREE.Group;
   private readonly leftHandHome = new THREE.Vector3();
   private readonly reload: ReloadPose = { roll: 0, pitch: 0, drop: 0, mag: 0, hand: 0 };
@@ -37,28 +41,9 @@ export class Fx {
     scene: THREE.Scene,
     private readonly camera: THREE.PerspectiveCamera,
   ) {
-    // Placeholder rifle: a few boxes, parented to the camera.
-    const dark = new THREE.MeshLambertMaterial({ color: PALETTE.GRAPHITE });
-    const light = new THREE.MeshLambertMaterial({ color: PALETTE.CONCRETE });
-    const part = (
-      w: number,
-      h: number,
-      d: number,
-      x: number,
-      y: number,
-      z: number,
-      m: THREE.Material,
-    ) => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
-      mesh.position.set(x, y, z);
-      this.gun.add(mesh);
-      return mesh;
-    };
-    part(0.07, 0.09, 0.4, 0, 0, -0.3, dark); // receiver
-    part(0.035, 0.035, 0.24, 0, 0.012, -0.55, light); // barrel
-    this.mag = part(0.05, 0.12, 0.06, 0, -0.1, -0.28, dark); // magazine
-    part(0.06, 0.1, 0.07, 0, -0.08, -0.1, dark); // grip
-    part(0.015, 0.03, 0.03, 0, 0.06, -0.4, light); // sight
+    // The rifle (rifle.ts), parented to the camera.
+    this.brick = buildBrick();
+    this.gun.add(this.brick.root);
     this.flashMesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.09, 0.09, 0.05),
       new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
@@ -95,6 +80,7 @@ export class Fx {
   /** A bullet was fired and travelled to `hit` (world space). */
   shot(hit: THREE.Vector3, hitWorld: boolean, ads: boolean): void {
     this.flashLife = 0.04;
+    this.brick.shoot();
     this.kickBack = ads ? 0.015 : 0.035;
     this.shake = Math.min(1, this.shake + (ads ? 0.15 : 0.3));
 
@@ -128,7 +114,8 @@ export class Fx {
 
   /**
    * Per-frame: animate viewmodel, effects and crosshair. Returns a camera shake offset (radians).
-   * `reloadT` is the weapon's remaining reload time in seconds (0 when not reloading).
+   * `reloadT` is the weapon's remaining reload time in seconds (0 when not reloading);
+   * `ammoFraction` is the share of a full magazine left, for the rifle's ammo strip.
    */
   update(
     frameDt: number,
@@ -136,6 +123,7 @@ export class Fx {
     spreadDeg: number,
     fovDeg: number,
     reloadT: number,
+    ammoFraction = 1,
   ): { yaw: number; pitch: number } {
     this.gun.position.lerpVectors(HIP, ADS, adsT);
     this.kickBack = Math.max(0, this.kickBack - frameDt * 0.5);
@@ -145,9 +133,10 @@ export class Fx {
     const r = reloadPose(reloadT > 0 ? 1 - reloadT / WEAPON.reloadTime : 0, this.reload);
     this.gun.rotation.set(r.pitch, 0, r.roll);
     this.gun.position.y += r.drop;
-    this.mag.position.y = -0.1 + r.mag;
+    this.brick.mag.position.y = BRICK_MAG_HOME.y + r.mag;
     this.leftHand.position.copy(this.leftHandHome).lerp(MAG_GRIP, r.hand);
     this.leftHand.position.y += r.mag * r.hand;
+    this.brick.update(frameDt, ammoFraction, clockSeconds());
     this.flashLife = Math.max(0, this.flashLife - frameDt);
     this.flashMesh.visible = this.flashLife > 0;
 
@@ -165,7 +154,8 @@ export class Fx {
       (Math.tan((spreadDeg * Math.PI) / 180) / Math.tan((fovDeg * Math.PI) / 360)) *
       (window.innerHeight / 2);
     this.crosshair.style.setProperty("--gap", `${Math.max(2, px).toFixed(1)}px`);
-    this.crosshair.style.opacity = String(1 - 0.85 * adsT);
+    // Aiming down sights, the optic's reticle is the crosshair: the HUD one is gone.
+    this.crosshair.style.opacity = String(adsT > 0.2 ? 0 : 1 - adsT * 5);
 
     this.shake = Math.max(0, this.shake - frameDt * 6);
     const a = this.shake * this.shake * 0.012;

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import { PALETTE } from "./palette";
+import { type Brick, buildBrick } from "./rifle";
 
 /**
  * Third-person character body: chunky armored humanoid built from boxes and low-poly
@@ -186,6 +187,7 @@ export class CharacterBody {
   private prevRawVy = 0;
   private readonly gun = new THREE.Group();
   private readonly muzzleFlash: THREE.Mesh;
+  private readonly brick: Brick;
   private airTime = 0;
   private land = 0;
   private readonly ground = zeroPose();
@@ -259,15 +261,16 @@ export class CharacterBody {
     // The rifle: slung at the hip while walking, up at the shoulder when aiming.
     const gun = this.gun;
     upper.add(gun);
-    part(gun, ink, box(0.07, 0.12, 0.46), [0, 0, 0.1]); // receiver
-    part(gun, metal, tube(0.022, 0.022, 0.34), [0, 0.02, 0.5], [Math.PI / 2, 0, 0]); // barrel
-    part(gun, suit, box(0.06, 0.1, 0.2), [0, -0.02, -0.2]); // stock
-    part(gun, ink, box(0.05, 0.16, 0.07), [0, -0.12, 0.08], [0.2, 0, 0]); // magazine
+    // The Brick (rifle.ts) is built facing -Z; turn it to face +Z with the grip at the origin.
+    this.brick = buildBrick();
+    this.brick.root.rotation.y = Math.PI;
+    this.brick.root.position.z = -0.1;
+    gun.add(this.brick.root);
     this.muzzleFlash = part(
       gun,
       new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
       box(0.12, 0.12, 0.14),
-      [0, 0.02, 0.76],
+      [0, 0.012, 0.76],
     );
     this.muzzleFlash.visible = false;
 
@@ -277,6 +280,7 @@ export class CharacterBody {
   /** Fired a shot: recoil and a muzzle flash for a moment (raises the rifle too). */
   shoot(): void {
     this.shootT = 1;
+    this.brick.shoot();
   }
 
   /** Got shot: flash BONE and flinch. */
@@ -404,6 +408,7 @@ export class CharacterBody {
     );
     g.rotation.set(lerp(1.0, 0, this.aimW) - 0.05 * this.shootT, 0, 0);
     this.muzzleFlash.visible = this.shootT > 0.55;
+    this.brick.update(dt, 1, this.time);
 
     // Landing squash: dip and lean forward for a moment.
     p.upperY -= 0.08 * this.land;
