@@ -1,0 +1,116 @@
+{
+  "structs": {
+    "Input": {
+      "doc": "One client command for one tick. jump and dash are \"pressed this tick\" edges; the rest are held states.",
+      "fields": {
+        "seq": { "type": "u32", "doc": "Sequence number, 1-based, one per client sim tick." },
+        "moveX": { "type": "f64", "doc": "Strafe, -1 (left) to +1 (right)." },
+        "moveZ": { "type": "f64", "doc": "Forward, -1 (back) to +1 (forward)." },
+        "yaw": { "type": "f64", "doc": "Look direction in radians. Yaw 0 faces -Z; positive yaw turns left." },
+        "pitch": { "type": "f64", "doc": "Look pitch in radians; positive looks up. Not used by movement." },
+        "jump": "bool",
+        "jumpHeld": { "type": "bool", "doc": "Jump button held (climbing)." },
+        "dash": "bool",
+        "slide": { "type": "bool", "doc": "Crouch/slide key held." },
+        "ads": { "type": "bool", "doc": "Aiming down sights (held): slows ground movement." }
+      }
+    },
+    "PlayerState": {
+      "doc": "Complete movement state. (x, y, z) is the centre of the player's feet. Metres and seconds, Y up.",
+      "fields": {
+        "x": "f64",
+        "y": "f64",
+        "z": "f64",
+        "vx": "f64",
+        "vy": "f64",
+        "vz": "f64",
+        "onGround": "bool",
+        "climbing": "bool",
+        "crouching": { "type": "bool", "doc": "Crouched (hold the slide key without enough speed to slide)." },
+        "sliding": "bool",
+        "slideTime": "f64",
+        "slideCooldown": "f64",
+        "dashCharges": { "type": "f64", "doc": "Fractional: regenerates continuously up to the maximum." },
+        "dashTime": { "type": "f64", "doc": "Seconds of dash remaining; 0 when not dashing." },
+        "dashDirX": "f64",
+        "dashDirZ": "f64",
+        "airJumps": { "type": "u8", "doc": "Air jumps left; refilled whenever grounded." },
+        "coyote": "f64",
+        "jumpBuffer": "f64",
+        "mantling": "bool",
+        "mantleT": "f64",
+        "mantleFromX": "f64",
+        "mantleFromY": "f64",
+        "mantleFromZ": "f64",
+        "mantleToX": "f64",
+        "mantleToY": "f64",
+        "mantleToZ": "f64"
+      }
+    },
+    "Entity": {
+      "doc": "What other players need to draw and interpolate someone. Every entity carries a teamId.",
+      "fields": {
+        "id": "u32",
+        "teamId": "u16",
+        "x": "f64",
+        "y": "f64",
+        "z": "f64",
+        "yaw": "f64",
+        "pitch": "f64",
+        "flags": { "type": "u8", "doc": "Bit set of EntityFlags." }
+      }
+    }
+  },
+  "flags": {
+    "EntityFlags": {
+      "crouching": 1,
+      "sliding": 2,
+      "climbing": 4,
+      "dashing": 8,
+      "onGround": 16,
+      "mantling": 32
+    }
+  },
+  "client": {
+    "input": {
+      "doc": "The latest few inputs, oldest first. Resent redundantly so a lost message does not lose inputs; the server skips sequence numbers it already has.",
+      "fields": { "inputs": "[Input]" }
+    },
+    "ping": {
+      "doc": "Round-trip and clock probe.",
+      "fields": { "t": { "type": "f64", "doc": "Client time in ms, echoed back in pong." } }
+    },
+    "respawn": {
+      "doc": "Ask the server to put this player back at a spawn point.",
+      "fields": {}
+    }
+  },
+  "server": {
+    "welcome": {
+      "doc": "Sent once on connect.",
+      "fields": {
+        "playerId": "u32",
+        "tickRate": "u16",
+        "snapshotRate": "u16",
+        "level": { "type": "string", "doc": "Level the server runs, for example greybox." }
+      }
+    },
+    "snapshot": {
+      "doc": "The world as this player may see it, 30 times a second.",
+      "fields": {
+        "tick": { "type": "u32", "doc": "Server tick this snapshot describes." },
+        "ackSeq": { "type": "u32", "doc": "Last input sequence the server has simulated for you. `you` is your state right after it." },
+        "queued": { "type": "u8", "doc": "Inputs of yours still waiting on the server (a measure of how far ahead you are)." },
+        "you": "PlayerState",
+        "entities": { "type": "[Entity]", "doc": "Everyone else you can see (see entitiesFor)." }
+      }
+    },
+    "pong": {
+      "doc": "Reply to ping.",
+      "fields": {
+        "t": { "type": "f64", "doc": "The client time from the ping." },
+        "tick": { "type": "u32", "doc": "Server tick when the ping was handled." }
+      }
+    }
+  }
+}

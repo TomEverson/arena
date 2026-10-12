@@ -9,8 +9,10 @@
     "lint": "turbo run lint",
     "build": "turbo run build",
     "bots": "echo 'bots: not implemented yet'",
-    "gen": "pnpm --filter @arena/shared gen",
-    "vectors": "pnpm --filter @arena/client vectors"
+    "gen": "pnpm --filter @arena/shared gen && pnpm --filter @arena/protocol gen",
+    "vectors": "pnpm --filter @arena/client vectors",
+    "dev:lag": "turbo run dev:lag --ui=stream",
+    "netcheck": "pnpm --filter @arena/client netcheck"
   },
   "devDependencies": {
     "turbo": "^2.11.7"

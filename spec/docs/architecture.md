@@ -18,7 +18,7 @@ In dev, Vite serves the client on :5173 and proxies `/ws` and `/healthz` to the 
 - Slow clients: if all of a player's snapshot buffers are in flight, that snapshot is skipped, never queued.
 - If the inbox is full, inputs are dropped rather than blocking the network goroutine.
 
-- Player movement runs on the server from queued inputs (`World.stepPlayer`): one input per player per tick; an empty queue repeats the last input with jump/dash presses cleared; a full queue drops the oldest. `server/internal/game/movement.go` is a port of the TS sim, locked to it by `testvectors/`.
+- Player movement runs on the server from queued inputs (`World.stepPlayer`) and is **input-driven**: a player only moves when an input arrives (one per tick; a second when backed up, limited by banked credit), so its state is always exactly "after input `ackSeq`". Duplicate (redundantly resent) sequence numbers are skipped; a full queue drops the oldest. `server/internal/game/movement.go` is a port of the TS sim, locked to it by `testvectors/`.
 - Levels (`/levels/*.json`) are loaded by both sides (`client/src/sim/level.ts`, `server/internal/level`); tuning numbers come from `/shared/params.json` (Go constants generated).
 
 ## Client
@@ -27,9 +27,8 @@ In dev, Vite serves the client on :5173 and proxies `/ws` and `/healthz` to the 
 - `RetroRenderer` draws to a low-res 16:9 render target (default 1280x720, set with `?res=<height>`; nearest filter) and blits it letterboxed.
 - Player controller (`main.ts`) feeds one input per tick into `stepPlayer` (`client/src/sim/`) and interpolates the camera.
 
-## Prediction (planned)
-Client predicts movement with the same function as the server (`sim/movement.ts` / `game/movement.go`),
-verified by shared `testvectors/`. Server snapshots carry `ackSeq` so the client can reconcile.
+## Prediction and remote players (M4)
+The client predicts movement with the same function as the server (`sim/movement.ts` / `game/movement.go`, locked together by `testvectors/`), sends the last 3 inputs every tick, and reconciles against each snapshot's `you` + `ackSeq` (`client/src/net/prediction.ts`). Small corrections fade out of the camera; large ones snap. Other players are drawn 100 ms in the past, interpolated between snapshots using a server-tick estimate (`clock.ts`, `interpolation.ts`). Wire types are generated from `protocol/messages.json`.
 
 ## Teams
 Every entity has a `teamId`. Currently team = player (teams of one); designed for teams of 4-6.

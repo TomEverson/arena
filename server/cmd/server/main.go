@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -47,7 +49,7 @@ func main() {
 	defer ticker.Stop()
 	go world.Run(ctx, ticker.C)
 
-	srv := &gameserver.Server{World: world, Codec: wire.JSON{}, Link: link}
+	srv := &gameserver.Server{World: world, Codec: wire.JSON{}, Link: link, LevelName: strings.TrimSuffix(filepath.Base(*levelPath), ".json")}
 	httpSrv := &http.Server{Addr: *addr, Handler: srv.Handler()}
 
 	go func() {

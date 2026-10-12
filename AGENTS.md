@@ -12,6 +12,7 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
   TypeScript (`client/src/sim/movement.ts`) are separate implementations that must both pass the same
   vectors in `testvectors/movement/`. The TypeScript sim is the reference; vectors are recorded from it.
 - Tuning numbers live once, in `shared/params.json`. TS imports it; Go constants are **generated** (`pnpm gen`).
+- The server is **input-driven**: a player only moves when an input arrives, so its state is always "after input ackSeq". The client predicts with the same `stepPlayer` and reconciles against snapshots (`client/src/net/prediction.ts`).
 - One goroutine owns the world; network goroutines only communicate through channels. No locks in the simulation.
 
 ## Hard rules
@@ -19,11 +20,11 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
 2. **The movement function lives only in the designated files** (`server/internal/game/movement.go`,
    `client/src/sim/` : movement.ts, collision.ts, params.ts, types.ts, level.ts). Do not duplicate movement math elsewhere.
    Combat math (fire rate, spread, recoil, damage, hitscan) likewise lives only in `client/src/sim/weapon.ts` and `hitscan.ts` (Go twin: `server/internal/game/weapon*.go`, M5). Keep both pure and deterministic: no `Math.random`, seeded RNG only.
-3. **Never hand-edit generated code.** Change the generator/source (future: `protocol/`) and regenerate.
+3. **Never hand-edit generated code** (`params_gen.go`, `protocol_gen.go`, `protocol.gen.ts`). Change the source (`shared/params.json`, `protocol/messages.json`) and run `pnpm gen`.
 4. **Any change to movement must update `testvectors/`** in the same commit, and both Go and TS tests must pass. Workflow: edit `shared/params.json` and/or the sim, port to Go, then `pnpm gen`, `pnpm vectors`, `pnpm test`. Never hand-edit vectors or `params_gen.go`.
 5. **Every entity carries a `teamId`** from the start. Teams of 1 today; design for teams of 4-6. Never assume team == player.
 6. **Snapshot building goes through `entitiesFor(player)`**, which currently returns everything. Visibility/interest rules go there and nowhere else.
-7. Message encoding goes through the `wire.Codec` interface; don't call `encoding/json` from game or handler code.
+7. Message encoding goes through the `wire.Codec` interface; don't call `encoding/json` from game or handler code. Message and state shapes come from `protocol/messages.json`.
 
 ## Commands (run from repo root; pnpm + Turborepo, no Makefile)
 | Command | What it does |
@@ -33,7 +34,9 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
 | `pnpm test` | Vitest + `go test ./...` + check that generated Go params are current |
 | `pnpm lint` | Biome + tsc, and `go vet` + gofmt + golangci-lint (skipped if not installed) |
 | `pnpm build` | `vite build` + `go build -o server/bin/server` |
-| `pnpm gen` | Regenerate Go constants from `shared/params.json` |
+| `pnpm gen` | Regenerate generated code: Go constants from `shared/params.json`, wire types from `protocol/messages.json` |
+| `pnpm dev:lag` | Like `pnpm dev`, with the server's fake network (80 ms each way, 3% loss) |
+| `pnpm netcheck` | End-to-end netcode check: two headless players against the real server (needs Go; takes about 20 s) |
 | `pnpm vectors` | Re-record `testvectors/movement/*.json` from the TS sim (runs each scenario's verify) |
 | `pnpm bots` | Placeholder (prints "not implemented yet") |
 
@@ -41,7 +44,7 @@ Server flags: `--addr=:8080 --level=../levels/greybox.json --fake-latency=80ms -
 Prereqs: Node 22+, pnpm 10, Go 1.24+, `air` (`go install github.com/air-verse/air@latest`), optional `golangci-lint`.
 
 ## Layout
-`client/` Vite+TS+Three.js · `server/` Go module · `protocol/` future message source of truth ·
+`client/` Vite+TS+Three.js · `server/` Go module · `protocol/` wire messages source of truth (generated Go + TS) ·
 `shared/` shared tuning numbers + Go codegen · `levels/` level JSON · `testvectors/` shared movement vectors · `tools/bots/` fake clients · `spec/` (`brainstorm/` notes, `docs/` polished docs)
 
 <!-- BEGIN:turborepo-agent-rules -->

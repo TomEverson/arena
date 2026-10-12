@@ -1,3 +1,5 @@
+import type { Input, PlayerState } from "../net/protocol.gen";
+
 /** Shared types for the movement simulation. Units are metres and seconds, Y is up. */
 
 export interface Aabb {
@@ -25,66 +27,18 @@ export interface CollisionWorld {
   ramps: Ramp[];
 }
 
-/** One tick of player intent. Edge-triggered buttons are "pressed this tick". */
-export interface PlayerInput {
-  /** Strafe, -1 (left) .. +1 (right). */
-  moveX: number;
-  /** Forward, -1 (back) .. +1 (forward). */
-  moveZ: number;
-  /** Look direction in radians. Yaw 0 faces -Z; positive yaw turns left. */
-  yaw: number;
-  jump: boolean;
-  /** Jump button held (climbing). */
-  jumpHeld: boolean;
-  dash: boolean;
-  /** Held. */
-  slide: boolean;
-  /** Aiming down sights (held): slows ground movement. */
-  ads: boolean;
-}
+/**
+ * One tick of player intent: the wire Input without the sequence number and
+ * pitch (movement does not use them). Edge buttons are "pressed this tick".
+ */
+export type PlayerInput = Omit<Input, "seq" | "pitch">;
 
 /**
- * Complete movement state. Flat numeric fields only, so it ports 1:1 to Go
- * and is trivially cloneable. (x, y, z) is the centre of the player's feet.
+ * Complete movement state. Defined once in /protocol/messages.json and generated
+ * for both sides, so the client sim and the wire cannot drift. Flat numeric
+ * fields only: ports 1:1 to Go and is trivially cloneable.
  */
-export interface PlayerState {
-  x: number;
-  y: number;
-  z: number;
-  vx: number;
-  vy: number;
-  vz: number;
-  onGround: boolean;
-
-  climbing: boolean;
-
-  /** Crouched (hold the slide key without enough speed to slide). */
-  crouching: boolean;
-  sliding: boolean;
-  slideTime: number;
-  slideCooldown: number;
-
-  /** Fractional: regenerates continuously up to PARAMS.dashCharges. */
-  dashCharges: number;
-  /** Seconds of dash remaining; 0 when not dashing. */
-  dashTime: number;
-  dashDirX: number;
-  dashDirZ: number;
-
-  /** Air jumps left; refilled whenever grounded. */
-  airJumps: number;
-  coyote: number;
-  jumpBuffer: number;
-
-  mantling: boolean;
-  mantleT: number;
-  mantleFromX: number;
-  mantleFromY: number;
-  mantleFromZ: number;
-  mantleToX: number;
-  mantleToY: number;
-  mantleToZ: number;
-}
+export type { PlayerState };
 
 export const emptyInput = (): PlayerInput => ({
   moveX: 0,

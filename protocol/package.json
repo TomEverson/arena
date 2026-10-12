@@ -1,0 +1,10 @@
+{
+  "name": "@arena/protocol",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "gen": "node scripts/gen.mjs",
+    "test": "node scripts/gen.mjs --check"
+  }
+}

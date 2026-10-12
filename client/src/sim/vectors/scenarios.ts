@@ -71,7 +71,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function fuzzInput(seed: number): () => InputFn {
+export function fuzzInput(seed: number): () => InputFn {
   return () => {
     const rnd = mulberry32(seed);
     let left = 0;

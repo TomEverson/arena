@@ -5,7 +5,12 @@ import { DummyViews } from "./dummyView";
 import { Fx } from "./fx";
 import { buildLevelMeshes } from "./levelRender";
 import { FixedTimestep, TICK_RATE } from "./loop";
-import { connect, type NetStatus } from "./net";
+import { NetClient } from "./net/client";
+import { ServerClock } from "./net/clock";
+import { INTERP_TICKS, RemoteTracks } from "./net/interpolation";
+import { Predictor } from "./net/prediction";
+import { CorrectionSmoother } from "./net/smoothing";
+import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
 import { castRay } from "./sim/hitscan";
 import { buildCollisionWorld, parseLevel } from "./sim/level";
@@ -51,6 +56,8 @@ const fx = new Fx(scene, view.camera);
 const targetInfo = document.getElementById("targetinfo") as HTMLDivElement;
 const ammoEl = document.getElementById("ammo") as HTMLDivElement;
 
+const DT = 1 / TICK_RATE;
+
 // --- Player ----------------------------------------------------------------
 const spawn = level.spawnZones[0];
 const spawnPos = spawn ? spawn.pos : ([0, 0, 0] as const);
@@ -69,8 +76,12 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") pressed.dash = true;
   if (e.code === "KeyR") pressed.reload = true;
   if (e.code === "KeyP") {
-    player = spawnState(spawnPos[0], spawnPos[1], spawnPos[2]);
-    prevPlayer = player;
+    if (net)
+      net.sendRespawn(); // the server owns our position; the snapshot corrects us
+    else {
+      player = spawnState(spawnPos[0], spawnPos[1], spawnPos[2]);
+      prevPlayer = player;
+    }
   }
 });
 window.addEventListener("keyup", (e) => held.delete(e.code));
@@ -99,14 +110,58 @@ document.addEventListener("pointerlockchange", () => {
 
 const axis = (pos: string, neg: string) => Number(held.has(pos)) - Number(held.has(neg));
 
-// --- Networking (connection status only, for now) --------------------------
-let net: NetStatus = { state: "connecting", playerId: null, serverTick: null };
-connect((s) => {
-  net = s;
-});
+// --- Networking ------------------------------------------------------------
+// Online (default): the server owns the truth. We predict our own movement with the
+// same stepPlayer, send numbered inputs, and reconcile against snapshots. Other
+// players are drawn ~100 ms in the past, interpolated between snapshots.
+// Offline (?offline, or no server reachable): plain local simulation for tuning.
+let net: NetClient | null = null;
+let netMode: "connecting" | "online" | "offline" = "connecting";
+let netNote = "";
+let predictor: Predictor | null = null;
+const smoother = new CorrectionSmoother();
+const clock = new ServerClock();
+const remotes = new RemoteTracks();
+const remoteViews = new RemoteViews(scene);
+
+function goOffline(note: string): void {
+  netMode = "offline";
+  netNote = note;
+  net = null;
+  predictor = null;
+}
+
+if (new URLSearchParams(location.search).has("offline")) {
+  netMode = "offline";
+  netNote = "(?offline)";
+} else {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  net = new NetClient(`${proto}//${location.host}/ws`, {
+    onWelcome(w) {
+      if (w.level !== level.name)
+        netNote = `WARNING: server runs "${w.level}", client has "${level.name}"`;
+    },
+    onSnapshot(s) {
+      clock.onSnapshot(s.tick, performance.now());
+      remotes.push(s.tick, s.entities);
+      if (!predictor) {
+        // First snapshot: start from wherever the server put us.
+        predictor = new Predictor(world, s.you, s.ackSeq, DT);
+        player = prevPlayer = predictor.state;
+        netMode = "online";
+        return;
+      }
+      const correction = predictor.reconcile(s.ackSeq, s.you);
+      if (correction) smoother.onCorrection(correction);
+      player = predictor.state;
+    },
+    onClose(wasConnected) {
+      goOffline(wasConnected ? "connection lost: offline mode" : "no server: offline mode");
+    },
+  });
+}
 
 // --- Simulation ------------------------------------------------------------
-const DT = 1 / TICK_RATE;
 let simTicks = 0;
 let weapon = spawnWeapon(1);
 let shotsFired = 0;
@@ -153,23 +208,26 @@ function fireShot(shot: ShotResult, ads: boolean): void {
 const sim = new FixedTimestep(() => {
   simTicks++;
   const ads = held.has("Mouse2");
+  const input = {
+    ...emptyInput(),
+    moveX: axis("KeyD", "KeyA"),
+    moveZ: axis("KeyW", "KeyS"),
+    yaw: look.yaw,
+    jump: pressed.jump,
+    jumpHeld: held.has("Space"),
+    dash: pressed.dash,
+    slide: held.has("KeyC"),
+    ads,
+  };
   prevPlayer = player;
-  player = stepPlayer(
-    player,
-    {
-      ...emptyInput(),
-      moveX: axis("KeyD", "KeyA"),
-      moveZ: axis("KeyW", "KeyS"),
-      yaw: look.yaw,
-      jump: pressed.jump,
-      jumpHeld: held.has("Space"),
-      dash: pressed.dash,
-      slide: held.has("KeyC"),
-      ads,
-    },
-    world,
-    DT,
-  );
+  if (predictor) {
+    // Online: predict now, tell the server (the last few inputs, so a lost message loses nothing).
+    predictor.step(input, look.pitch);
+    player = predictor.state;
+    net?.sendInputs(predictor.recent());
+  } else if (netMode === "offline") {
+    player = stepPlayer(player, input, world, DT);
+  } // else: still connecting, wait for the first snapshot
 
   stepDummies(dummies, DT, hitstopTicks > 0);
   if (hitstopTicks > 0) hitstopTicks--;
@@ -193,6 +251,19 @@ const sim = new FixedTimestep(() => {
   pressed.reload = false;
 });
 
+function netHud(): string {
+  if (netMode !== "online" || !net || !predictor) {
+    return `net: ${netMode} ${netNote}`;
+  }
+  const st = net.stats;
+  return (
+    `net: online #${net.playerId} | ping ${st.rttMs.toFixed(0)} ms ±${st.jitterMs.toFixed(0)} | ` +
+    `${st.snapshotsPerSecond} snap/s | server queue ${st.queued} | unacked ${predictor.pending}\n` +
+    `prediction: ${predictor.corrections} corrections, worst ${(predictor.maxError * 100).toFixed(1)} cm | ` +
+    `${remotes.ids().length} remote | interp ${(INTERP_TICKS * 1000) / TICK_RATE} ms ${netNote}`
+  );
+}
+
 // --- Render ----------------------------------------------------------------
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 let eye = PARAMS.standEye;
@@ -215,10 +286,22 @@ function frame(nowMs: number): void {
 
   // Smooth the eye height so slide transitions don't pop.
   eye += (eyeHeight(player) - eye) * (1 - Math.exp(-frameDt * 18));
+  smoother.update(frameDt);
   cam.position.set(
-    lerp(prevPlayer.x, player.x, alpha),
-    lerp(prevPlayer.y, player.y, alpha) + eye,
-    lerp(prevPlayer.z, player.z, alpha),
+    lerp(prevPlayer.x, player.x, alpha) + smoother.x,
+    lerp(prevPlayer.y, player.y, alpha) + eye + smoother.y,
+    lerp(prevPlayer.z, player.z, alpha) + smoother.z,
+  );
+
+  // Other players: where they were INTERP_TICKS ago, interpolated between snapshots.
+  const renderTick = clock.tickAt(nowMs) - INTERP_TICKS;
+  remoteViews.update(
+    clock.ready
+      ? remotes.ids().flatMap((id) => {
+          const pose = remotes.sample(id, renderTick);
+          return pose ? [pose] : [];
+        })
+      : [],
   );
   const spread = spreadDegrees(weapon.burst, adsHeld, {
     hSpeed: hSpeed(player),
@@ -255,7 +338,8 @@ function frame(nowMs: number): void {
     `(${(player.dashCharges % 1).toFixed(2)})\n` +
     `${killLog}\n` +
     `WASD move · Space jump (hold at green walls to climb) · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · P respawn\n` +
-    `render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks} | server ${net.state}${net.serverTick !== null ? ` tick ${net.serverTick}` : ""}`;
+    `render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks}\n` +
+    netHud();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

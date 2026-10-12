@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "lint": "biome check . && tsc --noEmit",
-    "vectors": "tsx scripts/record-vectors.ts"
+    "vectors": "tsx scripts/record-vectors.ts",
+    "dev:lag": "vite",
+    "netcheck": "tsx scripts/netcheck.ts"
   },
   "dependencies": {
     "three": "^0.186.1"

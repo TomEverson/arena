@@ -1,13 +1,13 @@
 // Package wire defines how messages are encoded on the socket.
 // The Codec interface lets us swap JSON for a binary format later without
-// touching the game or server code. The future source of truth for message
-// shapes is /protocol.
+// touching the game or server code. The message shapes themselves are generated
+// from /protocol/messages.json (package protocol).
 package wire
 
 import (
 	"encoding/json"
 
-	"arena/server/internal/game"
+	"arena/server/internal/protocol"
 )
 
 // Codec encodes server->client messages and decodes client->server ones.
@@ -15,9 +15,11 @@ import (
 type Codec interface {
 	// Binary reports whether frames should be sent as binary WebSocket frames.
 	Binary() bool
-	EncodeWelcome(dst []byte, playerID uint32) ([]byte, error)
-	EncodeSnapshot(dst []byte, s *game.Snapshot) ([]byte, error)
-	DecodeInput(data []byte, in *game.Input) error
+	EncodeWelcome(dst []byte, m *protocol.Welcome) ([]byte, error)
+	EncodeSnapshot(dst []byte, m *protocol.Snapshot) ([]byte, error)
+	EncodePong(dst []byte, m *protocol.Pong) ([]byte, error)
+	// DecodeClient decodes any client message into m (m is reset first).
+	DecodeClient(data []byte, m *protocol.ClientMessage) error
 }
 
 // JSON is the human-readable development codec.
@@ -25,30 +27,24 @@ type JSON struct{}
 
 func (JSON) Binary() bool { return false }
 
-type welcomeMsg struct {
-	Type         string `json:"type"`
-	PlayerID     uint32 `json:"playerId"`
-	TickRate     int    `json:"tickRate"`
-	SnapshotRate int    `json:"snapshotRate"`
-}
-
-type snapshotMsg struct {
-	Type     string        `json:"type"`
-	Tick     uint64        `json:"tick"`
-	AckSeq   uint32        `json:"ackSeq"`
-	Entities []game.Entity `json:"entities"`
-}
-
-func (JSON) EncodeWelcome(dst []byte, playerID uint32) ([]byte, error) {
-	b, err := json.Marshal(welcomeMsg{"welcome", playerID, game.TickRate, game.SnapshotRate})
+func appendJSON(dst []byte, v any) ([]byte, error) {
+	b, err := json.Marshal(v)
 	return append(dst, b...), err
 }
 
-func (JSON) EncodeSnapshot(dst []byte, s *game.Snapshot) ([]byte, error) {
-	b, err := json.Marshal(snapshotMsg{"snapshot", s.Tick, s.AckSeq, s.Entities})
-	return append(dst, b...), err
+func (JSON) EncodeWelcome(dst []byte, m *protocol.Welcome) ([]byte, error) {
+	return appendJSON(dst, m)
 }
 
-func (JSON) DecodeInput(data []byte, in *game.Input) error {
-	return json.Unmarshal(data, in)
+func (JSON) EncodeSnapshot(dst []byte, m *protocol.Snapshot) ([]byte, error) {
+	return appendJSON(dst, m)
+}
+
+func (JSON) EncodePong(dst []byte, m *protocol.Pong) ([]byte, error) {
+	return appendJSON(dst, m)
+}
+
+func (JSON) DecodeClient(data []byte, m *protocol.ClientMessage) error {
+	*m = protocol.ClientMessage{}
+	return json.Unmarshal(data, m)
 }

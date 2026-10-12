@@ -34,7 +34,11 @@
         "$TURBO_ROOT$/levels/*.json",
         "$TURBO_ROOT$/testvectors/movement/*.json",
         "$TURBO_ROOT$/shared/scripts/*.mjs",
-        "$TURBO_ROOT$/server/internal/game/params_gen.go"
+        "$TURBO_ROOT$/server/internal/game/params_gen.go",
+        "$TURBO_ROOT$/protocol/messages.json",
+        "$TURBO_ROOT$/protocol/scripts/*.mjs",
+        "$TURBO_ROOT$/server/internal/protocol/protocol_gen.go",
+        "$TURBO_ROOT$/client/src/net/protocol.gen.ts"
       ]
     },
     "lint": {
@@ -44,6 +48,10 @@
         "$TURBO_ROOT$/shared/params.json",
         "$TURBO_ROOT$/levels/*.json"
       ]
+    },
+    "dev:lag": {
+      "cache": false,
+      "persistent": true
     }
   }
 }

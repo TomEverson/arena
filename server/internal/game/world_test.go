@@ -9,7 +9,9 @@ import (
 func TestTickLoop(t *testing.T) {
 	w := NewWorld(nil)
 	p := NewPlayer(7)
+	other := NewPlayer(8)
 	w.Join(context.Background(), p)
+	w.Join(context.Background(), other)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ticks := make(chan time.Time)
@@ -34,8 +36,15 @@ func TestTickLoop(t *testing.T) {
 	if first.Tick != 2 {
 		t.Fatalf("first snapshot tick = %d, want 2", first.Tick)
 	}
-	if len(first.Entities) != 1 || first.Entities[0].ID != 7 || first.Entities[0].TeamID != 7 {
+	// Your own state is `you`; entities lists everyone else.
+	if len(first.Entities) != 1 || first.Entities[0].ID != 8 || first.Entities[0].TeamID != 8 {
 		t.Fatalf("unexpected entities: %+v", first.Entities)
+	}
+	if first.You != p.State {
+		t.Fatalf("snapshot you = %+v, want the player's state %+v", first.You, p.State)
+	}
+	if first.Type != "snapshot" {
+		t.Fatalf("snapshot type = %q", first.Type)
 	}
 }
 
@@ -62,55 +71,47 @@ func TestStepDoesNotAllocate(t *testing.T) {
 	}
 }
 
-// One input is consumed per tick, in order, and the ack follows.
+// One input is simulated per tick, in order, and the ack follows.
 func TestInputQueueConsumesOnePerTick(t *testing.T) {
 	w := NewWorld(nil)
 	p := NewPlayer(1)
 	w.Join(context.Background(), p)
 	w.Step()
-	for seq := uint32(1); seq <= 3; seq++ {
+	for seq := uint32(1); seq <= 2; seq++ { // stays under the catch-up threshold
 		w.SubmitInput(1, Input{Seq: seq, MoveZ: 1})
 	}
-	for want := uint32(1); want <= 3; want++ {
+	for want := uint32(1); want <= 2; want++ {
 		w.Step()
 		if p.ackSeq != want {
 			t.Fatalf("after tick %d ackSeq = %d, want %d", want, p.ackSeq, want)
 		}
 	}
 	w.Step() // queue empty: nothing new is acknowledged
-	if p.ackSeq != 3 {
+	if p.ackSeq != 2 {
 		t.Fatalf("ackSeq moved without input: %d", p.ackSeq)
 	}
 }
 
-// With no queued input the last held input repeats, but one-shot presses never do.
-func TestEmptyQueueRepeatsHeldButNotPresses(t *testing.T) {
-	w := NewWorld(nil)
+// Input-driven: with no input the player is not simulated at all, so its state
+// is always exactly "the state after the last acknowledged input".
+func TestEmptyQueueDoesNotSimulate(t *testing.T) {
+	lv := FlatLevel()
+	lv.Spawns = []Vec3{{X: 0, Y: 5, Z: 0}} // spawn in the air: gravity would move it
+	w := NewWorld(lv)
 	p := NewPlayer(1)
 	w.Join(context.Background(), p)
 	w.Step()
-	w.Step() // settle on the floor
-
-	w.SubmitInput(1, Input{Seq: 1, MoveZ: 1})
-	w.Step()
-	for i := 0; i < 30; i++ {
+	before := p.State
+	for i := 0; i < 10; i++ {
 		w.Step()
 	}
-	if p.State.VZ > -10 {
-		t.Fatalf("held forward input should keep running, vz = %v", p.State.VZ)
+	if p.State != before {
+		t.Fatalf("player was simulated with no input: %+v -> %+v", before, p.State)
 	}
-
-	w.SubmitInput(1, Input{Seq: 2, MoveZ: 1, Jump: true})
+	w.SubmitInput(1, Input{Seq: 1})
 	w.Step()
-	if p.State.VY <= 0 {
-		t.Fatalf("jump press should jump, vy = %v", p.State.VY)
-	}
-	airJumpsAfterFirst := p.State.AirJumps
-	for i := 0; i < 5; i++ {
-		w.Step() // repeated ticks must not re-press jump (would burn the air jump)
-	}
-	if p.State.AirJumps != airJumpsAfterFirst {
-		t.Fatalf("jump press was repeated: air jumps %d -> %d", airJumpsAfterFirst, p.State.AirJumps)
+	if p.State.Y >= before.Y {
+		t.Fatalf("player did not fall after an input: y = %v", p.State.Y)
 	}
 }
 
@@ -123,9 +124,85 @@ func TestInputQueueDropsOldestWhenFull(t *testing.T) {
 	for seq := uint32(1); seq <= InputQueueSize+4; seq++ {
 		w.SubmitInput(1, Input{Seq: seq})
 	}
-	w.Step() // drains the inbox into the queue, consumes the oldest survivor
-	if want := uint32(5); p.ackSeq != want {
-		t.Fatalf("first consumed seq = %d, want %d (oldest 4 dropped)", p.ackSeq, want)
+	w.Step() // drains the inbox (oldest 4 dropped), then catches up by simulating two
+	if want := uint32(6); p.ackSeq != want {
+		t.Fatalf("ack after first tick = %d, want %d (seqs 5 and 6 simulated)", p.ackSeq, want)
+	}
+}
+
+// Catch-up helps after a lag spike but cannot be used to run faster than real time for long.
+func TestCatchUpIsBoundedByCredit(t *testing.T) {
+	w := NewWorld(nil)
+	p := NewPlayer(1)
+	w.Join(context.Background(), p)
+	w.Step()
+
+	const ticks = 400
+	seq := uint32(0)
+	for i := 0; i < ticks; i++ {
+		for p.qLen+len(w.inbox) < InputQueueSize { // a cheater keeps the queue full
+			seq++
+			w.SubmitInput(1, Input{Seq: seq})
+		}
+		w.Step()
+	}
+	simulated := float64(p.ackSeq)
+	limit := float64(ticks) + catchUpCreditMax + catchUpRegen*ticks + 4 // 4: seqs dropped while the queue was full
+	if simulated > limit+float64(InputQueueSize) {
+		t.Fatalf("simulated %v inputs in %d ticks, want at most about %v", simulated, ticks, limit)
+	}
+	if simulated < ticks {
+		t.Fatalf("simulated only %v inputs in %d ticks", simulated, ticks)
+	}
+}
+
+// Redundant resends are skipped: a seq is simulated once.
+func TestDuplicateInputsAreSkipped(t *testing.T) {
+	w := NewWorld(nil)
+	a, b := NewPlayer(1), NewPlayer(2)
+	w.Join(context.Background(), a)
+	w.Join(context.Background(), b)
+	w.Step()
+	in := func(seq uint32) Input { return Input{Seq: seq, MoveZ: 1} }
+
+	// a gets the redundant stream the client really sends: 1; 1,2; 1,2,3; 2,3,4 ...
+	for seq := uint32(1); seq <= 8; seq++ {
+		for k := uint32(0); k < 3; k++ {
+			if seq > k {
+				w.SubmitInput(1, in(seq-k))
+			}
+		}
+		w.SubmitInput(2, in(seq)) // b gets each input once
+		w.Step()
+	}
+	if a.State != b.State || a.ackSeq != 8 || b.ackSeq != 8 {
+		t.Fatalf("redundant stream diverged: a=%+v ack %d, b=%+v ack %d", a.State, a.ackSeq, b.State, b.ackSeq)
+	}
+}
+
+// Respawn moves the player to a spawn point and keeps its queued inputs.
+func TestRespawn(t *testing.T) {
+	lv := FlatLevel()
+	lv.Spawns = []Vec3{{X: 10, Y: 0, Z: 5}, {X: -10, Y: 0, Z: -5}}
+	w := NewWorld(lv)
+	p := NewPlayer(1)
+	w.Join(context.Background(), p)
+	w.Step()
+	for seq := uint32(1); seq <= 30; seq++ {
+		w.SubmitInput(1, Input{Seq: seq, MoveZ: 1})
+		w.Step()
+	}
+	if p.State.Z > 4 {
+		t.Fatalf("player did not move: z = %v", p.State.Z)
+	}
+	w.SubmitInput(1, Input{Seq: 31, MoveZ: 1})
+	w.Respawn(context.Background(), 1)
+	w.Step() // respawn applied, then input 31 simulated from the spawn point
+	if p.State.X != -10 {
+		t.Fatalf("respawned at x = %v, want the second spawn (-10)", p.State.X)
+	}
+	if p.State.Z > -5 || p.State.Z < -5.5 {
+		t.Fatalf("input 31 should have been played from the spawn: z = %v", p.State.Z)
 	}
 }
 
@@ -144,5 +221,26 @@ func TestPlayersSpawnAtLevelSpawns(t *testing.T) {
 	}
 	if a.Entity.X != a.State.X {
 		t.Fatalf("entity not synced with state")
+	}
+}
+
+// Remote players need yaw, pitch and posture flags to be drawn.
+func TestEntityCarriesViewAndPostureFlags(t *testing.T) {
+	w := NewWorld(nil)
+	p := NewPlayer(1)
+	w.Join(context.Background(), p)
+	w.Step()
+	for seq := uint32(1); seq <= 3; seq++ {
+		w.SubmitInput(1, Input{Seq: seq, Yaw: 1.5, Pitch: -0.25, Slide: true})
+		w.Step()
+	}
+	if p.Entity.Yaw != 1.5 || p.Entity.Pitch != -0.25 {
+		t.Fatalf("entity view = %v, %v", p.Entity.Yaw, p.Entity.Pitch)
+	}
+	if p.Entity.Flags&2 != 0 { // standing still holding slide => crouch (1), not slide (2)
+		t.Fatalf("unexpected slide flag: %b", p.Entity.Flags)
+	}
+	if p.Entity.Flags&1 == 0 || p.Entity.Flags&16 == 0 {
+		t.Fatalf("expected crouching and onGround flags, got %b", p.Entity.Flags)
 	}
 }

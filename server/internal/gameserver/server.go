@@ -14,14 +14,17 @@ import (
 
 	"arena/server/internal/game"
 	"arena/server/internal/netsim"
+	"arena/server/internal/protocol"
 	"arena/server/internal/wire"
 )
 
 type Server struct {
-	World  *game.World
-	Codec  wire.Codec
-	Link   netsim.Link
-	nextID atomic.Uint32
+	World *game.World
+	Codec wire.Codec
+	Link  netsim.Link
+	// LevelName is reported to clients so they can check they run the same map.
+	LevelName string
+	nextID    atomic.Uint32
 }
 
 func (s *Server) Handler() http.Handler {
@@ -46,7 +49,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.CloseNow()
-	conn.SetReadLimit(4096)
+	conn.SetReadLimit(8192)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -67,7 +70,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	p := game.NewPlayer(s.nextID.Add(1))
 	log.Printf("player %d connected", p.ID)
 
-	hello, err := s.Codec.EncodeWelcome(nil, p.ID)
+	hello, err := s.Codec.EncodeWelcome(nil, &protocol.Welcome{
+		Type:         protocol.ServerTypeWelcome,
+		PlayerID:     p.ID,
+		TickRate:     game.TickRate,
+		SnapshotRate: game.SnapshotRate,
+		Level:        s.LevelName,
+	})
 	if err != nil {
 		log.Printf("encode welcome: %v", err)
 		return
@@ -89,11 +98,34 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.Link.Deliver(func() {
-			var msg game.Input // fresh value: Deliver may run this on another goroutine
-			if err := s.Codec.DecodeInput(data, &msg); err == nil {
-				s.World.SubmitInput(p.ID, msg)
+			var msg protocol.ClientMessage // fresh value: Deliver may run this on another goroutine
+			if err := s.Codec.DecodeClient(data, &msg); err != nil {
+				return
 			}
+			s.handle(ctx, p.ID, &msg, send)
 		})
+	}
+}
+
+// handle acts on one client message. It only talks to the world through its channels.
+func (s *Server) handle(ctx context.Context, id uint32, msg *protocol.ClientMessage, send func([]byte)) {
+	switch msg.Type {
+	case protocol.ClientTypeInput:
+		// Resent redundantly by the client; the world skips sequence numbers it already has.
+		for i := range msg.Inputs {
+			s.World.SubmitInput(id, msg.Inputs[i])
+		}
+	case protocol.ClientTypePing:
+		frame, err := s.Codec.EncodePong(nil, &protocol.Pong{
+			Type: protocol.ServerTypePong,
+			T:    msg.T,
+			Tick: uint32(s.World.Tick()),
+		})
+		if err == nil {
+			send(frame)
+		}
+	case protocol.ClientTypeRespawn:
+		s.World.Respawn(ctx, id)
 	}
 }
 

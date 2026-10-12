@@ -9,8 +9,11 @@ package game
 
 import (
 	"context"
+	"math"
 	"sync/atomic"
 	"time"
+
+	"arena/server/internal/protocol"
 )
 
 const (
@@ -27,24 +30,22 @@ const (
 	inboxSize       = 1024
 	// InputQueueSize is how many not-yet-simulated inputs we buffer per player.
 	InputQueueSize = 16
+
+	// A player is simulated only when an input arrives (input-driven), one input
+	// per tick. If a backlog builds up (a lag spike delivering inputs in a burst)
+	// the server catches up by simulating a second input in a tick, paid for with
+	// credit so a client that floods inputs cannot run faster than real time for long.
+	catchUpThreshold = 2    // queue length above which catch-up may happen
+	catchUpCreditMax = 8    // largest burst of extra ticks that can be banked
+	catchUpRegen     = 0.05 // credit regained per tick (one extra tick per 20)
 )
 
-// Entity is the replicated state of one thing in the world.
-// Every entity carries a TeamID from day one (teams of 1 for now).
-type Entity struct {
-	ID     uint32  `json:"id"`
-	TeamID uint16  `json:"teamId"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Z      float64 `json:"z"`
-}
-
-// Snapshot is a reusable buffer holding what one player sees at one tick.
-type Snapshot struct {
-	Tick     uint64
-	AckSeq   uint32 // last input sequence the server has simulated for this player
-	Entities []Entity
-}
+// Entity, Snapshot and the messages around them are defined once, in
+// protocol/messages.json. Every entity carries a TeamID from day one.
+type (
+	Entity   = protocol.Entity
+	Snapshot = protocol.Snapshot
+)
 
 // Level is what the world needs from a map: collision geometry and spawn points.
 type Level struct {
@@ -73,13 +74,14 @@ type Player struct {
 	Out  chan *Snapshot
 	Free chan *Snapshot
 
-	ackSeq uint32
+	ackSeq        uint32 // last input sequence simulated
+	lastQueuedSeq uint32 // highest input sequence accepted into the queue (duplicates are skipped)
+	catchUpCredit float64
 
 	// Pending inputs, oldest first (a fixed ring: no allocation).
-	queue     [InputQueueSize]Input
-	qHead     int
-	qLen      int
-	lastInput Input
+	queue [InputQueueSize]Input
+	qHead int
+	qLen  int
 
 	initial    PlayerState
 	hasInitial bool
@@ -93,9 +95,11 @@ func NewPlayer(id uint32) *Player {
 		Entity: Entity{ID: id, TeamID: uint16(id)},
 		Out:    make(chan *Snapshot, snapshotBuffers),
 		Free:   make(chan *Snapshot, snapshotBuffers),
+
+		catchUpCredit: catchUpCreditMax,
 	}
 	for i := 0; i < snapshotBuffers; i++ {
-		p.Free <- &Snapshot{Entities: make([]Entity, 0, MaxPlayers)}
+		p.Free <- &Snapshot{Type: protocol.ServerTypeSnapshot, Entities: make([]Entity, 0, MaxPlayers)}
 	}
 	return p
 }
@@ -130,6 +134,7 @@ const (
 	cmdJoin commandKind = iota
 	cmdLeave
 	cmdInput
+	cmdRespawn
 )
 
 type command struct {
@@ -184,6 +189,15 @@ func (w *World) Leave(ctx context.Context, id uint32) {
 	}
 }
 
+// Respawn puts the player back at a spawn point. Queued inputs are kept and
+// play out from the new position, exactly as the client will replay them.
+func (w *World) Respawn(ctx context.Context, id uint32) {
+	select {
+	case w.inbox <- command{kind: cmdRespawn, id: id}:
+	case <-ctx.Done():
+	}
+}
+
 // SubmitInput queues a client input. It never blocks: if the inbox is full
 // the input is dropped.
 func (w *World) SubmitInput(id uint32, in Input) {
@@ -221,22 +235,62 @@ func (w *World) Step() {
 	w.publishedTick.Store(w.tick)
 }
 
-// stepPlayer simulates one tick of movement for p. It consumes exactly one
-// queued input; if the queue is empty it repeats the last input with the
-// one-shot buttons (jump, dash) cleared, so a held key keeps working but a
-// press is never applied twice.
+// stepPlayer simulates p for this tick. Input-driven: it consumes queued inputs
+// and does nothing when there are none, so the player's state is always exactly
+// "the state after input ackSeq". That is what lets the client predict with the
+// same function and reconcile without phantom ticks.
 func (w *World) stepPlayer(p *Player) {
+	p.catchUpCredit = math.Min(catchUpCreditMax, p.catchUpCredit+catchUpRegen)
+	n := 0
 	if p.qLen > 0 {
-		p.lastInput = p.popInput()
-		p.ackSeq = p.lastInput.Seq
-	} else {
-		p.lastInput.Jump = false
-		p.lastInput.Dash = false
+		n = 1
+		if p.qLen > catchUpThreshold && p.catchUpCredit >= 1 {
+			n = 2
+			p.catchUpCredit--
+		}
 	}
-	StepPlayer(&p.State, &p.lastInput, &w.level.Collision, TickDT)
-	p.Entity.X = p.State.X
-	p.Entity.Y = p.State.Y
-	p.Entity.Z = p.State.Z
+	for i := 0; i < n; i++ {
+		in := p.popInput()
+		p.ackSeq = in.Seq
+		StepPlayer(&p.State, &in, &w.level.Collision, TickDT)
+		p.Entity.Yaw = in.Yaw
+		p.Entity.Pitch = in.Pitch
+	}
+	p.syncEntity()
+}
+
+// syncEntity copies the replicated parts of the movement state into the entity.
+func (p *Player) syncEntity() {
+	s := &p.State
+	p.Entity.X, p.Entity.Y, p.Entity.Z = s.X, s.Y, s.Z
+	var f uint8
+	if s.Crouching {
+		f |= protocol.EntityFlagCrouching
+	}
+	if s.Sliding {
+		f |= protocol.EntityFlagSliding
+	}
+	if s.Climbing {
+		f |= protocol.EntityFlagClimbing
+	}
+	if s.DashTime > 0 {
+		f |= protocol.EntityFlagDashing
+	}
+	if s.OnGround {
+		f |= protocol.EntityFlagOnGround
+	}
+	if s.Mantling {
+		f |= protocol.EntityFlagMantling
+	}
+	p.Entity.Flags = f
+}
+
+// spawn puts p at the next spawn point.
+func (w *World) spawn(p *Player) {
+	sp := w.level.Spawns[w.nextSpawn%len(w.level.Spawns)]
+	w.nextSpawn++
+	p.State = SpawnState(sp.X, sp.Y, sp.Z)
+	p.syncEntity()
 }
 
 func (w *World) drainInbox() {
@@ -257,12 +311,10 @@ func (w *World) apply(c command) {
 			p := c.player
 			if p.hasInitial {
 				p.State = p.initial
+				p.syncEntity()
 			} else {
-				sp := w.level.Spawns[w.nextSpawn%len(w.level.Spawns)]
-				w.nextSpawn++
-				p.State = SpawnState(sp.X, sp.Y, sp.Z)
+				w.spawn(p)
 			}
-			p.Entity.X, p.Entity.Y, p.Entity.Z = p.State.X, p.State.Y, p.State.Z
 			w.players = append(w.players, p)
 		}
 	case cmdLeave:
@@ -278,7 +330,18 @@ func (w *World) apply(c command) {
 	case cmdInput:
 		for _, p := range w.players {
 			if p.ID == c.id {
-				p.pushInput(c.input)
+				// Inputs are resent redundantly: skip anything already accepted.
+				if c.input.Seq > p.lastQueuedSeq {
+					p.lastQueuedSeq = c.input.Seq
+					p.pushInput(c.input)
+				}
+				return
+			}
+		}
+	case cmdRespawn:
+		for _, p := range w.players {
+			if p.ID == c.id {
+				w.spawn(p)
 				return
 			}
 		}
@@ -293,8 +356,10 @@ func (w *World) sendSnapshots() {
 		default:
 			continue // all buffers in flight: this client is slow, skip it
 		}
-		s.Tick = w.tick
+		s.Tick = uint32(w.tick)
 		s.AckSeq = p.ackSeq
+		s.Queued = uint8(p.qLen)
+		s.You = p.State
 		s.Entities = w.entitiesFor(p, s.Entities[:0])
 		select {
 		case p.Out <- s:
@@ -306,10 +371,12 @@ func (w *World) sendSnapshots() {
 
 // entitiesFor is the single choke point for what a player may see.
 // Interest management / fog of war / team visibility will live here.
-// Currently returns everything.
-func (w *World) entitiesFor(_ *Player, dst []Entity) []Entity {
+// Currently returns everyone else (the player's own state is sent as `you`).
+func (w *World) entitiesFor(viewer *Player, dst []Entity) []Entity {
 	for _, p := range w.players {
-		dst = append(dst, p.Entity)
+		if p != viewer {
+			dst = append(dst, p.Entity)
+		}
 	}
 	return dst
 }
