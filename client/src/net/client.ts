@@ -18,8 +18,11 @@ export interface NetStats {
 export interface NetHandlers {
   onWelcome(w: WelcomeMessage): void;
   onSnapshot(s: SnapshotMessage): void;
-  /** The socket closed or never opened. `wasConnected` tells whether we ever got a welcome. */
-  onClose(wasConnected: boolean): void;
+  /**
+   * The socket closed or never opened. `wasConnected` tells whether we ever got a welcome;
+   * `code` is the WebSocket close code (4001 room not found, 4002 room full).
+   */
+  onClose(wasConnected: boolean, code: number): void;
 }
 
 const PING_EVERY_MS = 500;
@@ -45,11 +48,11 @@ export class NetClient {
       this.ping();
       this.pingTimer = setInterval(() => this.ping(), PING_EVERY_MS);
     };
-    this.ws.onclose = () => {
+    this.ws.onclose = (ev) => {
       const wasConnected = this.playerId !== null;
       this.state = "closed";
       if (this.pingTimer) clearInterval(this.pingTimer);
-      this.handlers.onClose(wasConnected);
+      this.handlers.onClose(wasConnected, ev.code);
     };
     this.ws.onmessage = (ev) => {
       if (typeof ev.data !== "string") return;
@@ -99,6 +102,16 @@ export class NetClient {
 
   sendRespawn(): void {
     this.send({ type: "respawn" });
+  }
+
+  /** A practice-range helper: refill health and ammo, back to the course start, or reset the targets. */
+  sendPractice(action: "refill" | "start" | "reset"): void {
+    this.send({ type: "practice", action });
+  }
+
+  /** Vote for another match while the results are showing. */
+  sendRematch(): void {
+    this.send({ type: "rematch" });
   }
 
   close(): void {

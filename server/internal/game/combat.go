@@ -34,17 +34,21 @@ func eyeHeight(s *PlayerState) float64 {
 
 // --- Life cycle ------------------------------------------------------------
 
-// resetLife gives p a fresh life at the spawn point: full health, full magazine, spawn protection.
-func (w *World) resetLife(p *Player) {
-	w.spawn(p)
+// resetLife gives p a fresh life at the best spawn point (see chooseSpawn).
+func (w *World) resetLife(p *Player) { w.resetLifeAt(p, w.chooseSpawn(p)) }
+
+// resetLifeAt gives p a fresh life at sp: full health, full magazine, spawn protection.
+func (w *World) resetLifeAt(p *Player, sp Vec3) {
 	p.Health = protocol.PlayerHealth{
 		Health:       WeaponMaxHealth,
 		Shield:       WeaponMaxShield,
 		Alive:        true,
-		ProtectedFor: CombatSpawnProtection,
+		ProtectedFor: w.spawnProtection(),
 	}
+	p.State = SpawnState(sp.X, sp.Y, sp.Z)
 	p.Weapon = SpawnWeapon(p.Weapon.Rng)
 	p.sinceDamage = 1e9
+	p.syncEntity()
 }
 
 // updateLife runs the per-tick timers: respawn countdown, spawn protection, shield recharge.
@@ -72,6 +76,9 @@ func (w *World) updateLife(p *Player) {
 // preferring ones no enemy can see. With nobody else around it rotates through the spawns.
 func (w *World) chooseSpawn(p *Player) Vec3 {
 	spawns := w.level.Spawns
+	if w.practice {
+		return spawns[0] // the range always starts at the course start
+	}
 	best, bestScore := 0, math.Inf(-1)
 	anyEnemy := false
 	for i, sp := range spawns {
@@ -119,45 +126,51 @@ func (w *World) canSee(q *Player, sp Vec3, dist float64) bool {
 
 // --- Lag compensation ------------------------------------------------------
 
-// recordHistory stores where p is at the end of this tick.
-func (w *World) recordHistory(p *Player) {
-	s := &p.State
-	p.hist[w.tick%CombatHistoryTicks] = histEntry{
-		tick: uint32(w.tick), valid: true, alive: p.Health.Alive,
-		x: s.X, y: s.Y, z: s.Z, height: bodyHeight(s),
-	}
-}
+// history is a ring of recent positions of one thing (a player or a target).
+type history [CombatHistoryTicks]histEntry
 
-// entryAt returns p's recorded position at a tick. The current tick is not
-// recorded yet (it ends after all shots), so it comes from live state.
-func (w *World) entryAt(p *Player, tick uint32) (histEntry, bool) {
-	if uint64(tick) >= w.tick {
-		s := &p.State
-		return histEntry{tick: tick, valid: true, alive: p.Health.Alive, x: s.X, y: s.Y, z: s.Z, height: bodyHeight(s)}, true
+func (h *history) record(e histEntry) { h[e.tick%CombatHistoryTicks] = e }
+
+// at returns the entry for a tick. The current tick is not recorded yet (it ends
+// after all shots), so it comes from `live`.
+func (h *history) at(tick uint32, cur uint64, live histEntry) (histEntry, bool) {
+	if uint64(tick) >= cur {
+		live.tick = tick
+		return live, true
 	}
-	e := p.hist[tick%CombatHistoryTicks]
+	e := h[tick%CombatHistoryTicks]
 	return e, e.valid && e.tick == tick
 }
 
-// hitboxAt is where p was when the shooter's screen showed them at viewTick.
+// boxAt is where the thing was when the shooter's screen showed it at viewTick.
 // Clients only ever saw snapshots (every snapshotEvery ticks) and interpolated
 // between them, so we do the same between the two bracketing snapshot ticks.
-func (w *World) hitboxAt(p *Player, viewTick float64) (Aabb, bool) {
-	cur := float64(w.tick)
-	if viewTick >= cur {
-		e, _ := w.entryAt(p, uint32(w.tick))
-		return boxOf(e.x, e.y, e.z, e.height), e.alive
+func (h *history) boxAt(viewTick float64, cur uint64, live histEntry) (Aabb, bool) {
+	if viewTick >= float64(cur) {
+		return boxOf(live.x, live.y, live.z, live.height), live.alive
 	}
 	lo := math.Floor(viewTick/snapshotEvery) * snapshotEvery
 	frac := (viewTick - lo) / snapshotEvery
-	a, okA := w.entryAt(p, uint32(lo))
-	b, okB := w.entryAt(p, uint32(lo)+snapshotEvery)
+	a, okA := h.at(uint32(lo), cur, live)
+	b, okB := h.at(uint32(lo)+snapshotEvery, cur, live)
 	if !okA || !okB {
-		// Too old or the player had not joined yet: fall back to where they are now.
-		e, _ := w.entryAt(p, uint32(w.tick))
-		return boxOf(e.x, e.y, e.z, e.height), e.alive
+		// Too old or it did not exist yet: fall back to where it is now.
+		return boxOf(live.x, live.y, live.z, live.height), live.alive
 	}
 	return boxOf(a.x+(b.x-a.x)*frac, a.y+(b.y-a.y)*frac, a.z+(b.z-a.z)*frac, a.height), a.alive
+}
+
+func (w *World) liveEntry(p *Player) histEntry {
+	s := &p.State
+	return histEntry{tick: uint32(w.tick), valid: true, alive: p.Health.Alive, x: s.X, y: s.Y, z: s.Z, height: bodyHeight(s)}
+}
+
+// recordHistory stores where p is at the end of this tick.
+func (w *World) recordHistory(p *Player) { p.hist.record(w.liveEntry(p)) }
+
+// hitboxAt is where p was when the shooter's screen showed them at viewTick.
+func (w *World) hitboxAt(p *Player, viewTick float64) (Aabb, bool) {
+	return p.hist.boxAt(viewTick, w.tick, w.liveEntry(p))
 }
 
 func boxOf(x, y, z, height float64) Aabb {
@@ -186,7 +199,10 @@ func (w *World) resolveShot(shooter *Player, in *Input, shot *ShotResult) {
 	view := w.rewindView(in.ViewTick)
 	n := 0
 	for _, q := range w.players {
-		if q == shooter || !q.Health.Alive {
+		if w.practice {
+			break // in the range bullets pass through other players
+		}
+		if q == shooter || !q.Health.Alive || n == len(w.boxes) {
 			continue
 		}
 		box, alive := w.hitboxAt(q, view)
@@ -196,13 +212,31 @@ func (w *World) resolveShot(shooter *Player, in *Input, shot *ShotResult) {
 		w.boxes[n] = Hitbox{ID: q.ID, HeadMinY: box.MaxY - CombatHeadSize, Aabb: box}
 		n++
 	}
+	for i := range w.targets {
+		t := &w.targets[i]
+		if !t.Health.Alive || n == len(w.boxes) {
+			continue
+		}
+		box, alive := t.hist.boxAt(view, w.tick, t.live(w.tick))
+		if !alive {
+			continue
+		}
+		w.boxes[n] = Hitbox{ID: t.ID, HeadMinY: box.MaxY - CombatHeadSize, Aabb: box}
+		n++
+	}
 	hit := CastRay(&w.level.Collision, w.boxes[:n], ox, oy, oz, dx, dy, dz, WeaponRange)
 	if hit.Kind != RayTarget {
 		return
 	}
+	if uint32(hit.TargetID) >= CombatTargetIdBase {
+		if t := w.targetByID(uint32(hit.TargetID)); t != nil && w.canDamage() {
+			w.damageTarget(shooter, t, Damage(hit.Headshot), hit.Headshot)
+		}
+		return
+	}
 	victim := w.byID(uint32(hit.TargetID))
-	if victim == nil || !victim.Health.Alive || victim.Health.ProtectedFor > 0 {
-		return // protected players soak up the bullet without damage
+	if victim == nil || !victim.Health.Alive || victim.Health.ProtectedFor > 0 || !w.canDamage() {
+		return // protected players soak up the bullet; before the match it is only a warm-up
 	}
 	w.damage(shooter, victim, Damage(hit.Headshot), hit.Headshot)
 }
@@ -210,11 +244,8 @@ func (w *World) resolveShot(shooter *Player, in *Input, shot *ShotResult) {
 // damage applies a hit: shield first, then health; handles death and the kill reward.
 func (w *World) damage(shooter, victim *Player, amount float64, headshot bool) {
 	h := &victim.Health
-	fromShield := math.Min(h.Shield, amount)
-	h.Shield -= fromShield
-	h.Health -= math.Min(h.Health, amount-fromShield)
+	killed := takeDamage(h, amount)
 	victim.sinceDamage = 0
-	killed := h.Health <= 0
 
 	var flags uint8
 	if headshot {
@@ -223,8 +254,9 @@ func (w *World) damage(shooter, victim *Player, amount float64, headshot bool) {
 	if killed {
 		flags |= protocol.GameEventFlagKilled
 	}
-	shooter.pushEvent(w.tick, protocol.EventKindHit, shooter.ID, victim.ID, amount, flags)
-	victim.pushEvent(w.tick, protocol.EventKindHurt, shooter.ID, victim.ID, amount, flags)
+	// The shooter learns how much is left, so its screen can show the target's health bar.
+	shooter.pushEvent(w.tick, protocol.EventKindHit, shooter.ID, victim.ID, amount, flags, h.Health, h.Shield)
+	victim.pushEvent(w.tick, protocol.EventKindHurt, shooter.ID, victim.ID, amount, flags, h.Health, h.Shield)
 
 	if !killed {
 		return
@@ -238,8 +270,9 @@ func (w *World) damage(shooter, victim *Player, amount float64, headshot bool) {
 	shooter.Health.Health = WeaponMaxHealth
 	shooter.Health.Shield = WeaponMaxShield
 	for _, q := range w.players {
-		q.pushEvent(w.tick, protocol.EventKindKill, shooter.ID, victim.ID, 0, flags&protocol.GameEventFlagHeadshot)
+		q.pushEvent(w.tick, protocol.EventKindKill, shooter.ID, victim.ID, 0, flags&protocol.GameEventFlagHeadshot, 0, 0)
 	}
+	w.onKill()
 }
 
 func (w *World) byID(id uint32) *Player {
@@ -255,10 +288,11 @@ func (w *World) byID(id uint32) *Player {
 
 // pushEvent queues an event for p. Each recipient numbers its own events so the
 // client can skip ones it has already handled when they are resent.
-func (p *Player) pushEvent(tick uint64, kind uint8, actor, other uint32, amount float64, flags uint8) {
+func (p *Player) pushEvent(tick uint64, kind uint8, actor, other uint32, amount float64, flags uint8, health, shield float64) {
 	p.eventSeq++
 	p.events[(p.eventHead+p.eventLen)%eventRingSize] = protocol.GameEvent{
 		Seq: p.eventSeq, Tick: uint32(tick), Kind: kind, Actor: actor, Other: other, Amount: amount, Flags: flags,
+		Health: health, Shield: shield,
 	}
 	if p.eventLen == eventRingSize {
 		p.eventHead = (p.eventHead + 1) % eventRingSize

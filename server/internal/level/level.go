@@ -20,11 +20,20 @@ type rawBox struct {
 	Rises     *string    `json:"rises"`
 }
 
+type rawTarget struct {
+	ID    string     `json:"id"`
+	Pos   [3]float64 `json:"pos"`
+	Kind  string     `json:"kind"`
+	Axis  string     `json:"axis"`
+	Range float64    `json:"range"`
+}
+
 type rawLevel struct {
-	Name       string   `json:"name"`
-	Boxes      []rawBox `json:"boxes"`
-	Ramps      []rawBox `json:"ramps"`
-	SpawnZones []rawBox `json:"spawnZones"`
+	Name       string      `json:"name"`
+	Boxes      []rawBox    `json:"boxes"`
+	Ramps      []rawBox    `json:"ramps"`
+	SpawnZones []rawBox    `json:"spawnZones"`
+	Targets    []rawTarget `json:"targets"`
 }
 
 func finite(v [3]float64) bool {
@@ -57,7 +66,7 @@ func validate(kind string, i int, b rawBox) error {
 	return nil
 }
 
-// Parse reads level JSON. Fields it does not use (targets, controlPoints) are ignored.
+// Parse reads level JSON. Fields it does not use (controlPoints) are ignored.
 func Parse(data []byte) (*game.Level, error) {
 	var raw rawLevel
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -89,7 +98,44 @@ func Parse(data []byte) (*game.Level, error) {
 		}
 		lv.Spawns = append(lv.Spawns, game.Vec3{X: z.Pos[0], Y: z.Pos[1], Z: z.Pos[2]})
 	}
+	for i, t := range raw.Targets {
+		spec, err := parseTarget(i, t)
+		if err != nil {
+			return nil, err
+		}
+		lv.Targets = append(lv.Targets, spec)
+	}
 	return lv, nil
+}
+
+// parseTarget validates a practice target the same way client/src/sim/level.ts does.
+func parseTarget(i int, t rawTarget) (game.TargetSpec, error) {
+	if !finite(t.Pos) {
+		return game.TargetSpec{}, fmt.Errorf("level: targets[%d].pos: expected finite numbers", i)
+	}
+	kind, axis := t.Kind, t.Axis
+	if kind == "" {
+		kind = "static"
+	}
+	if axis == "" {
+		axis = "x"
+	}
+	if kind != "static" && kind != "strafe" {
+		return game.TargetSpec{}, fmt.Errorf("level: targets[%d].kind: expected static or strafe", i)
+	}
+	if axis != "x" && axis != "z" {
+		return game.TargetSpec{}, fmt.Errorf("level: targets[%d].axis: expected x or z", i)
+	}
+	if math.IsNaN(t.Range) || math.IsInf(t.Range, 0) || t.Range < 0 {
+		return game.TargetSpec{}, fmt.Errorf("level: targets[%d].range: expected a number >= 0", i)
+	}
+	return game.TargetSpec{
+		ID:     t.ID,
+		Pos:    game.Vec3{X: t.Pos[0], Y: t.Pos[1], Z: t.Pos[2]},
+		Strafe: kind == "strafe",
+		AxisX:  axis == "x",
+		Range:  t.Range,
+	}, nil
 }
 
 // Load reads and parses a level file.

@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+import { letterbox, ndcToScreen } from "./viewport";
+
 /**
  * Internal render height in pixels (16:9), upscaled with nearest-neighbor to the window.
  * Lower = chunkier. Try ?res=240 (very chunky), 360, 480, 540, 720 (default, barely pixelated).
@@ -55,6 +57,14 @@ export class RetroRenderer {
     this.renderer.setSize(w, h, false);
   }
 
+  /** Where a world point appears on the page, in CSS pixels, or null if it is off screen or behind us. */
+  toScreen(x: number, y: number, z: number): { x: number; y: number } | null {
+    this.camera.updateMatrixWorld();
+    const p = new THREE.Vector3(x, y, z).project(this.camera);
+    const el = this.renderer.domElement;
+    return ndcToScreen(p.x, p.y, p.z, letterbox(el.width, el.height, RENDER_WIDTH, RENDER_HEIGHT));
+  }
+
   render(): void {
     const r = this.renderer;
     r.setRenderTarget(this.target);
@@ -64,14 +74,12 @@ export class RetroRenderer {
     // Letterbox the low-res image into the full canvas.
     const cw = r.domElement.width;
     const ch = r.domElement.height;
-    const scale = Math.min(cw / RENDER_WIDTH, ch / RENDER_HEIGHT);
-    const vw = Math.floor(RENDER_WIDTH * scale);
-    const vh = Math.floor(RENDER_HEIGHT * scale);
+    const box = letterbox(cw, ch, RENDER_WIDTH, RENDER_HEIGHT);
     r.setRenderTarget(null);
     r.setViewport(0, 0, cw, ch);
     r.setScissorTest(false);
     r.clear();
-    r.setViewport(Math.floor((cw - vw) / 2), Math.floor((ch - vh) / 2), vw, vh);
+    r.setViewport(box.x, ch - box.y - box.h, box.w, box.h); // GL counts y from the bottom
     r.render(this.blitScene, this.blitCamera);
   }
 }

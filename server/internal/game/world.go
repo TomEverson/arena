@@ -51,6 +51,17 @@ type (
 type Level struct {
 	Collision CollisionWorld
 	Spawns    []Vec3
+	// Targets are the practice range's dummies; only practice rooms use them.
+	Targets []TargetSpec
+}
+
+// TargetSpec places one practice target: it stands still, or strafes back and forth.
+type TargetSpec struct {
+	ID     string
+	Pos    Vec3 // feet position (the centre of a strafe)
+	Strafe bool
+	AxisX  bool    // strafe along x (true) or z
+	Range  float64 // half the strafe distance
 }
 
 // FlatLevel is a large empty floor with its top at y = 0 and one spawn point.
@@ -79,7 +90,7 @@ type Player struct {
 	Health        protocol.PlayerHealth
 	Kills, Deaths uint16
 	sinceDamage   float64 // seconds since last damage (shield recharge)
-	hist          [CombatHistoryTicks]histEntry
+	hist          history
 	events        [eventRingSize]protocol.GameEvent
 	eventHead     int
 	eventLen      int
@@ -88,6 +99,7 @@ type Player struct {
 	ackSeq        uint32 // last input sequence simulated
 	lastQueuedSeq uint32 // highest input sequence accepted into the queue (duplicates are skipped)
 	catchUpCredit float64
+	rematch       bool // voted for another match while the results are showing
 
 	// Pending inputs, oldest first (a fixed ring: no allocation).
 	queue [InputQueueSize]Input
@@ -115,6 +127,7 @@ func NewPlayer(id uint32) *Player {
 			Type:     protocol.ServerTypeSnapshot,
 			Entities: make([]Entity, 0, MaxPlayers),
 			Events:   make([]protocol.GameEvent, 0, eventRingSize),
+			Scores:   make([]protocol.Score, 0, MaxPlayers),
 		}
 	}
 	return p
@@ -151,6 +164,8 @@ const (
 	cmdLeave
 	cmdInput
 	cmdRespawn
+	cmdRematch
+	cmdPractice
 )
 
 type command struct {
@@ -158,6 +173,7 @@ type command struct {
 	player *Player // join
 	id     uint32  // leave, input
 	input  Input   // input
+	action PracticeAction
 }
 
 // World is the authoritative game state.
@@ -168,6 +184,14 @@ type World struct {
 	inbox     chan command
 	nextSpawn int
 	boxes     [MaxPlayers]Hitbox // scratch: target hitboxes for one shot
+
+	cfg   MatchConfig
+	match matchState
+
+	practice bool // a practice range: targets, no player-vs-player damage
+	targets  []Target
+
+	playerCount atomic.Int32 // players in the world, readable from other goroutines
 
 	publishedTick atomic.Uint64 // readable from other goroutines (healthz)
 }
@@ -184,11 +208,15 @@ func NewWorld(level *Level) *World {
 		level:   level,
 		players: make([]*Player, 0, MaxPlayers),
 		inbox:   make(chan command, inboxSize),
+		match:   matchState{phase: protocol.MatchPhaseLive}, // always live until SetMatchConfig enables a cycle
 	}
 }
 
 // Tick returns the last completed tick. Safe from any goroutine.
 func (w *World) Tick() uint64 { return w.publishedTick.Load() }
+
+// PlayerCount returns how many players are in the world. Safe from any goroutine.
+func (w *World) PlayerCount() int { return int(w.playerCount.Load()) }
 
 // Join registers a player. Blocks until the world accepts it or ctx ends.
 func (w *World) Join(ctx context.Context, p *Player) {
@@ -211,6 +239,22 @@ func (w *World) Leave(ctx context.Context, id uint32) {
 func (w *World) Respawn(ctx context.Context, id uint32) {
 	select {
 	case w.inbox <- command{kind: cmdRespawn, id: id}:
+	case <-ctx.Done():
+	}
+}
+
+// Rematch records a vote for another match while the results are showing.
+func (w *World) Rematch(ctx context.Context, id uint32) {
+	select {
+	case w.inbox <- command{kind: cmdRematch, id: id}:
+	case <-ctx.Done():
+	}
+}
+
+// Practice asks for a practice-range helper (ignored in other modes).
+func (w *World) Practice(ctx context.Context, id uint32, action PracticeAction) {
+	select {
+	case w.inbox <- command{kind: cmdPractice, id: id, action: action}:
 	case <-ctx.Done():
 	}
 }
@@ -246,12 +290,15 @@ func (w *World) Step() {
 		w.stepPlayer(p)
 	}
 	// Positions at the end of this tick, for lag compensation of later shots.
+	w.stepTargets()
 	for _, p := range w.players {
 		w.recordHistory(p)
 	}
+	w.recordTargetHistory()
 	for _, p := range w.players {
 		w.updateLife(p)
 	}
+	w.updateMatch()
 
 	if w.tick%snapshotEvery == 0 {
 		w.sendSnapshots()
@@ -276,8 +323,8 @@ func (w *World) stepPlayer(p *Player) {
 	for i := 0; i < n; i++ {
 		in := p.popInput()
 		p.ackSeq = in.Seq // dead players still consume inputs so acks keep flowing
-		if !p.Health.Alive {
-			continue
+		if !p.Health.Alive || !w.canAct() {
+			continue // dead, or in a countdown/results screen: frozen, but the input is acknowledged
 		}
 		StepPlayer(&p.State, &in, &w.level.Collision, TickDT)
 		ctx := WeaponContext{HSpeed: hSpeed(&p.State), OnGround: p.State.OnGround, Crouching: p.State.Crouching, Sliding: p.State.Sliding}
@@ -323,13 +370,6 @@ func (p *Player) syncEntity() {
 	p.Entity.Flags = f
 }
 
-// spawn puts p at the best spawn point (see chooseSpawn).
-func (w *World) spawn(p *Player) {
-	sp := w.chooseSpawn(p)
-	p.State = SpawnState(sp.X, sp.Y, sp.Z)
-	p.syncEntity()
-}
-
 func (w *World) drainInbox() {
 	for {
 		select {
@@ -347,6 +387,7 @@ func (w *World) apply(c command) {
 		if len(w.players) < cap(w.players) {
 			p := c.player
 			w.players = append(w.players, p) // before choosing a spawn so others count as enemies
+			w.playerCount.Add(1)
 			if p.hasInitial {
 				p.State = p.initial
 				p.Health = protocol.PlayerHealth{Health: WeaponMaxHealth, Shield: WeaponMaxShield, Alive: true}
@@ -363,6 +404,7 @@ func (w *World) apply(c command) {
 				w.players[i] = w.players[last]
 				w.players[last] = nil
 				w.players = w.players[:last]
+				w.playerCount.Add(-1)
 				return
 			}
 		}
@@ -375,6 +417,22 @@ func (w *World) apply(c command) {
 					p.pushInput(c.input)
 				}
 				return
+			}
+		}
+	case cmdPractice:
+		for _, p := range w.players {
+			if p.ID == c.id {
+				w.applyPractice(p, c.action)
+				return
+			}
+		}
+	case cmdRematch:
+		if w.match.phase == protocol.MatchPhaseEnded {
+			for _, p := range w.players {
+				if p.ID == c.id {
+					p.rematch = true
+					return
+				}
 			}
 		}
 	case cmdRespawn:
@@ -401,6 +459,8 @@ func (w *World) sendSnapshots() {
 		s.You = p.State
 		s.Health = p.Health
 		s.Weapon = p.Weapon
+		s.Match = w.matchInfo()
+		s.Scores = w.scoresInto(s.Scores[:0])
 		s.Entities = w.entitiesFor(p, s.Entities[:0])
 		s.Events = p.recentEvents(s.Events[:0], w.tick)
 		select {
@@ -419,6 +479,9 @@ func (w *World) entitiesFor(viewer *Player, dst []Entity) []Entity {
 		if p != viewer {
 			dst = append(dst, p.Entity)
 		}
+	}
+	for i := range w.targets {
+		dst = append(dst, w.targets[i].Entity)
 	}
 	return dst
 }

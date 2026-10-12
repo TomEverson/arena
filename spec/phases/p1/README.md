@@ -20,6 +20,7 @@ Monorepo, Turborepo, Vite + Three.js client with fixed-timestep loop, Go server 
 | [M7](m7.md) | Scale to 8 | M6 |
 | [M8](m8.md) | Look, sound and feel pass | M1 (can run in parallel from M4) |
 | [M9](m9.md) | Friend-ready | M6, M7 |
+| [M10](m10.md) | Game modes: Practice Range + FFA | M6 (independent of M7-M9, which are parked) |
 
 ## Main risks
 - **Prediction and reconciliation (M4)**: most likely place for subtly wrong code. Keep it small, test with vectors.
@@ -28,4 +29,4 @@ Monorepo, Turborepo, Vite + Three.js client with fixed-timestep loop, Go server 
 - **Scope creep**: no PvE, classes or second weapon until M9 playtests ask for them.
 
 ## Conventions
-Each milestone is one file (`m1.md` ... `m9.md`) with scope (checklist), a done-when, and notes. Add detail to the file, or a folder of notes, as the milestone is worked on. Tick the checklist as items land.
+Each milestone is one file (`m1.md` ... `m10.md`) with scope (checklist), a done-when, and notes. Add detail to the file, or a folder of notes, as the milestone is worked on. Tick the checklist as items land.

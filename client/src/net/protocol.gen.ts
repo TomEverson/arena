@@ -26,6 +26,20 @@ export const GameEventFlags = {
   killed: 2,
 } as const;
 
+/** MatchPhases bits. */
+export const MatchPhases = {
+  waiting: 0,
+  countdown: 1,
+  live: 2,
+  ended: 3,
+} as const;
+
+/** EntityKinds bits. */
+export const EntityKinds = {
+  player: 0,
+  target: 1,
+} as const;
+
 /** One client command for one tick. jump and dash are "pressed this tick" edges; the rest are held states. */
 export interface Input {
   /** Sequence number, 1-based, one per client sim tick. */
@@ -100,6 +114,8 @@ export interface Entity {
   pitch: number;
   /** Bit set of EntityFlags. */
   flags: number;
+  /** One of EntityKinds: a player or a practice-range target. */
+  kind: number;
 }
 
 /** Weapon fire-control state. Simulated identically on client and server from the inputs. */
@@ -141,6 +157,35 @@ export interface GameEvent {
   amount: number;
   /** Bit set of GameEventFlags. */
   flags: number;
+  /** hit and hurt: the victim's health after the hit (so the shooter can show a health bar). */
+  health: number;
+  /** hit and hurt: the victim's shield after the hit. */
+  shield: number;
+}
+
+/** Where the room is in its match cycle. */
+export interface MatchInfo {
+  /** One of MatchPhases. */
+  phase: number;
+  /** Seconds left in this phase (countdown, live and results). 0 while waiting. */
+  timeLeft: number;
+  /** Time ran out with the lead tied: the next kill that makes a single leader ends the match. */
+  suddenDeath: boolean;
+  /** Player id of the winner once ended; 0 for a draw or while playing. */
+  winner: number;
+  /** Players in the room. */
+  players: number;
+  /** Players needed to start a match. */
+  minPlayers: number;
+  /** How many players have asked for a rematch while the results are showing. */
+  rematchVotes: number;
+}
+
+/** One player's tally in the current match. */
+export interface Score {
+  id: number;
+  kills: number;
+  deaths: number;
 }
 
 /** The latest few inputs, oldest first. Resent redundantly so a lost message does not lose inputs; the server skips sequence numbers it already has. */
@@ -161,6 +206,18 @@ export interface RespawnMessage {
   type: "respawn";
 }
 
+/** Vote to start another match while the results are showing. */
+export interface RematchMessage {
+  type: "rematch";
+}
+
+/** A practice-range helper (ignored in other modes): refill health and ammo, teleport back to the course start, or reset the targets. */
+export interface PracticeMessage {
+  type: "practice";
+  /** refill, start or reset. */
+  action: string;
+}
+
 /** Sent once on connect. */
 export interface WelcomeMessage {
   type: "welcome";
@@ -169,6 +226,11 @@ export interface WelcomeMessage {
   snapshotRate: number;
   /** Level the server runs, for example greybox. */
   level: string;
+  /** Room code (the link that lets a friend join is ?room=<code>). */
+  room: string;
+  maxPlayers: number;
+  /** The room's mode: ffa or practice. */
+  mode: string;
 }
 
 /** The world as this player may see it, 30 times a second. */
@@ -187,6 +249,9 @@ export interface SnapshotMessage {
   weapon: WeaponState;
   /** Recent events for you (hits you landed, hits you took, kills anyone made). */
   events: GameEvent[];
+  match: MatchInfo;
+  /** Everyone's tally, including yours. */
+  scores: Score[];
 }
 
 /** Reply to ping. */
@@ -201,7 +266,9 @@ export interface PongMessage {
 export type ClientMessage =
   | InputMessage
   | PingMessage
-  | RespawnMessage;
+  | RespawnMessage
+  | RematchMessage
+  | PracticeMessage;
 
 export type ServerMessage =
   | WelcomeMessage

@@ -9,8 +9,6 @@ import { fullHealth, type Health } from "./sim/weapon";
 
 const HALF_WIDTH = 0.3;
 const HEIGHT = 1.8;
-const STRAFE_SPEED = 3.5;
-const RESPAWN_SECONDS = 2;
 
 export interface Dummy extends Health {
   id: number;
@@ -74,9 +72,25 @@ export function aliveHitboxes(dummies: readonly Dummy[]): Hitbox[] {
   return dummies.filter((d) => d.alive).map(hitboxOf);
 }
 
+/** Practice-range reset: every dummy back at home with full health. */
+export function resetDummies(dummies: Dummy[]): void {
+  for (const d of dummies) {
+    d.alive = true;
+    d.respawnIn = 0;
+    d.health = W.maxHealth;
+    d.shield = W.maxShield;
+    d.x = d.homeX;
+    d.z = d.homeZ;
+    d.dir = 1;
+    d.firstHitAt = null;
+    d.hits = 0;
+    d.headshots = 0;
+  }
+}
+
 export function killDummy(d: Dummy): void {
   d.alive = false;
-  d.respawnIn = RESPAWN_SECONDS;
+  d.respawnIn = COMBAT.targetRespawn;
 }
 
 /** Move strafing dummies and respawn dead ones. `frozen` is true during hitstop. */
@@ -99,7 +113,7 @@ export function stepDummies(dummies: Dummy[], dt: number, frozen: boolean): void
     }
     if (d.kind !== "strafe") continue;
     const home = d.axis === "x" ? d.homeX : d.homeZ;
-    let p = (d.axis === "x" ? d.x : d.z) + d.dir * STRAFE_SPEED * dt;
+    let p = (d.axis === "x" ? d.x : d.z) + d.dir * COMBAT.targetSpeed * dt;
     if (p > home + d.range) {
       p = home + d.range;
       d.dir = -1;

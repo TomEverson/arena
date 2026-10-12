@@ -15,6 +15,7 @@ const ent = (id: number, x: number, extra: Partial<Entity> = {}): Entity => ({
   yaw: 0,
   pitch: 0,
   flags: 0,
+  kind: 0,
   ...extra,
 });
 
@@ -128,6 +129,8 @@ describe("EventTracker", () => {
     other: 2,
     amount: 9,
     flags: 0,
+    health: 100,
+    shield: 41,
   });
 
   it("hands back each event once, even when snapshots resend it", () => {

@@ -38,11 +38,13 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
 | `pnpm gen` | Regenerate generated code: Go constants from `shared/params.json`, wire types from `protocol/messages.json` |
 | `pnpm dev:lag` | Like `pnpm dev`, with the server's fake network (80 ms each way, 3% loss) |
 | `pnpm netcheck` | End-to-end netcode check: two headless players against the real server (needs Go; takes about 20 s) |
+| `pnpm practicecheck` | End-to-end practice-range check: a bot shooting strafing targets with and without lag compensation, no player-vs-player damage, the helper commands (about 70 s) |
+| `pnpm matchcheck` | End-to-end match-flow check: countdown, live, results, rematch, a late joiner (about 40 s) |
 | `pnpm combatcheck` | End-to-end combat check: two bots fight through the fake network, with and without lag compensation (about 80 s) |
 | `pnpm vectors` | Re-record `testvectors/movement/*.json` from the TS sim (runs each scenario's verify) |
 | `pnpm bots` | Placeholder (prints "not implemented yet") |
 
-Server flags: `--addr=:8080 --level=../levels/greybox.json --fake-latency=80ms --loss=3%`. Health: `GET /healthz`.
+Server flags: `--addr=:8080 --level=../levels/greybox.json --fake-latency=80ms --loss=3%`, and for the match cycle `--countdown=5s --match-length=6m --results=15s --room-idle=1m`, `--no-match` (FFA rooms always live) and `--practice-level=../levels/greybox.json` (the practice range's level). Health: `GET /healthz`. A room has a mode, `ffa` or `practice`: `POST /api/rooms {"mode":"practice"}`, and players join with `/?room=CODE`. Opening the page without a room link shows a start screen (or use `?mode=practice` / `?mode=ffa`).
 Prereqs: Node 22+, pnpm 10, Go 1.24+, `air` (`go install github.com/air-verse/air@latest`), optional `golangci-lint`.
 
 ## Layout

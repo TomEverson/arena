@@ -27,6 +27,16 @@ In dev, Vite serves the client on :5173 and proxies `/ws` and `/healthz` to the 
 - Health, damage, kills, death, respawn timers, spawn protection and spawn choice (farthest from living enemies, preferring spawns no enemy can see) are server-only. Dead players still consume inputs.
 - Events (`hit`, `hurt`, `kill`) ride in snapshots for 6 ticks and are de-duplicated by per-recipient sequence number.
 
+## Rooms and the match (M6)
+- A **room** is one match: its own `World` on its own goroutine with its own 60 Hz tick. `Rooms` (network side, mutex-protected) creates rooms, looks them up and removes empty ones; the simulation itself still has no locks. Clients create or join rooms with `POST /api/rooms` and `/ws?room=CODE`.
+- Inside the world, `match.go` runs the cycle waiting -> countdown -> live -> ended -> countdown. Players are frozen (inputs acknowledged, nothing simulated) in the countdown and results; shots only hurt while live. Sudden death ends on the first kill that leaves a single leader.
+- Snapshots carry `match` (phase, clock, winner, vote count) and `scores`; the client freezes prediction in exactly the phases the server does (`canAct`).
+
+## Game modes and the practice range (M10)
+- A room has a **mode**. `ffa` runs the match cycle on the FFA level. `practice` is an always-live range: `World.SetPractice(true)` adds the level's `targets[]` as server-simulated dummies (`server/internal/game/targets.go`), turns off player-vs-player damage and spawn protection, and starts everyone at the first spawn point. `Rooms` builds each mode from its own `ModeConfig` (level, match rules, practice flag).
+- Targets are entities in snapshots (`kind: target`, ids from 1000) with their own position history, so lag compensation works on strafing ones exactly as on players (`history.boxAt`). They never shoot back; killing one sends the shooter the same hit and kill events as a player kill, and it comes back after 2 s.
+- Practice helpers (`refill`, `start`, `reset`) are client messages the world ignores outside a range. The stats panel (accuracy, time-to-kill) is computed on the client from the hit events.
+
 ## Client
 - `FixedTimestep` (`client/src/loop.ts`) simulates at 60 Hz in an accumulator; rendering runs per
   animation frame with an interpolation alpha between the previous and current sim state.

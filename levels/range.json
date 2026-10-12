@@ -1,0 +1,151 @@
+{
+  "name": "range",
+  "version": 1,
+  "bounds": {
+    "min": [
+      -40,
+      -5,
+      -40
+    ],
+    "max": [
+      40,
+      30,
+      40
+    ]
+  },
+  "boxes": [
+    {
+      "id": "floor",
+      "pos": [
+        0,
+        -0.5,
+        0
+      ],
+      "size": [
+        80,
+        1,
+        80
+      ]
+    },
+    {
+      "id": "wall-n",
+      "pos": [
+        0,
+        4,
+        -40.5
+      ],
+      "size": [
+        82,
+        8,
+        1
+      ]
+    },
+    {
+      "id": "wall-s",
+      "pos": [
+        0,
+        4,
+        40.5
+      ],
+      "size": [
+        82,
+        8,
+        1
+      ]
+    },
+    {
+      "id": "wall-w",
+      "pos": [
+        -40.5,
+        4,
+        0
+      ],
+      "size": [
+        1,
+        8,
+        80
+      ]
+    },
+    {
+      "id": "wall-e",
+      "pos": [
+        40.5,
+        4,
+        0
+      ],
+      "size": [
+        1,
+        8,
+        80
+      ]
+    }
+  ],
+  "ramps": [],
+  "spawnZones": [
+    {
+      "id": "spawn",
+      "pos": [
+        0,
+        0,
+        34
+      ],
+      "size": [
+        6,
+        1,
+        6
+      ]
+    }
+  ],
+  "controlPoints": [],
+  "targets": [
+    {
+      "id": "static-12m",
+      "pos": [
+        0,
+        0,
+        22
+      ],
+      "kind": "static"
+    },
+    {
+      "id": "static-26m",
+      "pos": [
+        0,
+        0,
+        8
+      ],
+      "kind": "static"
+    },
+    {
+      "id": "static-44m",
+      "pos": [
+        0,
+        0,
+        -10
+      ],
+      "kind": "static"
+    },
+    {
+      "id": "strafe-near",
+      "pos": [
+        0,
+        0,
+        10
+      ],
+      "kind": "strafe",
+      "axis": "x",
+      "range": 6
+    },
+    {
+      "id": "strafe-far",
+      "pos": [
+        0,
+        0,
+        -4
+      ],
+      "kind": "strafe",
+      "axis": "x",
+      "range": 8
+    }
+  ]
+}

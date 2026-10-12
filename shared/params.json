@@ -141,6 +141,16 @@
     "spawnProtection": 2,
     "maxRewindTicks": 20,
     "historyTicks": 32,
-    "eventRedundancyTicks": 6
+    "eventRedundancyTicks": 6,
+    "targetIdBase": 1000,
+    "targetRespawn": 2,
+    "targetSpeed": 3.5
+  },
+  "match": {
+    "minPlayers": 2,
+    "maxPlayers": 8,
+    "countdownSeconds": 5,
+    "lengthSeconds": 360,
+    "resultsSeconds": 15
   }
 }

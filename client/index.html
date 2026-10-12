@@ -233,6 +233,258 @@
         content: " ◆";
         color: #ff5a4a;
       }
+
+      #matchbar {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #fff;
+        font: 700 16px monospace;
+        text-shadow: 2px 2px 0 #000;
+        background: rgba(0, 0, 0, 0.45);
+        padding: 4px 14px;
+        pointer-events: none;
+        text-align: center;
+        white-space: pre;
+      }
+      #matchbar small {
+        display: block;
+        font-size: 11px;
+        font-weight: 400;
+        color: #bcd;
+      }
+      #countdown {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font: 700 140px monospace;
+        text-shadow: 4px 4px 0 #000;
+        pointer-events: none;
+      }
+      #countdown.on {
+        display: flex;
+      }
+      #scoreboard,
+      #results {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        display: none;
+        background: rgba(0, 0, 0, 0.72);
+        color: #fff;
+        font: 14px monospace;
+        padding: 16px 24px;
+        min-width: 360px;
+        pointer-events: none;
+        text-shadow: 1px 1px 0 #000;
+      }
+      #scoreboard.on,
+      #results.on {
+        display: block;
+      }
+      #results h1 {
+        margin: 0 0 10px;
+        font: 700 34px monospace;
+        text-align: center;
+        color: #ffd24a;
+      }
+      #scoreboard table,
+      #results table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      #scoreboard th,
+      #results th {
+        text-align: left;
+        color: #9ab;
+        font-weight: 400;
+        border-bottom: 1px solid #456;
+      }
+      #scoreboard td,
+      #results td,
+      #scoreboard th,
+      #results th {
+        padding: 3px 8px;
+      }
+      #scoreboard td:nth-child(n + 3),
+      #results td:nth-child(n + 3),
+      #scoreboard th:nth-child(n + 3),
+      #results th:nth-child(n + 3) {
+        text-align: right;
+      }
+      tr.me td {
+        color: #ffd24a;
+        font-weight: 700;
+      }
+      #results .foot {
+        margin-top: 12px;
+        text-align: center;
+        color: #9fd;
+      }
+      #hint {
+        flex-direction: column;
+        gap: 14px;
+      }
+      #roominfo {
+        font-size: 14px;
+        color: #9fd;
+        text-align: center;
+      }
+      #roominfo button {
+        font: inherit;
+        margin-left: 8px;
+        cursor: pointer;
+        background: #234;
+        color: #fff;
+        border: 1px solid #567;
+        padding: 2px 10px;
+      }
+      #roominfo .err {
+        color: #ff8a7a;
+        font-size: 16px;
+      }
+      #roominfo a {
+        color: #ffd24a;
+      }
+
+      #hitlayer {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .tmark {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        width: 72px;
+        text-align: center;
+        display: none;
+        padding-bottom: 2px; /* a hair of air between the bar and the head */
+      }
+      .tmark .num {
+        font: 700 24px monospace;
+        color: #fff;
+        text-shadow:
+          2px 2px 0 #000,
+          -1px -1px 0 #000;
+        min-height: 28px;
+        transform-origin: 50% 100%;
+      }
+      .tmark .num.head {
+        color: #ffd24a;
+      }
+      .tmark .num.kill {
+        color: #ff5a4a;
+      }
+      .tmark .num.pop {
+        animation: numpop 0.18s ease-out;
+      }
+      @keyframes numpop {
+        from {
+          transform: scale(1.7);
+        }
+        to {
+          transform: scale(1);
+        }
+      }
+      .tmark .bar {
+        height: 5px;
+        margin-top: 2px;
+        background: rgba(0, 0, 0, 0.65);
+        outline: 1px solid rgba(0, 0, 0, 0.9);
+      }
+      .tmark .bar i {
+        display: block;
+        height: 100%;
+        transition: width 0.12s;
+      }
+      .tmark .shield i {
+        background: #4ac0ff;
+      }
+      .tmark .health i {
+        background: #ff5a4a;
+      }
+      #menu {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        background: #0a0f16;
+        color: #fff;
+        font-family: monospace;
+      }
+      #menu.on {
+        display: flex;
+      }
+      #menu h1 {
+        margin: 0;
+        font-size: 56px;
+        letter-spacing: 12px;
+        color: #ffd24a;
+      }
+      #menu .buttons {
+        display: flex;
+        gap: 20px;
+      }
+      #menu button {
+        width: 300px;
+        padding: 22px 18px;
+        font: 700 22px monospace;
+        color: #fff;
+        cursor: pointer;
+        background: #16212e;
+        border: 2px solid #3a5068;
+      }
+      #menu button:hover {
+        background: #1f3045;
+        border-color: #ffd24a;
+      }
+      #menu button small {
+        display: block;
+        margin-top: 10px;
+        font: 400 13px monospace;
+        color: #9ab;
+      }
+      #menu #menu-note {
+        min-height: 1.2em;
+        color: #ff8a7a;
+      }
+      #menu a {
+        color: #8ab;
+        font-size: 13px;
+      }
+      #practice {
+        position: fixed;
+        left: 24px;
+        top: 160px; /* below the debug text at the top left */
+        color: #fff;
+        font: 13px/1.5 monospace;
+        pointer-events: none;
+        text-shadow: 1px 1px 0 #000;
+        background: rgba(0, 0, 0, 0.45);
+        padding: 8px 12px;
+        display: none;
+      }
+      #practice.on {
+        display: block;
+      }
+      #practice b {
+        color: #ffd24a;
+      }
+      #practice .keys {
+        margin-top: 6px;
+        color: #9ab;
+        font-size: 11px;
+      }
       #ammo {
         position: fixed;
         right: 24px;
@@ -250,42 +502,48 @@
         margin-top: 4px;
         min-height: 1em;
       }
-      #targetinfo {
-        position: fixed;
-        left: 50%;
-        top: calc(50% + 48px);
-        transform: translateX(-50%);
-        color: #fff;
-        font: 12px monospace;
-        text-shadow: 1px 1px 0 #000;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.25s;
-        white-space: pre;
-        text-align: center;
-      }
-      #targetinfo.on {
-        opacity: 1;
-        transition: none;
-      }
     </style>
   </head>
   <body>
+    <div id="menu">
+      <h1>ARENA</h1>
+      <div class="buttons">
+        <button id="play-ffa">
+          Play FFA
+          <small>6-minute free-for-all. Share the link to bring friends.</small>
+        </button>
+        <button id="play-practice">
+          Practice range
+          <small>Movement course and shooting targets. No clock, targets do not shoot back.</small>
+        </button>
+      </div>
+      <div id="menu-note"></div>
+      <a href="?offline">no server? play offline</a>
+    </div>
     <canvas id="game"></canvas>
+    <div id="practice"></div>
     <div id="hud"></div>
     <div id="crosshair">
       <i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i>
     </div>
     <div id="hitmarker"></div>
-    <div id="targetinfo"></div>
+    <div id="hitlayer"></div>
     <div id="ammo"></div>
     <div id="vitals"></div>
     <div id="hurt"></div>
     <div id="death"></div>
     <div id="killfeed"></div>
+    <div id="matchbar"></div>
+    <div id="countdown"></div>
+    <div id="scoreboard"></div>
+    <div id="results"></div>
     <div id="hint">
-      Click to play — WASD move · Space jump (hold at green walls to climb) · Shift dash · C
-      crouch/slide · LMB fire · RMB aim · R reload · P respawn · Esc release
+      <div id="hinttext">
+        Click to play — WASD move · Space jump (hold at green walls to climb) · Shift dash · C
+        crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy
+        invite link · P respawn (dev) · Esc release
+      </div>
+      <div id="roominfo"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

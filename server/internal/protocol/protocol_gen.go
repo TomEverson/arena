@@ -8,6 +8,8 @@ const (
 	ClientTypeInput    = "input"
 	ClientTypePing     = "ping"
 	ClientTypeRespawn  = "respawn"
+	ClientTypeRematch  = "rematch"
+	ClientTypePractice = "practice"
 	ServerTypeWelcome  = "welcome"
 	ServerTypeSnapshot = "snapshot"
 	ServerTypePong     = "pong"
@@ -36,6 +38,20 @@ const (
 const (
 	GameEventFlagHeadshot uint8 = 1
 	GameEventFlagKilled   uint8 = 2
+)
+
+// MatchPhases bits.
+const (
+	MatchPhaseWaiting   uint8 = 0
+	MatchPhaseCountdown uint8 = 1
+	MatchPhaseLive      uint8 = 2
+	MatchPhaseEnded     uint8 = 3
+)
+
+// EntityKinds bits.
+const (
+	EntityKindPlayer uint8 = 0
+	EntityKindTarget uint8 = 1
 )
 
 // Input: One client command for one tick. jump and dash are "pressed this tick" edges; the rest are held states.
@@ -112,6 +128,8 @@ type Entity struct {
 	Pitch  float64 `json:"pitch"`
 	// Bit set of EntityFlags.
 	Flags uint8 `json:"flags"`
+	// One of EntityKinds: a player or a practice-range target.
+	Kind uint8 `json:"kind"`
 }
 
 // WeaponState: Weapon fire-control state. Simulated identically on client and server from the inputs.
@@ -153,6 +171,35 @@ type GameEvent struct {
 	Amount float64 `json:"amount"`
 	// Bit set of GameEventFlags.
 	Flags uint8 `json:"flags"`
+	// hit and hurt: the victim's health after the hit (so the shooter can show a health bar).
+	Health float64 `json:"health"`
+	// hit and hurt: the victim's shield after the hit.
+	Shield float64 `json:"shield"`
+}
+
+// MatchInfo: Where the room is in its match cycle.
+type MatchInfo struct {
+	// One of MatchPhases.
+	Phase uint8 `json:"phase"`
+	// Seconds left in this phase (countdown, live and results). 0 while waiting.
+	TimeLeft float64 `json:"timeLeft"`
+	// Time ran out with the lead tied: the next kill that makes a single leader ends the match.
+	SuddenDeath bool `json:"suddenDeath"`
+	// Player id of the winner once ended; 0 for a draw or while playing.
+	Winner uint32 `json:"winner"`
+	// Players in the room.
+	Players uint8 `json:"players"`
+	// Players needed to start a match.
+	MinPlayers uint8 `json:"minPlayers"`
+	// How many players have asked for a rematch while the results are showing.
+	RematchVotes uint8 `json:"rematchVotes"`
+}
+
+// Score: One player's tally in the current match.
+type Score struct {
+	ID     uint32 `json:"id"`
+	Kills  uint16 `json:"kills"`
+	Deaths uint16 `json:"deaths"`
 }
 
 // Welcome: Sent once on connect.
@@ -163,6 +210,11 @@ type Welcome struct {
 	SnapshotRate uint16 `json:"snapshotRate"`
 	// Level the server runs, for example greybox.
 	Level string `json:"level"`
+	// Room code (the link that lets a friend join is ?room=<code>).
+	Room       string `json:"room"`
+	MaxPlayers uint8  `json:"maxPlayers"`
+	// The room's mode: ffa or practice.
+	Mode string `json:"mode"`
 }
 
 // Snapshot: The world as this player may see it, 30 times a second.
@@ -181,6 +233,9 @@ type Snapshot struct {
 	Weapon   WeaponState  `json:"weapon"`
 	// Recent events for you (hits you landed, hits you took, kills anyone made).
 	Events []GameEvent `json:"events"`
+	Match  MatchInfo   `json:"match"`
+	// Everyone's tally, including yours.
+	Scores []Score `json:"scores"`
 }
 
 // Pong: Reply to ping.
@@ -197,4 +252,5 @@ type ClientMessage struct {
 	Type   string  `json:"type"`
 	Inputs []Input `json:"inputs,omitempty"`
 	T      float64 `json:"t,omitempty"`
+	Action string  `json:"action,omitempty"`
 }

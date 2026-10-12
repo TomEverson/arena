@@ -3,7 +3,12 @@
 > Brainstorming and rationale live in [`spec/brainstorm/`](../brainstorm/README.md), especially
 > [04-game-design.md](../brainstorm/04-game-design.md). This file is the polished result.
 
-## Game mode: FFA Deathmatch (first and only mode for now)
+## Game modes
+Two modes, chosen on the start screen (see `spec/phases/p1/m10.md`):
+- **FFA deathmatch**: the competitive game described below.
+- **Practice range**: an always-live sandbox with the movement course and shooting targets that do not shoot back, no timer or scoreboard, and a stats panel (time-to-kill, accuracy) for tuning and testing. Friends can share a range by link; players cannot damage each other there.
+
+## Game mode: FFA Deathmatch
 
 PvP only. No AI, no classes, no control points yet. One concrete mode is built and tuned before any other.
 Control-point war, PvPvE and team modes stay in the brainstorm backlog.
@@ -11,7 +16,8 @@ Control-point war, PvPvE and team modes stay in the brainstorm backlog.
 ### Match
 - **Players:** 8 max to start (2 minimum for a match; 16 is a stretch goal).
 - **Length:** 6 minutes. No kill limit: when the timer ends, most kills wins.
-- **Tie at the end:** sudden death (next kill wins). *Default, not yet confirmed.*
+- **Tie at the end:** sudden death: the clock stops and the first kill that leaves a single leader ends the match. *Default, not yet confirmed.*
+- **Flow:** wait for 2 players -> 5 s countdown (frozen) -> 6:00 match -> 15 s results (Enter to vote for a rematch; everyone voting starts it early) -> next match. Players can join and leave at any time; joiners start at 0 kills. Friends join by link (`?room=CODE`).
 - **Map:** one small-to-medium arena with vertical play, so movement has something to use.
 
 ### Teams

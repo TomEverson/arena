@@ -55,7 +55,7 @@ func TestEncodeSnapshot(t *testing.T) {
 	for _, want := range []string{
 		`"type":"snapshot"`, `"tick":12`, `"ackSeq":7`, `"queued":1`,
 		`"you":{"x":1.5,"y":2,"z":-3`, `"onGround":true`, `"airJumps":1`,
-		`"entities":[{"id":2,"teamId":2,"x":4,"y":5,"z":6,"yaw":0.5,"pitch":0,"flags":16}]`,
+		`"entities":[{"id":2,"teamId":2,"x":4,"y":5,"z":6,"yaw":0.5,"pitch":0,"flags":16,"kind":0}]`,
 	} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("snapshot %s missing %s", b, want)
@@ -64,8 +64,8 @@ func TestEncodeSnapshot(t *testing.T) {
 }
 
 func TestEncodeWelcomeAndPong(t *testing.T) {
-	w, _ := (JSON{}).EncodeWelcome(nil, &protocol.Welcome{Type: protocol.ServerTypeWelcome, PlayerID: 3, TickRate: 60, SnapshotRate: 30, Level: "greybox"})
-	if string(w) != `{"type":"welcome","playerId":3,"tickRate":60,"snapshotRate":30,"level":"greybox"}` {
+	w, _ := (JSON{}).EncodeWelcome(nil, &protocol.Welcome{Type: protocol.ServerTypeWelcome, PlayerID: 3, TickRate: 60, SnapshotRate: 30, Level: "greybox", Room: "K7QWM", MaxPlayers: 8, Mode: "practice"})
+	if string(w) != `{"type":"welcome","playerId":3,"tickRate":60,"snapshotRate":30,"level":"greybox","room":"K7QWM","maxPlayers":8,"mode":"practice"}` {
 		t.Errorf("welcome = %s", w)
 	}
 	p, _ := (JSON{}).EncodePong(nil, &protocol.Pong{Type: protocol.ServerTypePong, T: 99.5, Tick: 1000})

@@ -108,6 +108,10 @@
         "flags": {
           "type": "u8",
           "doc": "Bit set of EntityFlags."
+        },
+        "kind": {
+          "type": "u8",
+          "doc": "One of EntityKinds: a player or a practice-range target."
         }
       }
     },
@@ -174,7 +178,56 @@
         "flags": {
           "type": "u8",
           "doc": "Bit set of GameEventFlags."
+        },
+        "health": {
+          "type": "f64",
+          "doc": "hit and hurt: the victim's health after the hit (so the shooter can show a health bar)."
+        },
+        "shield": {
+          "type": "f64",
+          "doc": "hit and hurt: the victim's shield after the hit."
         }
+      }
+    },
+    "MatchInfo": {
+      "doc": "Where the room is in its match cycle.",
+      "fields": {
+        "phase": {
+          "type": "u8",
+          "doc": "One of MatchPhases."
+        },
+        "timeLeft": {
+          "type": "f64",
+          "doc": "Seconds left in this phase (countdown, live and results). 0 while waiting."
+        },
+        "suddenDeath": {
+          "type": "bool",
+          "doc": "Time ran out with the lead tied: the next kill that makes a single leader ends the match."
+        },
+        "winner": {
+          "type": "u32",
+          "doc": "Player id of the winner once ended; 0 for a draw or while playing."
+        },
+        "players": {
+          "type": "u8",
+          "doc": "Players in the room."
+        },
+        "minPlayers": {
+          "type": "u8",
+          "doc": "Players needed to start a match."
+        },
+        "rematchVotes": {
+          "type": "u8",
+          "doc": "How many players have asked for a rematch while the results are showing."
+        }
+      }
+    },
+    "Score": {
+      "doc": "One player's tally in the current match.",
+      "fields": {
+        "id": "u32",
+        "kills": "u16",
+        "deaths": "u16"
       }
     }
   },
@@ -197,6 +250,16 @@
     "GameEventFlags": {
       "headshot": 1,
       "killed": 2
+    },
+    "MatchPhases": {
+      "waiting": 0,
+      "countdown": 1,
+      "live": 2,
+      "ended": 3
+    },
+    "EntityKinds": {
+      "player": 0,
+      "target": 1
     }
   },
   "client": {
@@ -218,6 +281,19 @@
     "respawn": {
       "doc": "Ask the server to put this player back at a spawn point.",
       "fields": {}
+    },
+    "rematch": {
+      "doc": "Vote to start another match while the results are showing.",
+      "fields": {}
+    },
+    "practice": {
+      "doc": "A practice-range helper (ignored in other modes): refill health and ammo, teleport back to the course start, or reset the targets.",
+      "fields": {
+        "action": {
+          "type": "string",
+          "doc": "refill, start or reset."
+        }
+      }
     }
   },
   "server": {
@@ -230,6 +306,15 @@
         "level": {
           "type": "string",
           "doc": "Level the server runs, for example greybox."
+        },
+        "room": {
+          "type": "string",
+          "doc": "Room code (the link that lets a friend join is ?room=<code>)."
+        },
+        "maxPlayers": "u8",
+        "mode": {
+          "type": "string",
+          "doc": "The room's mode: ffa or practice."
         }
       }
     },
@@ -258,6 +343,11 @@
         "events": {
           "type": "[GameEvent]",
           "doc": "Recent events for you (hits you landed, hits you took, kills anyone made)."
+        },
+        "match": "MatchInfo",
+        "scores": {
+          "type": "[Score]",
+          "doc": "Everyone's tally, including yours."
         }
       }
     },

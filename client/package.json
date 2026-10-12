@@ -12,7 +12,9 @@
     "dev:lag": "vite",
     "netcheck": "tsx scripts/netcheck.ts",
     "format": "eslint . --fix && prettier --write .",
-    "combatcheck": "tsx scripts/combatcheck.ts"
+    "combatcheck": "tsx scripts/combatcheck.ts",
+    "matchcheck": "tsx scripts/matchcheck.ts",
+    "practicecheck": "tsx scripts/practicecheck.ts"
   },
   "dependencies": {
     "three": "^0.186.1"

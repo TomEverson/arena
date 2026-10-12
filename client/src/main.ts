@@ -1,19 +1,46 @@
 import * as THREE from "three";
 
 import greybox from "../../levels/greybox.json";
-import { aliveHitboxes, type Dummy, killDummy, makeDummies, stepDummies } from "./dummies";
+import {
+  aliveHitboxes,
+  type Dummy,
+  DUMMY_HEIGHT,
+  killDummy,
+  makeDummies,
+  resetDummies,
+  stepDummies,
+} from "./dummies";
 import { DummyViews } from "./dummyView";
 import { Fx } from "./fx";
+import { HitFeedback } from "./hitFeedback";
 import { CombatHud } from "./hud";
 import { buildLevelMeshes } from "./levelRender";
 import { FixedTimestep, TICK_RATE } from "./loop";
+import { MatchHud } from "./matchHud";
+import { canAct } from "./matchui";
 import { NetClient } from "./net/client";
 import { ServerClock } from "./net/clock";
 import { EventTracker } from "./net/events";
 import { INTERP_TICKS, RemoteTracks } from "./net/interpolation";
 import { Predictor } from "./net/prediction";
-import { EntityFlags, type PlayerHealth } from "./net/protocol.gen";
+import {
+  EntityFlags,
+  type GameEvent,
+  GameEventFlags,
+  type MatchInfo,
+  type PlayerHealth,
+  type Score,
+} from "./net/protocol.gen";
+import {
+  closeReason,
+  createRoom,
+  type GameMode,
+  modeFromUrl,
+  roomFromUrl,
+  roomLink,
+} from "./net/rooms";
 import { CorrectionSmoother } from "./net/smoothing";
+import { PracticeStats } from "./practiceStats";
 import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
 import { castRay, type Hitbox } from "./sim/hitscan";
@@ -57,7 +84,7 @@ const HITSTOP_TICKS = 4; // about 67 ms: dummies freeze when one dies
 const dummies: Dummy[] = makeDummies(level.targets);
 const dummyViews = new DummyViews(scene, dummies);
 const fx = new Fx(scene, view.camera);
-const targetInfo = document.getElementById("targetinfo") as HTMLDivElement;
+const hitFeedback = new HitFeedback();
 const ammoEl = document.getElementById("ammo") as HTMLDivElement;
 
 const DT = 1 / TICK_RATE;
@@ -74,11 +101,17 @@ const held = new Set<string>();
 const pressed = { jump: false, dash: false, reload: false };
 
 window.addEventListener("keydown", (e) => {
+  if (e.code === "Tab") e.preventDefault(); // Tab shows the scoreboard, not the browser's focus ring
   if (e.repeat) return;
   held.add(e.code);
   if (e.code === "Space") pressed.jump = true;
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") pressed.dash = true;
   if (e.code === "KeyR") pressed.reload = true;
+  if (e.code === "Enter") net?.sendRematch(); // only counts while the results are showing
+  if (e.code === "KeyL") copyInviteLink();
+  if (e.code === "KeyK") practiceReset();
+  if (e.code === "KeyH") practiceRefill();
+  if (e.code === "KeyT") practiceStart();
   if (e.code === "KeyP") {
     if (net)
       net.sendRespawn(); // the server owns our position; the snapshot corrects us
@@ -129,8 +162,122 @@ const clock = new ServerClock();
 const remotes = new RemoteTracks();
 const remoteViews = new RemoteViews(scene);
 const events = new EventTracker();
-const combatHud = new CombatHud((kind) => fx.hitMarker(kind));
+const combatHud = new CombatHud(
+  (kind) => fx.hitMarker(kind),
+  (e) => showServerHit(e),
+);
+const matchHud = new MatchHud();
+const roomInfoEl = document.getElementById("roominfo") as HTMLDivElement;
 let health: PlayerHealth | null = null;
+let match: MatchInfo | null = null;
+let scores: Score[] = [];
+let roomCode = "";
+let myId = -1;
+let roomNote = "";
+let gameMode: GameMode = "ffa"; // the room's mode, from the server's welcome
+const practiceStats = new PracticeStats();
+const practiceEl = document.getElementById("practice") as HTMLDivElement;
+const menuEl = document.getElementById("menu") as HTMLDivElement;
+const menuNote = document.getElementById("menu-note") as HTMLDivElement;
+
+/** Practice tools and the stats panel are on in the practice range, and in offline mode (local dummies). */
+const inRange = () => (netMode === "online" ? gameMode === "practice" : netMode === "offline");
+
+/** K: reset the targets and the stats. */
+function practiceReset(): void {
+  if (!inRange()) return;
+  practiceStats.reset();
+  if (netMode === "online") net?.sendPractice("reset");
+  else resetDummies(dummies);
+}
+
+/** H: refill health and ammo. */
+function practiceRefill(): void {
+  if (!inRange()) return;
+  if (netMode === "online") net?.sendPractice("refill");
+  else weapon = spawnWeapon(1);
+}
+
+/** T: back to the start of the movement course. */
+function practiceStart(): void {
+  if (!inRange()) return;
+  if (netMode === "online") {
+    net?.sendPractice("start");
+  } else {
+    player = spawnState(spawnPos[0], spawnPos[1], spawnPos[2]);
+    prevPlayer = player;
+  }
+}
+
+function practiceHtml(): string {
+  const s = practiceStats;
+  const secs = (v: number | null) => (v === null ? "–" : `${v.toFixed(2)}s`);
+  return (
+    `<b>${netMode === "offline" ? "PRACTICE (offline)" : "PRACTICE RANGE"}</b><br>` +
+    `shots ${s.shots}  hits ${s.hits}  accuracy <b>${(s.accuracy * 100).toFixed(0)}%</b><br>` +
+    `headshots ${s.headshots} (${(s.headshotShare * 100).toFixed(0)}%)  damage ${Math.round(s.damage)}<br>` +
+    `kills ${s.kills}  TTK last <b>${secs(s.lastTtk)}</b>  avg ${secs(s.averageTtk)}  best ${secs(s.bestTtk)}` +
+    `<div class="keys">K reset targets + stats · H refill · T course start</div>`
+  );
+}
+
+/** The link a friend opens to join this room (no other query parameters). */
+const inviteLink = () => (roomCode ? roomLink(location.origin, location.pathname, roomCode) : "");
+
+function copyInviteLink(): void {
+  const link = inviteLink();
+  if (!link) return;
+  navigator.clipboard.writeText(link).then(
+    () => (roomNote = "Link copied!"),
+    () => (roomNote = `Copy failed: ${link}`),
+  );
+  setTimeout(() => (roomNote = ""), 2500);
+}
+roomInfoEl.addEventListener("click", (e) => {
+  e.stopPropagation(); // clicking the link area should not start the game
+  if ((e.target as HTMLElement).id === "copylink") copyInviteLink();
+});
+
+/** A server-confirmed hit: show the target's health bar and a damage number over where they are on screen. */
+function showServerHit(e: GameEvent): void {
+  const now = performance.now();
+  practiceStats.onHit({
+    targetId: e.other,
+    damage: e.amount,
+    headshot: (e.flags & GameEventFlags.headshot) !== 0,
+    killed: (e.flags & GameEventFlags.killed) !== 0,
+    tick: e.tick,
+  });
+  remoteViews.flash(e.other);
+  hitFeedback.onHit(
+    {
+      targetId: e.other,
+      health: e.health,
+      shield: e.shield,
+      damage: e.amount,
+      headshot: (e.flags & GameEventFlags.headshot) !== 0,
+      killed: (e.flags & GameEventFlags.killed) !== 0,
+    },
+    now,
+  );
+}
+
+/** How far above the top of a head the health bar sits (metres). 0 puts it right on the head. */
+const HEAD_GAP = 0;
+
+/** Where a target's head is on screen right now (for the marker that follows them), or null. */
+function headAnchor(id: number): { x: number; y: number } | null {
+  if (netMode === "offline") {
+    const d = dummies[id];
+    return d ? view.toScreen(d.x, d.y + DUMMY_HEIGHT + HEAD_GAP, d.z) : null;
+  }
+  const pose = clock.ready
+    ? remotes.sample(id, clock.tickAt(performance.now()) - INTERP_TICKS)
+    : null;
+  if (!pose) return null;
+  const height = pose.flags & EntityFlags.crouching ? PARAMS.crouchHeight : PARAMS.standHeight;
+  return view.toScreen(pose.x, pose.y + height + HEAD_GAP, pose.z);
+}
 
 function goOffline(note: string): void {
   netMode = "offline";
@@ -138,16 +285,19 @@ function goOffline(note: string): void {
   net = null;
   predictor = null;
   health = null;
+  match = null;
+  scores = [];
 }
 
-if (new URLSearchParams(location.search).has("offline")) {
-  netMode = "offline";
-  netNote = "(?offline)";
-} else {
+function startNet(code: string): void {
+  roomCode = code;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  net = new NetClient(`${proto}//${location.host}/ws`, {
+  net = new NetClient(`${proto}//${location.host}/ws?room=${encodeURIComponent(code)}`, {
     onWelcome(w) {
+      myId = w.playerId;
+      roomCode = w.room;
       combatHud.setPlayerId(w.playerId);
+      gameMode = w.mode === "practice" ? "practice" : "ffa";
       if (w.level !== level.name)
         netNote = `WARNING: server runs "${w.level}", client has "${level.name}"`;
     },
@@ -155,23 +305,67 @@ if (new URLSearchParams(location.search).has("offline")) {
       clock.onSnapshot(s.tick, performance.now());
       remotes.push(s.tick, s.entities);
       health = s.health;
+      match = s.match;
+      scores = s.scores;
       for (const e of events.fresh(s.events)) combatHud.onEvent(e);
+      // We only simulate while alive and while the match lets players act (not in the countdown or results).
+      const acting = s.health.alive && canAct(s.match.phase);
       if (!predictor) {
         // First snapshot: start from wherever the server put us.
         predictor = new Predictor(world, s.you, s.ackSeq, DT, s.weapon);
-        predictor.alive = s.health.alive;
+        predictor.alive = acting;
         player = prevPlayer = predictor.state;
         netMode = "online";
         return;
       }
-      const correction = predictor.reconcile(s.ackSeq, s.you, s.weapon, s.health.alive);
+      const correction = predictor.reconcile(s.ackSeq, s.you, s.weapon, acting);
       if (correction) smoother.onCorrection(correction);
       player = predictor.state;
     },
-    onClose(wasConnected) {
-      goOffline(wasConnected ? "connection lost: offline mode" : "no server: offline mode");
+    onClose(wasConnected, closeCode) {
+      const why = closeReason(closeCode);
+      if (why) {
+        roomInfoEl.innerHTML = `<span class="err">${why}</span> <a href="${location.pathname}">Start a new room</a>`;
+        goOffline(why);
+      } else {
+        goOffline(wasConnected ? "connection lost: offline mode" : "no server: offline mode");
+      }
     },
   });
+}
+
+/** Make a room of this mode, put its link in the address bar to share, and join it. */
+async function startRoom(mode: GameMode): Promise<void> {
+  menuEl.classList.remove("on");
+  try {
+    const code = (await createRoom(mode)).code;
+    const url = new URL(location.href);
+    url.searchParams.set("room", code);
+    url.searchParams.delete("mode");
+    history.replaceState(null, "", url);
+    startNet(code);
+  } catch {
+    goOffline("no server: offline mode");
+    menuNote.textContent = "";
+  }
+}
+
+document.getElementById("play-ffa")?.addEventListener("click", () => void startRoom("ffa"));
+document
+  .getElementById("play-practice")
+  ?.addEventListener("click", () => void startRoom("practice"));
+
+if (new URLSearchParams(location.search).has("offline")) {
+  netMode = "offline";
+  netNote = "(?offline)";
+} else {
+  const code = roomFromUrl(location.search);
+  const mode = modeFromUrl(location.search);
+  if (code)
+    startNet(code); // a room link: straight in
+  else if (mode)
+    void startRoom(mode); // ?mode=practice: skip the menu
+  else menuEl.classList.add("on"); // otherwise choose
 }
 
 // --- Simulation ------------------------------------------------------------
@@ -180,7 +374,6 @@ let weapon = spawnWeapon(1);
 let shotsFired = 0;
 let hitstopTicks = 0;
 let killLog = "no kills yet";
-let targetInfoUntil = 0;
 
 /** Other players as the local screen currently draws them (effects only: the server decides hits). */
 function remoteHitboxes(renderTick: number): Hitbox[] {
@@ -224,6 +417,7 @@ function fireShotOnline(shot: ShotResult, ads: boolean): void {
 
 function fireShot(shot: ShotResult, ads: boolean): void {
   shotsFired++;
+  practiceStats.onShot();
   const origin: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
   const dir = viewDirection(look.yaw + shot.spreadYaw, look.pitch + shot.spreadPitch);
   const hit = castRay(world, aliveHitboxes(dummies), origin, dir);
@@ -238,10 +432,25 @@ function fireShot(shot: ShotResult, ads: boolean): void {
     d.hits++;
     if (hit.headshot) d.headshots++;
     const result = applyDamage(d, damageFor(hit.headshot));
+    practiceStats.onHit({
+      targetId: d.id,
+      damage: damageFor(hit.headshot),
+      headshot: hit.headshot,
+      killed: result.killed,
+      tick: simTicks,
+    });
     dummyViews.flash(d.id);
-    targetInfo.textContent = `${d.name}\nshield ${Math.ceil(d.shield)}   hp ${Math.ceil(d.health)}`;
-    targetInfo.classList.add("on");
-    targetInfoUntil = performance.now() + 1200;
+    hitFeedback.onHit(
+      {
+        targetId: d.id,
+        health: d.health,
+        shield: d.shield,
+        damage: damageFor(hit.headshot),
+        headshot: hit.headshot,
+        killed: result.killed,
+      },
+      performance.now(),
+    );
     if (result.killed) {
       const ttk = simTicks * DT - (d.firstHitAt ?? 0);
       killLog = `last kill ${ttk.toFixed(2)}s | ${shotsFired - d.shotsAtFirstHit + 1} shots, ${d.hits} hits, ${d.headshots} head`;
@@ -282,7 +491,10 @@ const sim = new FixedTimestep(() => {
     predictor.step(input, look.pitch, viewTick);
     player = predictor.state;
     net?.sendInputs(predictor.recent());
-    if (predictor.lastShot?.fired) fireShotOnline(predictor.lastShot, ads);
+    if (predictor.lastShot?.fired) {
+      practiceStats.onShot();
+      fireShotOnline(predictor.lastShot, ads);
+    }
   } else if (netMode === "offline") {
     // Offline practice: local movement, local weapon, local dummies.
     player = stepPlayer(player, input, world, DT);
@@ -317,7 +529,7 @@ function netHud(): string {
     `net: online #${net.playerId} | ping ${st.rttMs.toFixed(0)} ms ±${st.jitterMs.toFixed(0)} | ` +
     `${st.snapshotsPerSecond} snap/s | server queue ${st.queued} | unacked ${predictor.pending}\n` +
     `prediction: ${predictor.corrections} corrections, worst ${(predictor.maxError * 100).toFixed(1)} cm | ` +
-    `${remotes.ids().length} remote | interp ${(INTERP_TICKS * 1000) / TICK_RATE} ms ${netNote}`
+    `room ${roomCode} | ${remotes.ids().length} remote | interp ${(INTERP_TICKS * 1000) / TICK_RATE} ms ${netNote}`
   );
 }
 
@@ -360,6 +572,7 @@ function frame(nowMs: number): void {
           return pose ? [pose] : [];
         })
       : [],
+    frameDt,
   );
   const activeWeapon = predictor ? predictor.weapon : weapon;
   const spread = spreadDegrees(activeWeapon.burst, adsHeld, {
@@ -372,8 +585,24 @@ function frame(nowMs: number): void {
   cam.rotation.set(look.pitch + shake.pitch, look.yaw + shake.yaw, 0);
   if (netMode === "offline") dummyViews.update(dummies, frameDt);
   else dummyViews.hideAll(); // online, the targets are other players
-  combatHud.update(netMode === "online" ? health : null);
-  if (targetInfoUntil < nowMs) targetInfo.classList.remove("on");
+  const inMatch = match !== null && canAct(match.phase);
+  combatHud.update(netMode === "online" ? health : null, inMatch);
+  matchHud.update(
+    netMode === "online" && gameMode === "ffa" ? match : null,
+    scores,
+    myId,
+    held.has("Tab"),
+    inviteLink(),
+  );
+  if (netMode === "online" && !roomInfoEl.querySelector(".err")) {
+    const html =
+      `${gameMode === "practice" ? "Practice range" : "FFA"} · Room <b>${roomCode}</b> · ${match?.players ?? 0} player${match?.players === 1 ? "" : "s"} ` +
+      `<button id="copylink">Copy invite link</button>${roomNote ? ` ${roomNote}` : ""}<br>${inviteLink()}`;
+    if (roomInfoEl.innerHTML !== html) roomInfoEl.innerHTML = html;
+  }
+  hitFeedback.update(nowMs, headAnchor);
+  practiceEl.classList.toggle("on", inRange());
+  if (inRange()) practiceEl.innerHTML = practiceHtml();
   ammoEl.innerHTML = `${activeWeapon.ammo} / ${WEAPON.magSize}<small>${
     activeWeapon.reloadT > 0
       ? `RELOADING ${activeWeapon.reloadT.toFixed(1)}s`
@@ -399,7 +628,7 @@ function frame(nowMs: number): void {
     `jumps ${"●".repeat(player.airJumps)}${"○".repeat(PARAMS.maxAirJumps - player.airJumps)}  dash ${"●".repeat(Math.floor(player.dashCharges))}${"○".repeat(PARAMS.dashCharges - Math.floor(player.dashCharges))}  ` +
     `(${(player.dashCharges % 1).toFixed(2)})\n` +
     `${killLog}\n` +
-    `WASD move · Space jump (hold at green walls to climb) · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · P respawn\n` +
+    `WASD move · Space jump (hold at green walls to climb) · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
     `render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks}\n` +
     netHud();
   requestAnimationFrame(frame);

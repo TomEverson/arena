@@ -15,6 +15,8 @@ export interface Pose {
   yaw: number;
   pitch: number;
   flags: number;
+  /** An EntityKinds value: a player or a practice-range target. */
+  kind: number;
 }
 
 interface Sample {
@@ -87,6 +89,7 @@ export class RemoteTracks {
       yaw: lerpAngle(a.e.yaw, b.e.yaw, t),
       pitch: lerp(a.e.pitch, b.e.pitch, t),
       flags: a.e.flags,
+      kind: a.e.kind,
     };
   }
 }

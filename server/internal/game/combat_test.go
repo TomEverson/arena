@@ -86,6 +86,12 @@ func TestBodyShotHitsShieldFirst(t *testing.T) {
 	if len(hurt) != 1 || hurt[0].Actor != 1 {
 		t.Fatalf("victim hurt events = %+v", hurt)
 	}
+	// Both events say how much the victim has left, so a health bar can be drawn.
+	for _, e := range []protocol.GameEvent{hit[0], hurt[0]} {
+		if e.Shield != WeaponMaxShield-WeaponDamage || e.Health != WeaponMaxHealth {
+			t.Fatalf("event victim health/shield = %v/%v, want %v/%v", e.Health, e.Shield, float64(WeaponMaxHealth), WeaponMaxShield-WeaponDamage)
+		}
+	}
 	if d.b.sinceDamage > 2*TickDT { // reset by the hit, then at most a tick or two of timer since
 		t.Fatalf("damage should reset the shield recharge timer, got %v s", d.b.sinceDamage)
 	}
@@ -139,6 +145,15 @@ func TestKillFlow(t *testing.T) {
 	}
 	if d.b.Health.RespawnIn <= 0 || d.b.Health.RespawnIn > CombatRespawnTime {
 		t.Fatalf("respawn timer = %v", d.b.Health.RespawnIn)
+	}
+	hits := eventsOf(d.a, protocol.EventKindHit)
+	if last := hits[len(hits)-1]; last.Flags&protocol.GameEventFlagKilled == 0 || last.Health != 0 || last.Shield != 0 {
+		t.Fatalf("the killing hit should leave the victim at 0/0, got %+v", last)
+	}
+	for i := 1; i < len(hits); i++ { // damage only ever lowers the victim's health and shield
+		if hits[i].Health+hits[i].Shield >= hits[i-1].Health+hits[i-1].Shield {
+			t.Fatalf("hit %d did not reduce the victim's total: %+v then %+v", i, hits[i-1], hits[i])
+		}
 	}
 	for _, p := range []*Player{d.a, d.b} {
 		kills := eventsOf(p, protocol.EventKindKill)

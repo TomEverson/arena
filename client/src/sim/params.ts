@@ -16,3 +16,6 @@ export const WEAPON = params.weapon;
 
 /** Health, respawn and lag-compensation numbers (server-authoritative; the client shows them). */
 export const COMBAT = params.combat;
+
+/** Match flow: player counts and phase lengths (the server runs the clock; the client shows it). */
+export const MATCH = params.match;

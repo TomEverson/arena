@@ -11,12 +11,9 @@
  */
 import { type ChildProcess } from "node:child_process";
 
-import { EntityFlags } from "../src/net/protocol.gen";
-import { castRay, type Hitbox } from "../src/sim/hitscan";
-import { eyeHeight } from "../src/sim/movement";
-import { COMBAT, PARAMS } from "../src/sim/params";
 import { loadWorld } from "../src/sim/vectors/node";
-import { BotClient, type BotStats, type Brain, sleep, startServer } from "./headless";
+import { makeFighter } from "./brains";
+import { BotClient, type BotStats, createRoom, sleep, startServer } from "./headless";
 
 const world = loadWorld({ level: "duel" });
 
@@ -25,47 +22,7 @@ const latency = process.argv[3] ?? "80ms";
 const loss = process.argv[4] ?? "3%";
 const port = 8096;
 
-/** Aim at the other player as drawn on our screen, strafe, close in when far, shoot when we can see them. */
-const fighter: Brain = (bot, tick) => {
-  const p = bot.predictor;
-  if (!p || !bot.health?.alive || !bot.clock.ready) return {};
-  const id = bot.remotes.ids()[0];
-  if (id === undefined) return {};
-  const pose = bot.remotes.sample(id, bot.renderTick);
-  if (!pose || pose.flags & EntityFlags.dead) return {};
-
-  const height = pose.flags & EntityFlags.crouching ? PARAMS.crouchHeight : PARAMS.standHeight;
-  const eye = [p.state.x, p.state.y + eyeHeight(p.state), p.state.z] as const;
-  const dx = pose.x - eye[0];
-  const dy = pose.y + height * 0.55 - eye[1];
-  const dz = pose.z - eye[2];
-  const flat = Math.hypot(dx, dz);
-  const yaw = Math.atan2(-dx, -dz);
-  const pitch = Math.atan2(dy, flat);
-
-  const box: Hitbox = {
-    id,
-    headMinY: pose.y + height - COMBAT.headSize,
-    minX: pose.x - PARAMS.halfWidth,
-    maxX: pose.x + PARAMS.halfWidth,
-    minY: pose.y,
-    maxY: pose.y + height,
-    minZ: pose.z - PARAMS.halfWidth,
-    maxZ: pose.z + PARAMS.halfWidth,
-  };
-  const len = Math.hypot(dx, dy, dz);
-  const sees = castRay(world, [box], [...eye], [dx / len, dy / len, dz / len]).kind === "target";
-  const ghost = (pose.flags & EntityFlags.protected) !== 0; // no point shooting at the invulnerable
-
-  return {
-    yaw,
-    pitch,
-    moveZ: flat > 14 ? 1 : 0,
-    moveX: flat > 14 ? 0 : Math.floor(tick / 45) % 2 === 0 ? 1 : -1, // strafe: left, right, left...
-    ads: true,
-    fire: sees && !ghost,
-  };
-};
+const fighter = makeFighter(world);
 
 interface RunResult {
   label: string;
@@ -76,8 +33,9 @@ interface RunResult {
 }
 
 async function fight(label: string, compensate: boolean): Promise<RunResult> {
-  const a = new BotClient("A", port, world, fighter, compensate);
-  const b = new BotClient("B", port, world, fighter, compensate);
+  const room = await createRoom(port);
+  const a = new BotClient("A", port, room, world, fighter, compensate);
+  const b = new BotClient("B", port, room, world, fighter, compensate);
   await sleep(seconds * 1000);
   a.stop();
   b.stop();
@@ -102,14 +60,20 @@ const rate = (hits: number, shots: number) => (shots <= 0 ? 0 : hits / shots);
 let server: ChildProcess | undefined;
 let failed = false;
 try {
-  server = await startServer(port, latency, loss, "duel");
+  server = await startServer(port, latency, loss, "duel", [
+    "--countdown=1s",
+    "--match-length=600s",
+  ]);
   console.log(
     `two bots fight for ${seconds}s through ${latency} each way and ${loss} loss, with lag compensation...`,
   );
   const withComp = await fight("with lag compensation", true);
   server.kill();
   await sleep(500);
-  server = await startServer(port, latency, loss, "duel");
+  server = await startServer(port, latency, loss, "duel", [
+    "--countdown=1s",
+    "--match-length=600s",
+  ]);
   console.log(`...and again for ${seconds}s without it`);
   const without = await fight("no lag compensation", false);
 

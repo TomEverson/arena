@@ -25,6 +25,12 @@ func main() {
 	latency := flag.Duration("fake-latency", 0, "added one-way latency on every packet, both directions (e.g. 80ms)")
 	loss := flag.String("loss", "0%", "random packet loss, both directions (e.g. 3%)")
 	levelPath := flag.String("level", "../levels/greybox.json", "level JSON to load (relative to the working directory)")
+	practiceLevelPath := flag.String("practice-level", "../levels/greybox.json", "level JSON for practice ranges")
+	noMatch := flag.Bool("no-match", false, "FFA rooms are always live: no waiting, countdown, timer or results")
+	countdown := flag.Duration("countdown", time.Duration(game.MatchCountdownSeconds*float64(time.Second)), "countdown before a match")
+	length := flag.Duration("match-length", time.Duration(game.MatchLengthSeconds*float64(time.Second)), "length of a match")
+	results := flag.Duration("results", time.Duration(game.MatchResultsSeconds*float64(time.Second)), "how long the results show before the next match")
+	roomIdle := flag.Duration("room-idle", time.Minute, "how long an empty room is kept")
 	flag.Parse()
 
 	lossFrac, err := netsim.ParseLoss(*loss)
@@ -44,12 +50,37 @@ func main() {
 		log.Fatalf("loading level %q: %v (pass --level=<path>)", *levelPath, err)
 	}
 	log.Printf("level %s: %d boxes, %d ramps, %d spawns", *levelPath, len(lv.Collision.Boxes), len(lv.Collision.Ramps), len(lv.Spawns))
-	world := game.NewWorld(lv)
-	ticker := time.NewTicker(time.Second / game.TickRate)
-	defer ticker.Stop()
-	go world.Run(ctx, ticker.C)
 
-	srv := &gameserver.Server{World: world, Codec: wire.JSON{}, Link: link, LevelName: strings.TrimSuffix(filepath.Base(*levelPath), ".json")}
+	cfg := game.DefaultMatchConfig()
+	cfg.Enabled = !*noMatch
+	cfg.Countdown, cfg.Length, cfg.Results = countdown.Seconds(), length.Seconds(), results.Seconds()
+	if cfg.Enabled {
+		log.Printf("match: %v countdown, %v long, %v results, %d to %d players", *countdown, *length, *results, cfg.MinPlayers, cfg.Capacity)
+	} else {
+		log.Printf("no match cycle: FFA rooms are always live")
+	}
+
+	practiceLevel := lv
+	if *practiceLevelPath != *levelPath {
+		if practiceLevel, err = level.Load(*practiceLevelPath); err != nil {
+			log.Fatalf("loading practice level %q: %v", *practiceLevelPath, err)
+		}
+	}
+	rangeCfg := cfg // a practice range is always live, with the same room size
+	rangeCfg.Enabled = false
+	rooms := gameserver.NewRooms(ctx, gameserver.RoomsConfig{
+		Modes: map[string]gameserver.ModeConfig{
+			gameserver.ModeFFA:      {Level: lv, Match: cfg},
+			gameserver.ModePractice: {Level: practiceLevel, Match: rangeCfg, Practice: true},
+		},
+		EmptyTimeout: *roomIdle,
+	})
+	srv := &gameserver.Server{
+		Rooms:     rooms,
+		Codec:     wire.JSON{},
+		Link:      link,
+		LevelName: strings.TrimSuffix(filepath.Base(*levelPath), ".json"),
+	}
 	httpSrv := &http.Server{Addr: *addr, Handler: srv.Handler()}
 
 	go func() {

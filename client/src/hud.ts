@@ -1,4 +1,5 @@
 import type { HitKind } from "./fx";
+import { playerName } from "./matchui";
 import { EventKinds, type GameEvent, GameEventFlags, type PlayerHealth } from "./net/protocol.gen";
 import { WEAPON } from "./sim/params";
 
@@ -13,7 +14,10 @@ export class CombatHud {
   private readonly feed = document.getElementById("killfeed") as HTMLDivElement;
   private myId = -1;
 
-  constructor(private readonly onHitMarker: (kind: HitKind) => void) {}
+  constructor(
+    private readonly onHitMarker: (kind: HitKind) => void,
+    private readonly onHitDetail: (e: GameEvent) => void,
+  ) {}
 
   setPlayerId(id: number): void {
     this.myId = id;
@@ -26,6 +30,7 @@ export class CombatHud {
         const killed = (e.flags & GameEventFlags.killed) !== 0;
         const head = (e.flags & GameEventFlags.headshot) !== 0;
         this.onHitMarker(killed ? "kill" : head ? "head" : "body");
+        this.onHitDetail(e);
         break;
       }
       case EventKinds.hurt:
@@ -41,8 +46,7 @@ export class CombatHud {
 
   private addKill(e: GameEvent): void {
     const line = document.createElement("div");
-    const name = (id: number) => (id === this.myId ? "YOU" : `Player ${id}`);
-    line.textContent = `${name(e.actor)}  ▸  ${name(e.other)}`;
+    line.textContent = `${playerName(e.actor, this.myId)}  ▸  ${playerName(e.other, this.myId)}`;
     if ((e.flags & GameEventFlags.headshot) !== 0) line.classList.add("head");
     if (e.actor === this.myId || e.other === this.myId) line.classList.add("me");
     this.feed.prepend(line);
@@ -51,7 +55,7 @@ export class CombatHud {
   }
 
   /** Per frame: health bars and the death screen. Pass null before the first snapshot. */
-  update(h: PlayerHealth | null): void {
+  update(h: PlayerHealth | null, showDeath = true): void {
     if (!h) {
       this.vitals.textContent = "";
       this.death.classList.remove("on");
@@ -66,7 +70,7 @@ export class CombatHud {
       `<div class="bar health${low}"><i style="width:${pct(h.health, WEAPON.maxHealth)}"></i></div>` +
       `<div class="note">${h.protectedFor > 0 ? `SPAWN PROTECTION ${h.protectedFor.toFixed(1)}s (ends when you fire)` : ""}</div>`;
 
-    if (h.alive) {
+    if (h.alive || !showDeath) {
       this.death.classList.remove("on");
     } else {
       this.death.classList.add("on");

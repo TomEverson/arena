@@ -90,4 +90,16 @@ const (
 	CombatMaxRewindTicks       = 20
 	CombatHistoryTicks         = 32
 	CombatEventRedundancyTicks = 6
+	CombatTargetIdBase         = 1000
+	CombatTargetRespawn        = 2
+	CombatTargetSpeed          = 3.5
+)
+
+// Match flow (shared/params.json "match"), prefixed with Match.
+const (
+	MatchMinPlayers       = 2
+	MatchMaxPlayers       = 8
+	MatchCountdownSeconds = 5
+	MatchLengthSeconds    = 360
+	MatchResultsSeconds   = 15
 )

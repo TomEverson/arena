@@ -42,7 +42,9 @@ ${emit("", params.movement)}
 // Weapon tuning (shared/params.json "weapon"), prefixed with Weapon.
 ${emit("Weapon", params.weapon)}
 // Combat tuning (shared/params.json "combat"), prefixed with Combat.
-${emit("Combat", params.combat)}`;
+${emit("Combat", params.combat)}
+// Match flow (shared/params.json "match"), prefixed with Match.
+${emit("Match", params.match)}`;
 
 const formatted = execFileSync("gofmt", [], { input: raw, encoding: "utf8" });
 
