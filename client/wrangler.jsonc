@@ -1,0 +1,10 @@
+// The client on Cloudflare Workers: static files only (the built page in ./dist), no Worker code.
+// The game server is somewhere else (a droplet): the build is told where with VITE_SERVER_URL.
+// Deploy with `pnpm deploy:client` (deploy/client/deploy.sh). See spec/docs/deploy.md.
+{
+  "name": "arena",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}

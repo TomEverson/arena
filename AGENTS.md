@@ -43,13 +43,15 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
 | `pnpm combatcheck` | End-to-end combat check: two bots fight through the fake network, with and without lag compensation (about 80 s) |
 | `pnpm vectors` | Re-record `testvectors/movement/*.json` from the TS sim (runs each scenario's verify) |
 | `pnpm bots` | Placeholder (prints "not implemented yet") |
+| `pnpm deploy:server` | Build the server for Linux and install it on the droplet (settings in `deploy/.env`; see [spec/docs/deploy.md](spec/docs/deploy.md)). Restarts the server: running rooms end |
+| `pnpm deploy:client` | Build the client against the deployed server and publish it to Cloudflare Workers (`client/wrangler.jsonc`) |
 
-Server flags: `--addr=:8080 --level=../levels/greybox.json --fake-latency=80ms --loss=3%`, and for the match cycle `--countdown=5s --match-length=6m --results=15s --room-idle=1m`, `--no-match` (FFA rooms always live) and `--practice-level=../levels/greybox.json` (the practice range's level). Health: `GET /healthz`. A room has a mode, `ffa` or `practice`: `POST /api/rooms {"mode":"practice"}`, and players join with `/?room=CODE`. Opening the page without a room link shows a start screen (or use `?mode=practice` / `?mode=ffa`). The start screen asks for a username and keeps it in localStorage (`arena.name`, `client/src/username.ts`); a link opened without one asks first. The name is not sent to the server yet.
+Server flags: `--addr=:8080 --level=../levels/greybox.json --fake-latency=80ms --loss=3%`, and for the match cycle `--countdown=5s --match-length=6m --results=15s --room-idle=1m`, `--no-match` (FFA rooms always live), `--practice-level=../levels/greybox.json` (the practice range's level) and `--allowed-origins=host,host` (the sites the client may be served from when it is not on the server's own host). Health: `GET /healthz`. A room has a mode, `ffa` or `practice`: `POST /api/rooms {"mode":"practice"}`, and players join with `/?room=CODE`. Opening the page without a room link shows a start screen (or use `?mode=practice` / `?mode=ffa`). The start screen asks for a username and keeps it in localStorage (`arena.name`, `client/src/username.ts`); a link opened without one asks first. The name is not sent to the server yet.
 Prereqs: Node 22+, pnpm 10, Go 1.24+, `air` (`go install github.com/air-verse/air@latest`), optional `golangci-lint`.
 
 ## Layout
 `client/` Vite+TS+Three.js (ESLint + Prettier config in `client/`) · `server/` Go module · `protocol/` wire messages source of truth (generated Go + TS) ·
-`shared/` shared tuning numbers + Go codegen · `levels/` level JSON · `testvectors/` shared movement vectors · `tools/bots/` fake clients · `spec/` (`brainstorm/` notes, `docs/` polished docs)
+`shared/` shared tuning numbers + Go codegen · `levels/` level JSON · `testvectors/` shared movement vectors · `tools/bots/` fake clients · `deploy/` deploy scripts and droplet config · `spec/` (`brainstorm/` notes, `docs/` polished docs)
 
 <!-- BEGIN:turborepo-agent-rules -->
 

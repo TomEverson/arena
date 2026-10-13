@@ -16,7 +16,9 @@
     "format": "pnpm --filter @arena/client format",
     "combatcheck": "pnpm --filter @arena/client combatcheck",
     "matchcheck": "pnpm --filter @arena/client matchcheck",
-    "practicecheck": "pnpm --filter @arena/client practicecheck"
+    "practicecheck": "pnpm --filter @arena/client practicecheck",
+    "deploy:server": "sh deploy/server/deploy.sh",
+    "deploy:client": "sh deploy/client/deploy.sh"
   },
   "devDependencies": {
     "turbo": "^2.11.7"

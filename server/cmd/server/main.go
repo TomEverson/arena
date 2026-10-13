@@ -31,6 +31,7 @@ func main() {
 	length := flag.Duration("match-length", time.Duration(game.MatchLengthSeconds*float64(time.Second)), "length of a match")
 	results := flag.Duration("results", time.Duration(game.MatchResultsSeconds*float64(time.Second)), "how long the results show before the next match")
 	roomIdle := flag.Duration("room-idle", time.Minute, "how long an empty room is kept")
+	allowedOrigins := flag.String("allowed-origins", "", "comma-separated host names the client may be served from besides localhost (e.g. arena.example.com,*.example.com)")
 	flag.Parse()
 
 	lossFrac, err := netsim.ParseLoss(*loss)
@@ -81,6 +82,14 @@ func main() {
 		Codec:     wire.MsgPack{},
 		Link:      link,
 		LevelName: strings.TrimSuffix(filepath.Base(*levelPath), ".json"),
+	}
+	for _, host := range strings.Split(*allowedOrigins, ",") {
+		if host = strings.TrimSpace(host); host != "" {
+			srv.AllowedOrigins = append(srv.AllowedOrigins, host)
+		}
+	}
+	if len(srv.AllowedOrigins) > 0 {
+		log.Printf("allowed origins: %s (and localhost)", strings.Join(srv.AllowedOrigins, ", "))
 	}
 	httpSrv := &http.Server{Addr: *addr, Handler: srv.Handler()}
 

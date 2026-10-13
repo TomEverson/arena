@@ -1,0 +1,22 @@
+[Unit]
+Description=Arena game server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=arena
+Group=arena
+WorkingDirectory=/opt/arena
+# ALLOWED_ORIGINS: the host names the client is served from (written by deploy.sh).
+EnvironmentFile=/opt/arena/arena.env
+# Only Caddy talks to it, on this machine: Caddy holds the certificate and the public ports.
+ExecStart=/opt/arena/arena-server --addr=127.0.0.1:8080 --level=/opt/arena/levels/ffa.json --practice-level=/opt/arena/levels/greybox.json --allowed-origins=${ALLOWED_ORIGINS}
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,5 +1,7 @@
 /** Rooms: one match each. A friend joins by opening the same link, `/?room=<code>`. */
 
+import { server } from "./serverUrl";
+
 export interface RoomInfo {
   code: string;
   players: number;
@@ -27,7 +29,7 @@ export function modeFromUrl(search: string): GameMode | null {
 
 /** Ask the server for a brand new room of this mode. Throws if the server cannot be reached or is full. */
 export async function createRoom(mode: GameMode = "ffa"): Promise<RoomInfo> {
-  const res = await fetch("/api/rooms", {
+  const res = await fetch(server.http("/api/rooms"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ mode }),

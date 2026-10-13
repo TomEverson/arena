@@ -9,6 +9,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"sync/atomic"
 
@@ -39,7 +41,11 @@ type Server struct {
 	Link  netsim.Link
 	// LevelName is reported to clients so they can check they run the same map.
 	LevelName string
-	nextID    atomic.Uint32
+	// AllowedOrigins are the hosts a page may be served from and still talk to this server,
+	// besides localhost: the site's own host names when the client is hosted somewhere else
+	// (a pattern per host, as path.Match reads it: "arena.example.com", "*.example.com").
+	AllowedOrigins []string
+	nextID         atomic.Uint32
 	// Snapshot metrics are intentionally kept at the network edge: they measure the encoded
 	// payload that clients actually receive, rather than the in-memory game snapshot.
 	snapshotCount atomic.Uint64
@@ -52,7 +58,47 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/rooms", s.handleCreateRoom)
 	mux.HandleFunc("GET /api/rooms/{code}", s.handleRoomInfo)
 	mux.HandleFunc("/ws", s.handleWS)
-	return mux
+	return s.cors(mux)
+}
+
+// devOrigins are always allowed: the Vite dev server (any localhost port) proxies here.
+var devOrigins = []string{"localhost:*", "127.0.0.1:*"}
+
+// originAllowed reports whether a page from this Origin header may use the server.
+func (s *Server) originAllowed(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Host)
+	for _, list := range [][]string{devOrigins, s.AllowedOrigins} {
+		for _, pattern := range list {
+			if ok, _ := path.Match(strings.ToLower(pattern), host); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// cors lets pages on the allowed origins call the HTTP API from another host (the client on a
+// static host, the server here). The WebSocket has its own origin check in handleWS. Requests
+// with no Origin header (curl, health checks, same-origin pages) pass through untouched.
+func (s *Server) cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if origin := r.Header.Get("Origin"); origin != "" && s.originAllowed(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+				w.Header().Set("Access-Control-Max-Age", "86400")
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -123,8 +169,7 @@ func (s *Server) handleRoomInfo(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// Dev: the Vite dev server (any localhost port) proxies here.
-		OriginPatterns: []string{"localhost:*", "127.0.0.1:*"},
+		OriginPatterns: append(append([]string{}, devOrigins...), s.AllowedOrigins...),
 	})
 	if err != nil {
 		log.Printf("ws accept: %v", err)

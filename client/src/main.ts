@@ -41,6 +41,7 @@ import {
   roomFromUrl,
   roomLink,
 } from "./net/rooms";
+import { server } from "./net/serverUrl";
 import { CorrectionSmoother, SMOOTH_TIME, SNAP_DISTANCE } from "./net/smoothing";
 import { PALETTE } from "./palette";
 import { PracticeStats } from "./practiceStats";
@@ -583,8 +584,7 @@ function serverDown(note: string): void {
 
 function startNet(code: string): void {
   roomCode = code;
-  const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  net = new NetClient(`${proto}//${location.host}/ws?room=${encodeURIComponent(code)}`, {
+  net = new NetClient(server.ws(`/ws?room=${encodeURIComponent(code)}`), {
     onWelcome(w) {
       myId = w.playerId;
       roomCode = w.room;

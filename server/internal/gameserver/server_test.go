@@ -541,3 +541,57 @@ func TestWelcomeNamesTheRoomsOwnMap(t *testing.T) {
 		t.Fatalf("practice welcome level = %q, want range-test", w.Level)
 	}
 }
+
+func TestOtherOriginsAreRefusedUnlessAllowed(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	rooms := NewRooms(ctx, RoomsConfig{Modes: map[string]ModeConfig{ModeFFA: {Level: game.FlatLevel(), Match: practice()}}})
+	srv := &Server{
+		Rooms: rooms, Codec: wire.JSON{}, LevelName: "test",
+		AllowedOrigins: []string{"arena.example.com", "*.pages.example.com"},
+	}
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	preflight := func(origin string) *http.Response {
+		req, _ := http.NewRequest(http.MethodOptions, ts.URL+"/api/rooms", nil)
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		req.Header.Set("Access-Control-Request-Headers", "content-type")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res
+	}
+	for _, origin := range []string{"https://arena.example.com", "https://preview.pages.example.com", "http://localhost:5173"} {
+		res := preflight(origin)
+		if res.StatusCode != http.StatusNoContent || res.Header.Get("Access-Control-Allow-Origin") != origin {
+			t.Fatalf("%s should be allowed: status %d, allow-origin %q", origin, res.StatusCode, res.Header.Get("Access-Control-Allow-Origin"))
+		}
+	}
+	if res := preflight("https://evil.example.org"); res.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("an unknown origin got CORS headers: %v", res.Header)
+	}
+
+	// The real request carries the header too, and a request with no Origin is left alone.
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/rooms", nil)
+	req.Header.Set("Origin", "https://arena.example.com")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusCreated || res.Header.Get("Access-Control-Allow-Origin") != "https://arena.example.com" {
+		t.Fatalf("creating a room from the site: status %d, allow-origin %q", res.StatusCode, res.Header.Get("Access-Control-Allow-Origin"))
+	}
+	res, err = http.Get(ts.URL + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || res.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("a plain request: status %d, allow-origin %q", res.StatusCode, res.Header.Get("Access-Control-Allow-Origin"))
+	}
+}
