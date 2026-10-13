@@ -44,13 +44,20 @@ Defined in `client/src/palette.ts`. **Every color in the game comes from this li
 | Name | Hex | Meaning | Examples |
 |---|---|---|---|
 | COBALT | `#3170d8` | **The blue team** | The trooper's helmet stripe, shoulder edges, forearm and knee stripes |
+| VIOLET | `#5b3a9e` | **The violet team** | The assassin's sash |
+
+### Character trim
+
+| Name | Hex | Use |
+|---|---|---|
+| BRASS | `#c9a227` | Gold trim on characters, thin lines only (it sits near ACID, so never large areas) |
 
 ## Rules
 
 1. **Calm world, loud accents.** Accents stay small. If an accent covers a large area, it stops meaning anything.
 2. **One meaning per accent.** Never use ACID for decoration or HAZARD for a friendly thing. Players learn the color language without a tutorial.
 3. **Readability beats beauty.** Players and enemies must be identifiable instantly by silhouette and contrast.
-4. **Team colors:** COBALT (blue) is the first, added 2026-10-13 with the white trooper. Keep team colors off world geometry. Phase 1 is free-for-all, where HAZARD marks enemies: the trooper carries no HAZARD, so how an enemy reads in free-for-all (an outline, a HAZARD marker, a second team color) is still open.
+4. **Team colors:** COBALT (blue) and VIOLET, added 2026-10-13 with the trooper and the assassin. Keep team colors off world geometry. Phase 1 is free-for-all, where HAZARD marks enemies: the trooper carries no HAZARD, so how an enemy reads in free-for-all (an outline, a HAZARD marker, a second team color) is still open.
 5. **Target cheap laptops.** Few draw calls, little overdraw, no heavy real-time lighting.
 
 ## Screen effect
@@ -104,7 +111,8 @@ Modeled in **Blockbench** (see "Blockbench models" below) or built in code from 
 - **Colors (trooper):** BONE armor with COBALT stripes (the team color), GRAPHITE suit and boots, a black INK visor, HAZE ear discs with SIGNAL lights. Flashes BONE when hit. (The first chunky trooper was HAZARD armor, the enemy color; Luke replaced it with this design.)
 - **Fits the hitbox:** every part stays inside the 0.6 × 1.8 m box, and the whole head inside the head zone (1.5 to 1.8 m), so what you see is what you hit. The head can only be 0.3 m tall, so it looks big by being **wide** (0.38 m) instead. Never change the hitbox for looks; it's game logic in `sim/`.
 - **Animations:** idle breathing and arm sway; walk cycle tied to distance moved (faces the walking direction); standing characters turn to face the player; hit flinch; fall backward on death; grow up from the floor on respawn.
-- **Looks:** a character is a set of parts on shared joints (`CharacterLook` in `client/src/character.ts`), so every look has the same hitbox and animations. There are three. The **trooper** is the chunky one described above. The **assassin** is the fast one, built like a runner: clean BONE plates over a GRAPHITE suit, a wide chest tapering to a narrow waist, strong thighs and light greaves, a low helmet with swept-back fins and a slanted two-slit HAZARD visor, and a HAZARD scarf with a tail down the back. The scarf is its silhouette; with the visor and the wrist and ankle bands it is also what marks it as an enemy. (A first version, slim and all dark with a hood, read as a stick figure and was replaced.) The **dummy** is the base model: a plain jointed mannequin (BONE segments, INK joints, CONCRETE hands and feet) with the two hit zones marked in HAZARD, a band round the head and a target on the chest. Practice dummies use it, with empty hands; start a new look from it. Players use the trooper everywhere for now: there is no character select yet.
+- **Looks:** a character is a set of parts on shared joints (`CharacterLook` in `client/src/character.ts`), so every look has the same hitbox and animations. There are two, both Blockbench models: the **trooper** (white armor, blue team) and the **assassin** (dark, violet team), described under "Blockbench models". The game uses the trooper everywhere for now: there is no character select yet.
+- **Looks:** a character is a set of parts on shared joints (`CharacterLook` in `client/src/character.ts`), so every look has the same hitbox and animations. There are two, both Blockbench models: the **trooper** (white armor, blue team) and the **assassin** (dark, violet team), described under "Blockbench models". The game uses the trooper everywhere for now: there is no character select yet.
 - **Character viewer:** with the dev server running, open `http://localhost:5173/figure.html` (add `?res=240` for the retro look). 1 idle, 2 walk, 3 run, Space jump, C slide, H hit, K kill, B show hitbox (switches to the 1.0 m slide box while sliding), O orbit, arrows rotate and zoom. Dev only, not part of the game build.
 
 ## Blockbench models
@@ -133,6 +141,7 @@ Decided 2026-10-13 (Luke): characters are modeled in [Blockbench](https://www.bl
 
    Don't rotate bones in the rest pose; arms hang straight down.
 5. **Inside the hitbox:** x and z within ±9.6, y from 0 to 57.6, the helmet between 48 and 57.6 (the head zone).
+   **One exception, hats** (Luke, 2026-10-13): parts named `hat...` may reach ±13.4 sideways and 62.4 high (0.42 m and 1.95 m). Shots through a brim miss (it is decoration) and a tall hat can peek over cover.
 
 **Editing workflow**
 1. Open `art/blockbench/trooper.bbmodel`, edit, paint in the Paint tab, **File > Save**.
@@ -140,6 +149,8 @@ Decided 2026-10-13 (Luke): characters are modeled in [Blockbench](https://www.bl
 3. Run `pnpm --filter @arena/client test` (checks the rules above), then look at it in `/figure.html` (add `?res=240&fx=on` for the retro look).
 
 **Trooper (Blockbench version):** follows Luke's second turnaround sheet (a white armored trooper, 2026-10-13), 37 cubes on a 128×128 texture. Round shapes are two crossed boxes (a wide-flat one and a narrow-tall one) plus a flat cap, so the corners read as cut off. A BONE dome helmet with a COBALT stripe from the front over the top to the back, a full-width INK visor slit with a CONCRETE glint, HAZE ear discs (INK ring, CONCRETE, SIGNAL light), one antenna on the left; a BONE chest with a CONCRETE centre seam and a small SIGNAL status light; BONE shoulder pads with COBALT outer edges; GRAPHITE suit, pants, gloves and boots; a CONCRETE belt with a HAZE buckle; BONE forearm plates and knee plates with COBALT stripes. BONE parts shade to HAZE at their lower edges. Limits from the hitbox: the head can't be as big as on the sheet (it must fit the 0.3 m head zone), so it is as wide as allowed instead. The first texture was generated by a script (exact palette colors, one UV net per cube); from now on, paint it in Blockbench.
+
+**Assassin (Blockbench version):** follows Luke's turnaround sheet (2026-10-13), inspired by an aerial grappling-gear soldier and a wide-hatted swordswoman, without copying either. 38 cubes on a 256×256 texture. A big cone hat of stepped rings (GRAPHITE with INK radial seams, a BRASS rim), worn low over a dark mask with a SIGNAL V-shaped visor and a BRASS side strip; a BONE scarf wrapped high with a long tail down the back; layered GRAPHITE feather shoulders (INK feather lines); a GRAPHITE chest with INK plate seams over an INK suit; a VIOLET sash with two BRASS rings, tied at the back with two hanging ends; the grappling rig: a CONCRETE gas tank on each hip with a SIGNAL light and a strap, and a blade pointing down; GRAPHITE gauntlets, INK gloves; INK pants with strap bands; GRAPHITE boots with a BRASS top and L-shaped trim. Known issue: in the retro look the dark parts merge, so the shape reads but details get lost (a CONCRETE edge on the feathers would help).
 
 ## The rifle: Brick
 
@@ -165,6 +176,8 @@ Owner: Luke. Add rows here before building them. **Who** is either the first-per
 | Running | first-person, body | on ground, speed near `runSpeed` (11 m/s) | Body: blends from walk between 5 and 11 m/s; longer stride (2.6 m), forward lean, pumping arms. No sprint key: walk vs run is speed only | body: done · first-person: to do |
 | Jumping | first-person, body | off the ground (`onGround` false); rising vs falling from vertical speed | Body: knee up and arms forward when rising, legs reach down and arms out when falling, squash on landing | body: done · first-person: to do |
 | Sliding | first-person, body | `sliding` | Body: feet-first, sitting up, gun arm forward, other hand trailing; head and chest inside the 1.0 m slide hitbox, legs reach out in front | body: done · first-person: to do |
+| Blade slash | body (assassin) | `meleeing` (the same melee as everyone: same damage, reach and timing) | Instead of the punch: the rifle drops to the left hand, the right hand draws the blade from the hip, raises it high, cuts down across the body and sheathes it (the hip blade hides while it is in the hand). `slashHand` and `RIG_LOOKS` in `character.ts` | done |
+| Grappling cable | body (assassin) | `wallRunning`, plus which side the wall is on (`wallSide`: other players' bodies find it with a short ray each way, `remoteView.ts`) | A steel cable shoots from the hip tank on the wall's side to a point up ahead on the wall in 0.12 s, stays out during the run and reels back in. Visual only: the wall run is the same for every look. Tune `CABLE_FROM`, `CABLE_TO` | done |
 | Reload | first-person | weapon `reloadT` > 0 (lasts `reloadTime`, 1.8 s) | Gun tilts, left hand pulls the magazine down off screen, brings a new one, slots it in with a jolt. Keyframes in `client/src/reloadAnim.ts` | done (first-person); body: to do |
 
 Body animations live in `client/src/character.ts` (one `CharacterBody` per character; poses are blended by weights that fade in about 0.1 s). It only needs a position each frame plus "on the ground?" and "sliding?", so other players will use it unchanged once they arrive over the network (not rendered yet). Test every body animation in the character viewer (`/figure.html`): 1 idle, 2 walk, 3 run, Space jump, C slide.

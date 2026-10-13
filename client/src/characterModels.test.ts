@@ -46,8 +46,14 @@ const JOINTS: Record<string, { parent: string; at: [number, number, number] }> =
 const HALF_WIDTH = 0.3;
 const HEIGHT = 1.8;
 const HEAD_ZONE = 1.5;
+/**
+ * The one exception (Luke, 2026-10-13): a hat may be bigger than the hitbox, wider and taller.
+ * Parts named hat... only; shots through the brim miss, it is decoration.
+ */
+const HAT_HALF_WIDTH = 0.42;
+const HAT_TOP = 1.95;
 
-describe.each(["trooper"])("Blockbench model %s", (look) => {
+describe.each(["trooper", "assassin"])("Blockbench model %s", (look) => {
   const gltf = readGlb(`./models/${look}.glb`);
   const byName = new Map(gltf.nodes.map((n, i) => [n.name, i]));
   const parentOf = new Map<number, number>();
@@ -82,12 +88,14 @@ describe.each(["trooper"])("Blockbench model %s", (look) => {
         const [x0, y0, z0] = [0, 1, 2].map((k) => at(acc?.min, k)) as [number, number, number];
         const [x1, y1, z1] = [0, 1, 2].map((k) => at(acc?.max, k)) as [number, number, number];
         const where = `${node.name ?? "?"}: x ${x0.toFixed(3)}..${x1.toFixed(3)}, y ${y0.toFixed(3)}..${y1.toFixed(3)}, z ${z0.toFixed(3)}..${z1.toFixed(3)}`;
-        for (const v of [x0, z0]) expect(v, where).toBeGreaterThanOrEqual(-HALF_WIDTH - 1e-6);
-        for (const v of [x1, z1]) expect(v, where).toBeLessThanOrEqual(HALF_WIDTH + 1e-6);
+        const hat = node.name?.startsWith("hat") ?? false;
+        const half = hat ? HAT_HALF_WIDTH : HALF_WIDTH;
+        for (const v of [x0, z0]) expect(v, where).toBeGreaterThanOrEqual(-half - 1e-6);
+        for (const v of [x1, z1]) expect(v, where).toBeLessThanOrEqual(half + 1e-6);
         expect(y0, where).toBeGreaterThanOrEqual(-1e-6);
-        expect(y1, where).toBeLessThanOrEqual(HEIGHT + 1e-6);
+        expect(y1, where).toBeLessThanOrEqual((hat ? HAT_TOP : HEIGHT) + 1e-6);
         // Helmet parts (everything in the head bone above the collar) must be in the head zone.
-        if (parentOf.get(i) === headBone && y1 > HEAD_ZONE + 0.05)
+        if (parentOf.get(i) === headBone && y1 > HEAD_ZONE + 0.05 && !hat)
           expect(y0, where).toBeGreaterThanOrEqual(HEAD_ZONE - 1e-6);
       }
     });

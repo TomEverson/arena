@@ -40,6 +40,11 @@ export interface BodyState {
   alive: boolean;
   /** Running along a wall (airborne, but moving like a sprint). */
   wallRunning?: boolean;
+  /**
+   * Which side the wall is on while wall running: +1 the figure's own +X side, -1 its -X side,
+   * 0 or missing when unknown. Only used for looks (the grappling cable).
+   */
+  wallSide?: number;
   /** Crouched (low and slow, feet planted). */
   crouching?: boolean;
   /** In the middle of a dash. */
@@ -106,6 +111,23 @@ const GUN_MELEE: GunSpot = { x: -0.1, y: 0.38, z: 0.2, pitch: 0.9 }; // hanging 
 const FIST_REST = [0.2, 0.16, 0.14] as const;
 const FIST_WIND = [0.27, 0.3, -0.02] as const;
 const FIST_STRIKE = [0.1, 0.44, 0.58] as const;
+/**
+ * Looks that wear the grappling rig (a gas tank and a blade on each hip): their melee is a slash
+ * with the right blade instead of a punch, and they fire a cable at the wall when wall running.
+ * Visual only: the melee hit and the wall run themselves are the same for every look (sim/).
+ */
+const RIG_LOOKS: readonly CharacterLook[] = ["assassin"];
+/** The right hand during a slash, in the upper body's space: at the hip blade, raised high, cut through. */
+const SLASH_DRAW = [0.25, -0.02, 0.05] as const;
+const SLASH_WIND = [0.3, 0.55, -0.04] as const;
+const SLASH_END = [-0.14, 0.12, 0.42] as const;
+/** The blade is in the hand (not on the hip) for this part of the swing. */
+const SLASH_DRAWN = [0.13, 0.88] as const;
+/** The cable: from the hip tank to a point on the wall up ahead (the figure's own space, metres). */
+const CABLE_FROM = [0.23, 0.91, 0.03] as const;
+const CABLE_TO = [0.4, 2.8, 1.8] as const;
+const CABLE_SHOOT_SECONDS = 0.12; // to fly out to the wall, and to reel back in
+const CABLE_THICKNESS = 0.014;
 const smooth = (x: number) => {
   const t = Math.min(1, Math.max(0, x));
   return t * t * (3 - 2 * t);
@@ -115,6 +137,25 @@ const mix3 = (a: readonly number[], b: readonly number[], t: number): [number, n
   lerp(a[1] ?? 0, b[1] ?? 0, t),
   lerp(a[2] ?? 0, b[2] ?? 0, t),
 ];
+/** The right fist during a punch (u = 0..1 through the swing): rest, wind back, strike, return. */
+function punchHand(u: number): [number, number, number] {
+  if (u < 0.2) return [FIST_REST[0], FIST_REST[1], FIST_REST[2]];
+  if (u < 0.4) return mix3(FIST_REST, FIST_WIND, smooth((u - 0.2) / 0.2));
+  if (u < 0.55) return mix3(FIST_WIND, FIST_STRIKE, smooth((u - 0.4) / 0.15));
+  return mix3(FIST_STRIKE, FIST_REST, smooth((u - 0.55) / 0.45));
+}
+
+/**
+ * The right hand during a blade slash: reach to the hip and draw, raise the blade high behind the
+ * shoulder, cut down and across the body, then put it back on the hip.
+ */
+function slashHand(u: number): [number, number, number] {
+  if (u < 0.15) return mix3(FIST_REST, SLASH_DRAW, smooth(u / 0.15));
+  if (u < 0.35) return mix3(SLASH_DRAW, SLASH_WIND, smooth((u - 0.15) / 0.2));
+  if (u < 0.5) return mix3(SLASH_WIND, SLASH_END, smooth((u - 0.35) / 0.15));
+  return mix3(SLASH_END, SLASH_DRAW, smooth((u - 0.5) / 0.38));
+}
+
 /** Where each hand grips, in the rifle's own space: the grip, and under the front of the receiver. */
 const GRIP_RIGHT = [0, -0.075, 0] as const;
 const GRIP_LEFT = [0, -0.07, 0.3] as const;
@@ -136,6 +177,9 @@ const _pole = new THREE.Vector3();
 const _euler = new THREE.Euler();
 const _qa = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
+const _c1 = new THREE.Vector3();
+const _c2 = new THREE.Vector3();
+const _zAxis = new THREE.Vector3(0, 0, 1);
 
 /**
  * Two-bone arm IK. The shoulder is at (shoulderX, SHOULDER_Y, 0) in the upper body's space; the
@@ -367,6 +411,15 @@ export class CharacterBody {
   private readonly headParts: THREE.Mesh[] = [];
   /** The Blockbench model this look is built from, if any, and its meshes (for the hit flash). */
   private readonly model: CharacterModel | undefined;
+  /** Wears the grappling rig (RIG_LOOKS): slashes with a blade, fires a cable on wall runs. */
+  private readonly rig: boolean;
+  /** The blade in the right hand during a slash, and the one sheathed on the hip (a model part). */
+  private readonly handBlade = new THREE.Group();
+  private hipBlade: THREE.Object3D | null = null;
+  private readonly cable: THREE.Mesh;
+  /** 0 = reeled in; 1 = out at the wall. */
+  private cableT = 0;
+  private cableSide = 1;
   private readonly modelMeshes: THREE.Mesh[] = [];
   private flashing = false;
   private airTime = 0;
@@ -441,6 +494,19 @@ export class CharacterBody {
     );
     this.muzzleFlash.visible = false;
 
+    // The grappling rig's moving parts: a blade for the right hand and a steel cable.
+    this.rig = RIG_LOOKS.includes(look);
+    const blade = this.handBlade;
+    this.elbows[1].add(blade);
+    blade.position.set(0, -ARM_FORE, 0.01); // in the fist
+    blade.rotation.x = -0.5; // angled forward, out of the fist
+    part(blade, ink, box(0.035, 0.07, 0.035), [0, -0.01, 0]); // grip
+    part(blade, metal, box(0.07, 0.015, 0.05), [0, -0.05, 0]); // guard
+    part(blade, material(PALETTE.HAZE), box(0.02, 0.3, 0.045), [0, -0.21, 0]); // blade
+    blade.visible = false;
+    this.cable = part(this.root, metal, box(1, 1, 1), [0, 0, 0]);
+    this.cable.visible = false;
+
     scene.add(this.root);
   }
 
@@ -454,6 +520,7 @@ export class CharacterBody {
       for (const mesh of model.parts[bone]) {
         const m = mesh.clone(); // shares the geometry and material
         parent.add(m);
+        if (m.name === "blade_r") this.hipBlade = m; // drawn into the hand for a slash
         this.modelMeshes.push(m);
         if (bone === "head") this.headParts.push(m);
       }
@@ -923,16 +990,7 @@ export class CharacterBody {
         grip(GRIP_RIGHT, SHOULDER_X, false);
       }
       if (mm > 0) {
-        // The right fist: rest, wind back, strike, return.
-        const u = mu;
-        const f =
-          u < 0.2
-            ? FIST_REST
-            : u < 0.4
-              ? mix3(FIST_REST, FIST_WIND, smooth((u - 0.2) / 0.2))
-              : u < 0.55
-                ? mix3(FIST_WIND, FIST_STRIKE, smooth((u - 0.4) / 0.15))
-                : mix3(FIST_STRIKE, FIST_REST, smooth((u - 0.55) / 0.45));
+        const f = this.rig ? slashHand(mu) : punchHand(mu);
         const r = solveArm(SHOULDER_X, f[0], f[1], f[2], this.ik);
         // From the rifle grip (or the idle arm) to the fist, as far as the carry has got.
         if (this.handMixR > 0) this.handQ[1].slerp(r.q, mm);
@@ -949,6 +1007,10 @@ export class CharacterBody {
       }
     }
     this.muzzleFlash.visible = this.shootT > 0.55;
+    const drawn = this.rig && mu > SLASH_DRAWN[0] && mu < SLASH_DRAWN[1];
+    this.handBlade.visible = drawn;
+    if (this.hipBlade) this.hipBlade.visible = !drawn;
+    this.updateCable(this.rig && wallRun ? (s.wallSide ?? 0) : 0, dt);
     this.brick.update(dt, 1, this.time);
     this.sniper.update(dt, 1, this.time);
 
@@ -987,6 +1049,29 @@ export class CharacterBody {
       const mat = this.flashing ? this.model.flash : this.model.material;
       for (const m of this.modelMeshes) m.material = mat;
     }
+  }
+
+  /**
+   * The grappling cable: shoots from the hip tank on the wall's side to a point up ahead on the
+   * wall while `side` is set (+1 or -1), and reels back in when it is 0.
+   */
+  private updateCable(side: number, dt: number): void {
+    if (side !== 0) this.cableSide = Math.sign(side);
+    const step = dt / CABLE_SHOOT_SECONDS;
+    this.cableT = side !== 0 ? Math.min(1, this.cableT + step) : Math.max(0, this.cableT - step);
+    const c = this.cable;
+    c.visible = this.cableT > 0 && !this.firstPerson;
+    if (!c.visible) return;
+    const k = this.cableSide;
+    _c1.set(k * CABLE_FROM[0], CABLE_FROM[1], CABLE_FROM[2]);
+    _c2
+      .set(k * CABLE_TO[0], CABLE_TO[1], CABLE_TO[2])
+      .sub(_c1)
+      .multiplyScalar(this.cableT);
+    const length = _c2.length();
+    c.position.copy(_c1).addScaledVector(_c2, 0.5);
+    c.quaternion.setFromUnitVectors(_zAxis, _c2.normalize());
+    c.scale.set(CABLE_THICKNESS, CABLE_THICKNESS, Math.max(length, 1e-3));
   }
 
   /** Idle -> walk -> run, by speed. */

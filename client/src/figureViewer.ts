@@ -481,6 +481,8 @@ function stepFakePlayer(dt: number): void {
   state.x += dir * speed * dt;
   if (state.x > RANGE) dir = -1;
   if (state.x < -RANGE) dir = 1;
+  // The wall is on the -Z side: on the body's own +X side when running toward +X (for the cable).
+  state.wallSide = state.wallRunning ? dir : 0;
   if (airJumpAt > 0) {
     airJumpAt -= dt;
     if (airJumpAt <= 0) {

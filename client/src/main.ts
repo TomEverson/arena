@@ -325,7 +325,7 @@ let predictor: Predictor | null = null;
 const smoother = new CorrectionSmoother();
 const clock = new ServerClock();
 const remotes = new RemoteTracks();
-const remoteViews = new RemoteViews(scene);
+const remoteViews = new RemoteViews(scene, () => world);
 const skillViews = new SkillViews(scene);
 /** Bombardments already on screen (a new one sounds its warning once). */
 const knownStrikes = new Set<number>();
