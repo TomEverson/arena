@@ -324,6 +324,36 @@
         flex-direction: column;
         gap: 14px;
       }
+      #heroes {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
+        font-size: 14px;
+        cursor: default;
+      }
+      #heroes .label {
+        color: #9ab;
+      }
+      #heroes button {
+        font: 700 14px monospace;
+        padding: 6px 14px;
+        color: #cde;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid #556;
+        cursor: pointer;
+      }
+      #heroes button.on {
+        color: #2de2e6;
+        border-color: #2de2e6;
+      }
+      #heroes small {
+        flex-basis: 100%;
+        text-align: center;
+        min-height: 1.2em;
+        color: #fc6;
+      }
       #roominfo {
         font-size: 14px;
         color: #9fd;
@@ -452,10 +482,6 @@
         min-height: 1.2em;
         color: #ff8a7a;
       }
-      #menu a {
-        color: #8ab;
-        font-size: 13px;
-      }
       #practice {
         position: fixed;
         left: 24px;
@@ -508,6 +534,29 @@
         color: #ffd24a;
         border-color: #ffd24a;
       }
+      #skills {
+        position: fixed;
+        right: 24px;
+        bottom: 116px;
+        display: flex;
+        gap: 6px;
+        font: 700 12px monospace;
+        pointer-events: none;
+      }
+      #skills span {
+        padding: 3px 8px;
+        color: #9ab;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid #445;
+      }
+      #skills span.on {
+        color: #2de2e6;
+        border-color: #2de2e6;
+      }
+      #skills span.ult {
+        color: #ff4b1f;
+        border-color: #ff4b1f;
+      }
       #ammo small {
         display: block;
         font-size: 13px;
@@ -531,7 +580,6 @@
         </button>
       </div>
       <div id="menu-note"></div>
-      <a href="?offline">no server? play offline</a>
     </div>
     <canvas id="game"></canvas>
     <div id="practice"></div>
@@ -540,6 +588,7 @@
     <div id="hitmarker"></div>
     <div id="hitlayer"></div>
     <div id="slots"></div>
+    <div id="skills"></div>
     <div id="ammo"></div>
     <div id="vitals"></div>
     <div id="hurt"></div>
@@ -555,6 +604,7 @@
         R reload · Tab scoreboard · Enter rematch · L copy invite link · P respawn (dev) · Esc
         release
       </div>
+      <div id="heroes"></div>
       <div id="roominfo"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>

@@ -3,7 +3,7 @@
  * feature and carries a `verify` that must hold, so a recording can never freeze a
  * broken behaviour. Inline worlds keep most of them independent of greybox.json.
  */
-import { PARAMS as P } from "../params";
+import { PARAMS as P, SKILL } from "../params";
 import { box, flatWorld } from "../testutil";
 import type { Aabb, PlayerInput, PlayerState, Ramp } from "../types";
 import type { Scenario } from "./record";
@@ -861,6 +861,331 @@ export const scenarios: Scenario[] = [
       (t) => {
         check(!any(t, (s) => s.wallRunning), "never wall ran");
       },
+    );
+  })(),
+
+  (() => {
+    // A tall wall 20 m ahead (face at z = -20). The Assassin looks up at it, hooks it and reels in.
+    const w = inline([box(0, 10, -25, 40, 20, 10)]);
+    const input = (): InputFn => (t) => ({ hero: 1, pitch: 0.4, skillQ: t === 5, reel: t >= 5 });
+    return scenario(
+      "grapple-pull",
+      "The Assassin hooks a wall and holds the button: reeled in faster and faster up to grapple speed, then let go at the wall with the speed kept.",
+      w,
+      [0, 0, 0],
+      { total: 120, input },
+      (t) => {
+        check(
+          any(t, (s) => s.grappling),
+          "grappled",
+        );
+        check(
+          Math.abs(maxOf(t, (s) => Math.hypot(s.vx, s.vy, s.vz)) - SKILL.grappleSpeed) < 0.01,
+          "reached grapple speed and no more",
+        );
+        check(Math.min(...t.map((s) => s.z)) < -19, "reached the wall");
+        check(!last(t).grappling, "let go");
+        check(maxOf(t, (s) => s.y) > 8, "flung on up the wall");
+        check(
+          t.every((s) => s.z > -20 + P.halfWidth - 1e-6),
+          "never went into the wall",
+        );
+        const used = t.find((s) => s.grappling);
+        check(
+          used !== undefined && used.grappleCharges < SKILL.grappleCharges - 0.9,
+          "spent a charge",
+        );
+        check(used !== undefined && used.airJumps === P.maxAirJumps, "the air jump is back");
+      },
+    );
+  })(),
+
+  (() => {
+    // A beam 13 m up. Run at it, hook it, reel for half a second, then let go of the button.
+    const w = inline([box(0, 14, -12, 30, 2, 4)]);
+    const input = (): InputFn => (t) => ({
+      hero: 1,
+      moveZ: 1,
+      pitch: 0.5,
+      skillQ: t === 20,
+      reel: t >= 20 && t < 50,
+      slide: t === 120,
+    });
+    return scenario(
+      "grapple-swing",
+      "Reel for a moment, then let go of the button: the line stays as long as it is and you swing under the hook like a pendulum, until crouch drops you.",
+      w,
+      [0, 0, 14],
+      { total: 150, input },
+      (t) => {
+        const swing = t.slice(51, 120);
+        check(
+          swing.every((s) => s.grappling),
+          "stayed on the line",
+        );
+        const len = swing[0]?.grappleLen ?? 0;
+        check(
+          swing.every((s) => s.grappleLen === len),
+          "the line keeps its length when not reeling",
+        );
+        const hook = swing[0] as PlayerState;
+        const dist = (s: PlayerState) =>
+          Math.hypot(
+            hook.grappleX - s.x,
+            hook.grappleY - (s.y + P.standHeight / 2),
+            hook.grappleZ - s.z,
+          );
+        check(
+          swing.every((s) => dist(s) < len + 0.6),
+          "never further from the hook than the line is long",
+        );
+        check(
+          swing.some((s) => s.vy < -2) && swing.some((s) => s.vy > 5),
+          "swung down and back up",
+        );
+        check(t[121]?.grappling === false, "crouch lets go");
+        check(
+          Math.hypot(t[121]?.vx ?? 0, t[121]?.vy ?? 0, t[121]?.vz ?? 0) > 8,
+          "with the speed kept",
+        );
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 14, -12, 30, 2, 4)]);
+    const input = (): InputFn => (t) => ({ hero: 1, pitch: 0.55, skillQ: t === 5, reel: t >= 5 });
+    return scenario(
+      "grapple-stall",
+      "Reeling into a hook you cannot reach (the underside of a beam): it circles, stops getting closer, and lets go.",
+      w,
+      [0, 0, 6],
+      { total: 110, input },
+      (t) => {
+        check(t[60]?.grappling === true, "reeled in");
+        check(!last(t).grappling, "let go once stalled");
+        check(
+          maxOf(t, (s) => s.grappleStall) >= SKILL.grappleStallTime - 0.02,
+          "because it stalled",
+        );
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 10, -25, 40, 20, 10)]);
+    const input = (): InputFn => (t) => ({ hero: 1, moveZ: 1, pitch: 0.4, skillQ: t === 5 });
+    return scenario(
+      "grapple-landing",
+      "A tap from the ground without reeling: the hook kicks you forward, and landing lets the line go.",
+      w,
+      [0, 0, 0],
+      { total: 90, input },
+      (t) => {
+        check(t[6]?.grappling === true, "hooked");
+        check(!last(t).grappling && last(t).onGround, "landed and let go");
+        check(
+          t.filter((s) => s.grappling && s.onGround).length <= 2,
+          "not dragged along the ground on the line",
+        );
+      },
+    );
+  })(),
+
+  (() => {
+    // Hook the wall up to the left, then up to the right without letting go: a V.
+    const w = inline([box(0, 10, -25, 40, 20, 10)]);
+    const input = (): InputFn => (t) => ({
+      hero: 1,
+      pitch: 0.4,
+      yaw: t < 8 ? 0.5 : -0.5,
+      skillQ: t === 5 || t === 9,
+      reel: t >= 5,
+    });
+    return scenario(
+      "grapple-v",
+      "A second grapple in the middle of a pull adds a hook: reeling goes up the middle of the two, and lets go once between them.",
+      w,
+      [0, 0, 0],
+      { total: 120, input },
+      (t) => {
+        const both = t.filter((s) => s.grappling && s.grapple2);
+        check(both.length > 10, "pulled by two hooks for a while");
+        const first = both[0] as PlayerState;
+        check(first.grappleX < -5 && first.grapple2X > 5, "one hook to the left, one to the right");
+        const end = both[both.length - 1] as PlayerState;
+        check(Math.abs(end.x) < 5, "stayed between the hooks");
+        check(end.z < -8 && end.z > -19.5, "let go before the wall, once between the hooks");
+        check(end.vz < -10, "going up the middle, fast");
+        check(!last(t).grappling && !last(t).grapple2, "both hooks released");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 10, -25, 40, 20, 10)]);
+    const input = (): InputFn => (t) => ({
+      hero: 1,
+      pitch: 0.4,
+      skillQ: t === 5,
+      reel: t >= 5,
+      jump: t === 15,
+    });
+    return scenario(
+      "grapple-jump-release",
+      "A jump in the middle of a pull lets go with a hop, keeping the speed.",
+      w,
+      [0, 0, 0],
+      { total: 90, input },
+      (t) => {
+        check(t[12]?.grappling === true && t[16]?.grappling === false, "let go on the jump");
+        check((t[16]?.vy ?? 0) >= SKILL.grappleHop - 1, "hopped");
+        check((t[16]?.vz ?? 0) < -8, "kept its speed toward the wall");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 10, -25, 40, 20, 10)]);
+    const AIM = { hero: 1, pitch: 0.4 };
+    const input = (): InputFn => (t) => ({ ...AIM, skillQ: t % 3 === 0 });
+    return scenario(
+      "grapple-out-of-range",
+      "Grapple pressed with nothing within range: no pull, and no charge is spent.",
+      w,
+      [0, 0, 80],
+      { total: 60, input },
+      (t) => {
+        check(!any(t, (s) => s.grappling), "out of range: no pull");
+        check(last(t).grappleCharges === SKILL.grappleCharges, "no charge spent on a miss");
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 10, -25, 40, 20, 10)]);
+    const input = (): InputFn => (t) => ({ hero: 1, pitch: 0.4, skillQ: t % 3 === 0, reel: true });
+    const total = Math.round(SKILL.grappleRegen * 60 + 60);
+    return scenario(
+      "grapple-charges",
+      "Grapple pressed over and over: two hooks in a row, then nothing until a charge comes back.",
+      w,
+      [0, 0, -5],
+      { total, input },
+      (t) => {
+        const before = (i: number) =>
+          i > 0 ? (t[i - 1]?.grappleCharges ?? 0) : SKILL.grappleCharges;
+        const spent = t
+          .map((s, i) => (s.grappleCharges < before(i) - 0.5 ? i : -1))
+          .filter((i) => i >= 0);
+        check(spent.length >= 3, `three hooks or more in all (got ${spent.length})`);
+        check((spent[1] ?? 99) - (spent[0] ?? 0) <= 3, "the second straight after the first");
+        check(
+          (spent[2] ?? 0) - (spent[0] ?? 0) >= SKILL.grappleRegen * 60 - 6,
+          "the third only when a charge is back",
+        );
+      },
+    );
+  })(),
+
+  (() => {
+    const w = inline([box(0, 10, -25, 40, 20, 10)]);
+    const input = (): InputFn => (t) => ({ hero: 0, pitch: 0.4, skillQ: t === 5, reel: t >= 5 });
+    return scenario(
+      "grapple-not-trooper",
+      "The Trooper pressing the same button does not grapple.",
+      w,
+      [0, 0, 0],
+      { total: 40, input },
+      (t) => {
+        check(!any(t, (s) => s.grappling), "no pull");
+        check(last(t).z === 0 && last(t).onGround, "stood still");
+      },
+    );
+  })(),
+
+  (() => {
+    const input = (): InputFn => (t) => ({ hero: 1, moveZ: 1, dash: t === 20 });
+    return scenario(
+      "assassin-no-dash",
+      "The Assassin has no dash: the button does nothing to its movement (it is the spinning slash).",
+      inline([]),
+      [0, 0, 0],
+      { total: 60, input },
+      (t) => {
+        check(!any(t, (s) => s.dashTime > 0), "never dashed");
+        check(maxOf(t, speed) <= P.runSpeed + 1e-6, "never faster than a run");
+      },
+    );
+  })(),
+
+  (() => {
+    const input = (): InputFn => (t) => ({ hero: 1, jump: t === 5 || t === 25 });
+    return scenario(
+      "assassin-no-air-jump",
+      "The Assassin has no double jump: a second press in the air does nothing.",
+      inline([]),
+      [0, 0, 0],
+      { total: 80, input },
+      (t) => {
+        const peak = maxOf(t, (s) => s.y);
+        check(
+          peak < (P.jumpSpeed * P.jumpSpeed) / (2 * P.gravity) + 0.05,
+          "only one jump's height",
+        );
+        check(last(t).onGround, "back on the ground");
+      },
+    );
+  })(),
+
+  (() => {
+    // Already diving (the dive is started by the weapon step, outside the movement function):
+    // forward and down from 30 m up, high enough not to reach the ground.
+    const dir = { rollDirX: 0, rollDirY: -Math.SQRT1_2, rollDirZ: -Math.SQRT1_2 };
+    return scenario(
+      "roll-dive",
+      "The rolling dive: straight along its aim at dive speed with no gravity, ending when its time is up, with part of the speed kept.",
+      inline([]),
+      [0, 30, 0],
+      phases([[70, { hero: 1 }]]),
+      (t) => {
+        // (t[0] is the state before the first tick: diving, but not yet moving.)
+        const diving = t.slice(1).filter((s) => s.rollT > 0);
+        check(diving.length >= Math.round(SKILL.rollTime * 60) - 3, "dived for its time");
+        check(
+          diving.every((s) => Math.abs(Math.hypot(s.vx, s.vy, s.vz) - SKILL.rollSpeed) < 1e-6),
+          "at dive speed, in a straight line",
+        );
+        const after = t[diving.length + 1] as PlayerState;
+        check(
+          Math.abs(
+            Math.hypot(after.vx, after.vy, after.vz) - SKILL.rollSpeed * SKILL.rollExitScale,
+          ) < 0.6,
+          "then let go with part of the speed",
+        );
+      },
+      { rollT: SKILL.rollTime, ...dir, onGround: false },
+    );
+  })(),
+
+  (() => {
+    const dir = { rollDirX: 0, rollDirY: -1, rollDirZ: 0 };
+    return scenario(
+      "roll-slam",
+      "A dive straight down ends the moment it hits the ground.",
+      inline([]),
+      [0, 4, 0],
+      phases([[40, { hero: 1 }]]),
+      (t) => {
+        const landed = t.findIndex((s) => s.onGround);
+        check(
+          landed > 0 && landed < Math.round(SKILL.rollTime * 60),
+          "hit the ground before its time was up",
+        );
+        check((t[landed]?.rollT ?? 1) === 0, "and the dive ended there");
+        check(last(t).y === 0, "on the floor");
+      },
+      { rollT: SKILL.rollTime, ...dir, onGround: false },
     );
   })(),
 

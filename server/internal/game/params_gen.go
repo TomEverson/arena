@@ -155,3 +155,102 @@ const (
 	MatchLengthSeconds    = 360
 	MatchResultsSeconds   = 15
 )
+
+// Thunder spear launcher tuning (shared/params.json "spear"), prefixed with Spear.
+const (
+	SpearDamage          = 25
+	SpearHeadshotMult    = 1
+	SpearRpm             = 50
+	SpearMagSize         = 2
+	SpearReloadTime      = 4
+	SpearRange           = 150
+	SpearHipSpread       = 1
+	SpearAdsSpread       = 0.2
+	SpearMoveBloom       = 1
+	SpearAirBloom        = 0.5
+	SpearAdsBloomScale   = 0.3
+	SpearCrouchHipMult   = 0.7
+	SpearSlideHipMult    = 0.9
+	SpearSlideBloomScale = 0.5
+	SpearShotBloom       = 0
+	SpearShotBloomMax    = 0
+	SpearRecoilResetTime = 1
+	SpearAdsFovScale     = 0.8
+	SpearAdsSensitivity  = 0.8
+	SpearAdsSpeedMult    = 0.6
+)
+
+var SpearRecoilPitch = [...]float64{3}
+var SpearRecoilYaw = [...]float64{0}
+
+// Hero skills (shared/params.json "skill"), prefixed with Skill.
+const (
+	SkillGrenadeCooldown     = 12
+	SkillGrenadeFuse         = 2
+	SkillGrenadeSpeed        = 24
+	SkillGrenadeLift         = 3
+	SkillGrenadeGravity      = 22
+	SkillGrenadeBounce       = 0.45
+	SkillGrenadeFriction     = 0.75
+	SkillGrenadeRadius       = 5
+	SkillGrenadeDamage       = 80
+	SkillBarrierCooldown     = 16
+	SkillBarrierDistance     = 2
+	SkillBarrierWidth        = 2.5
+	SkillBarrierHeight       = 2
+	SkillBarrierThickness    = 0.3
+	SkillBarrierHealth       = 250
+	SkillBarrierSeconds      = 6
+	SkillUltChargeSeconds    = 90
+	SkillUltChargeDamage     = 600
+	SkillBombardRange        = 80
+	SkillBombardRadius       = 4
+	SkillBombardWarning      = 2
+	SkillBombardSeconds      = 4
+	SkillBombardInterval     = 0.25
+	SkillBombardDamage       = 10
+	SkillGrenadeIdBase       = 2000
+	SkillBarrierIdBase       = 3000
+	SkillStrikeIdBase        = 4000
+	SkillPickupIdBase        = 5000
+	SkillPickupReach         = 1.2
+	SkillPickupRespawn       = 3
+	SkillGrappleCharges      = 2
+	SkillGrappleRegen        = 3
+	SkillGrappleRange        = 50
+	SkillGrappleSpeed        = 30
+	SkillGrapplePull         = 50
+	SkillGrappleKick         = 8
+	SkillGrappleSteer        = 5
+	SkillGrappleGravityScale = 0.6
+	SkillGrappleStretch      = 12
+	SkillGrappleArrive       = 2
+	SkillGrappleMaxTime      = 6
+	SkillGrappleStallTime    = 0.3
+	SkillGrappleSplit        = 0.35
+	SkillGrappleExitScale    = 1
+	SkillGrappleHop          = 6
+	SkillGrappleBloom        = 4
+	SkillSlashCooldown       = 5
+	SkillSlashSpin           = 0.45
+	SkillSlashRange          = 3
+	SkillSlashDamage         = 70
+	SkillRollMinDive         = 0.7
+	SkillRollCooldown        = 6
+	SkillRollSpeed           = 26
+	SkillRollTime            = 0.9
+	SkillRollExitScale       = 0.5
+	SkillRollRange           = 2.5
+	SkillRollDamage          = 60
+	SkillSlamRadius          = 4
+	SkillSlamDamage          = 40
+	SkillOverdriveSeconds    = 8
+	SkillHookIdBase          = 6000
+	SkillSpearIdBase         = 7000
+	SkillSpearSpeed          = 70
+	SkillSpearGravity        = 6
+	SkillSpearFuse           = 1
+	SkillSpearRadius         = 4.5
+	SkillSpearDamage         = 90
+	SkillBladeDamage         = 40
+)

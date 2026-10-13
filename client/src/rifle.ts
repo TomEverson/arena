@@ -52,6 +52,12 @@ export interface Brick {
   /** How far aimed down sights the gun is (0 hip, 1 aimed): lets a gun clear its sight window (see `sightMask`). */
   aim?(t: number): void;
   /**
+   * A reload of its own, for a gun the standard one (tilt, magazine out and in) does not suit:
+   * `t` is how far through it is (0..1), or a negative number when not reloading. Called after
+   * `update` each frame.
+   */
+  reload?(t: number): void;
+  /**
    * Per frame. `ammo` is the share of a full magazine left (0..1); `time` is seconds, for the
    * blink. Also settles the slide.
    */

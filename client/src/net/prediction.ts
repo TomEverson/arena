@@ -8,7 +8,7 @@
  * prediction for N; on a mismatch it adopts the server state and replays the
  * inputs the server has not simulated yet.
  */
-import { hSpeed, stepPlayer } from "../sim/movement";
+import { hSpeed, slashLunge, startRoll, stepPlayer } from "../sim/movement";
 import type { CollisionWorld, PlayerInput, PlayerState } from "../sim/types";
 import {
   movementMods,
@@ -44,7 +44,13 @@ interface Entry {
 }
 
 function weaponContext(s: PlayerState): WeaponContext {
-  return { hSpeed: hSpeed(s), onGround: s.onGround, crouching: s.crouching, sliding: s.sliding };
+  return {
+    hSpeed: hSpeed(s),
+    onGround: s.onGround,
+    crouching: s.crouching,
+    sliding: s.sliding,
+    grappling: s.grappling,
+  };
 }
 
 export function statesMatch(a: PlayerState, b: PlayerState, epsilon = MATCH_EPSILON): boolean {
@@ -104,13 +110,15 @@ export class Predictor {
   /** Simulate one tick now. Returns the sequenced input to send. */
   step(input: PlayerInput, pitch = 0, viewTick = 0): Input {
     // The weapon in hand sets run speed and aim-down-sights slowdown: put them on the input.
-    const moving: PlayerInput = { ...input, ...movementMods(this.weapon) };
-    const full: Input = { ...moving, seq: this.nextSeq++, pitch, viewTick };
+    const moving: PlayerInput = { ...input, pitch, ...movementMods(this.weapon) };
+    const full: Input = { ...moving, seq: this.nextSeq++, viewTick };
     this.lastShot = null;
     if (this.alive) {
       this.state = stepPlayer(this.state, moving, this.world, this.dt);
       const r = stepWeapon(this.weapon, moving, weaponContext(this.state), this.dt);
       this.weapon = r.state;
+      if (r.shot.slash) slashLunge(this.state, moving.yaw);
+      if (r.shot.roll) startRoll(this.state, moving.yaw, moving.pitch);
       const s = r.shot;
       if (
         s.fired ||
@@ -119,7 +127,11 @@ export class Predictor {
         s.dryFire ||
         s.meleeStarted ||
         s.meleeStrike ||
-        s.switched
+        s.switched ||
+        s.grenade ||
+        s.barrier ||
+        s.slash ||
+        s.roll
       )
         this.lastShot = s;
     }
@@ -180,7 +192,10 @@ export class Predictor {
       if (alive) {
         const inp = { ...e.input, ...movementMods(w) }; // from the weapon as replayed, like the server
         s = stepPlayer(s, inp, this.world, this.dt);
-        w = stepWeapon(w, inp, weaponContext(s), this.dt).state;
+        const r = stepWeapon(w, inp, weaponContext(s), this.dt);
+        w = r.state;
+        if (r.shot.slash) slashLunge(s, inp.yaw);
+        if (r.shot.roll) startRoll(s, inp.yaw, inp.pitch);
       }
       e.after = s;
       e.weaponAfter = w;

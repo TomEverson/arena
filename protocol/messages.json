@@ -45,9 +45,33 @@
           "type": "bool",
           "doc": "Melee pressed this tick."
         },
+        "skillQ": {
+          "type": "bool",
+          "doc": "First skill pressed this tick (the Trooper's grenade, the Assassin's grapple)."
+        },
+        "reel": {
+          "type": "bool",
+          "doc": "First skill button held: the Assassin's grapple reels in while it is (let go and you swing on the line as it is)."
+        },
+        "skillE": {
+          "type": "bool",
+          "doc": "Second skill pressed this tick (the Trooper's barrier, the Assassin's rolling dive)."
+        },
+        "ult": {
+          "type": "bool",
+          "doc": "Ultimate pressed this tick (the Trooper's bombardment, the Assassin's overdrive). Only the server acts on it."
+        },
+        "hero": {
+          "type": "u8",
+          "doc": "One of HeroKinds: who the player is, which decides what the skill buttons do. The client sends what it believes; the server overwrites it with the truth before simulating."
+        },
+        "overdrive": {
+          "type": "bool",
+          "doc": "The Assassin's overdrive is running. Like hero: the client sends what it believes, the server overwrites it."
+        },
         "slot": {
           "type": "u8",
-          "doc": "Weapon slot pressed this tick: 0 none, 1 rifle, 2 sniper, 3 empty hands."
+          "doc": "Weapon slot pressed this tick: 0 none, 1 and 2 the hero's two guns (Trooper: rifle, sniper; Assassin: sniper, thunder spears), 3 hands (Trooper: fists; Assassin: blades)."
         },
         "runSpeedMult": {
           "type": "f64",
@@ -124,6 +148,56 @@
         "wallCooldown": {
           "type": "f64",
           "doc": "Seconds before the wall in wallNormal can be grabbed or jumped off again."
+        },
+        "rollT": {
+          "type": "f64",
+          "doc": "Seconds left of the Assassin's rolling dive (0 when not diving)."
+        },
+        "rollDirX": "f64",
+        "rollDirY": "f64",
+        "rollDirZ": {
+          "type": "f64",
+          "doc": "The unit direction of the dive."
+        },
+        "grappling": {
+          "type": "bool",
+          "doc": "Being pulled to a grapple point (the Assassin's first skill)."
+        },
+        "grappleX": "f64",
+        "grappleY": "f64",
+        "grappleZ": {
+          "type": "f64",
+          "doc": "The point the grapple is hooked to."
+        },
+        "grapple2": {
+          "type": "bool",
+          "doc": "A second hook is out as well: the pull is between the two (a V)."
+        },
+        "grapple2X": "f64",
+        "grapple2Y": "f64",
+        "grapple2Z": {
+          "type": "f64",
+          "doc": "The point the second hook is on."
+        },
+        "grappleLen": {
+          "type": "f64",
+          "doc": "How long the first hook's line is: it only gets shorter, and the player cannot go further from the hook than this (that is what makes the swing)."
+        },
+        "grapple2Len": {
+          "type": "f64",
+          "doc": "The same for the second hook."
+        },
+        "grappleT": {
+          "type": "f64",
+          "doc": "Seconds since the last hook went out."
+        },
+        "grappleStall": {
+          "type": "f64",
+          "doc": "Seconds the grapple has been reeling without getting closer (it lets go when this runs long: you are circling the hook)."
+        },
+        "grappleCharges": {
+          "type": "f64",
+          "doc": "Grapples ready (fractional while one recharges)."
         }
       }
     },
@@ -143,7 +217,11 @@
         },
         "kind": {
           "type": "u8",
-          "doc": "One of EntityKinds: a player or a practice-range target."
+          "doc": "One of EntityKinds. Skill objects are entities too: a grenade in flight, a barrier (yaw 0 spans X, a quarter turn spans Z), a bombardment (flags 1 once the shells are falling), a practice-range recharge pickup (sent only while it can be taken), the point a grappling player is hooked to (teamId is that player's id), a thunder spear (yaw and pitch are the way it points; flags 1 once it has stuck and is about to go off)."
+        },
+        "hero": {
+          "type": "u8",
+          "doc": "One of HeroKinds, for a player: which character to draw."
         }
       }
     },
@@ -191,6 +269,14 @@
           "type": "f64",
           "doc": "Seconds until the next melee is allowed."
         },
+        "skillQT": {
+          "type": "f64",
+          "doc": "Seconds until the first skill is ready again; 0 when ready."
+        },
+        "skillET": {
+          "type": "f64",
+          "doc": "Seconds until the second skill is ready again; 0 when ready."
+        },
         "rng": {
           "type": "u32",
           "doc": "Seeded random generator state (bullet spread)."
@@ -210,6 +296,22 @@
         "protectedFor": {
           "type": "f64",
           "doc": "Seconds of spawn protection left (ends early when you fire)."
+        },
+        "ult": {
+          "type": "f64",
+          "doc": "Ultimate charge, 0 to 1 (ready at 1). Fills over time and from damage dealt; kept through death."
+        },
+        "hero": {
+          "type": "u8",
+          "doc": "One of HeroKinds: who you are playing this life."
+        },
+        "overdrive": {
+          "type": "f64",
+          "doc": "Seconds of the Assassin's overdrive left; 0 when it is not running."
+        },
+        "nextHero": {
+          "type": "u8",
+          "doc": "One of HeroKinds: who you will be on your next life (differs from hero after a change mid-life)."
         }
       }
     },
@@ -325,6 +427,10 @@
       "protected": 128,
       "wallRunning": 256,
       "meleeing": 512,
+      "grappling": 4,
+      "holdingSpear": 8192,
+      "rolling": 16384,
+      "slashing": 4096,
       "holdingSniper": 1024,
       "emptyHanded": 2048
     },
@@ -336,7 +442,9 @@
     "GameEventFlags": {
       "headshot": 1,
       "killed": 2,
-      "melee": 4
+      "melee": 4,
+      "blast": 8,
+      "slash": 16
     },
     "MatchPhases": {
       "waiting": 0,
@@ -344,9 +452,19 @@
       "live": 2,
       "ended": 3
     },
+    "HeroKinds": {
+      "trooper": 0,
+      "assassin": 1
+    },
     "EntityKinds": {
       "player": 0,
-      "target": 1
+      "target": 1,
+      "grenade": 2,
+      "barrier": 3,
+      "strike": 4,
+      "pickup": 5,
+      "hook": 6,
+      "spear": 7
     }
   },
   "client": {
@@ -372,6 +490,15 @@
     "rematch": {
       "doc": "Vote to start another match while the results are showing.",
       "fields": {}
+    },
+    "hero": {
+      "doc": "Choose a hero. It takes effect on your next life, or at once in the practice range, outside a live match, while dead, or during spawn protection.",
+      "fields": {
+        "hero": {
+          "type": "u8",
+          "doc": "One of HeroKinds."
+        }
+      }
     },
     "practice": {
       "doc": "A practice-range helper (ignored in other modes): refill health and ammo, teleport back to the course start, or reset the targets.",

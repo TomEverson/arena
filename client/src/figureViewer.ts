@@ -33,8 +33,9 @@ const panel = document.getElementById("panel") as HTMLDivElement;
  * Add a row when there is another one; the selector in the panel lists whatever is in this table.
  */
 const MODELS = [
-  { id: "dummy", name: "Trooper", kind: "character" },
+  { id: "trooper", name: "Trooper", kind: "character" },
   { id: "assassin", name: "Assassin", kind: "character" },
+  { id: "dummy", name: "Dummy (base model)", kind: "character" },
   { id: "brick", name: "Brick (rifle)", kind: "weapon" },
   { id: "needle", name: "Needle (sniper)", kind: "weapon" },
 ] as const;
@@ -71,11 +72,13 @@ scene.add(wall, wallStripe);
 let model: (typeof MODELS)[number] = MODELS[0];
 /** One body per character look; `body` is the one being shown. */
 const bodies = {
-  dummy: new CharacterBody(scene, 0, "trooper"),
+  trooper: new CharacterBody(scene, 0, "trooper"),
   assassin: new CharacterBody(scene, 0, "assassin"),
+  dummy: new CharacterBody(scene, 0, "dummy"),
 };
-let body = bodies.dummy;
+let body = bodies.trooper;
 bodies.assassin.root.visible = false;
+bodies.dummy.root.visible = false;
 
 // The weapon preview: the rifle floating at about chest height, muzzle to the right.
 const brick = buildBrick();
@@ -340,7 +343,7 @@ modelSelect.addEventListener("change", () => {
   state.x = 0;
   resetStance();
   distance = model.kind === "weapon" ? 1.5 : 4; // a rifle is small: come closer
-  if (model.id === "dummy" || model.id === "assassin") body = bodies[model.id];
+  if (model.kind === "character") body = bodies[model.id];
   for (const b of Object.values(bodies)) b.root.visible = model.kind === "character" && b === body;
   for (const p of previews) p.model.root.visible = model.kind === "weapon" && p.id === model.id;
   fillAnimations();

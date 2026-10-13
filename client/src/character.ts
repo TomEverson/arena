@@ -2,6 +2,7 @@ import * as THREE from "three";
 
 import { PALETTE } from "./palette";
 import { type Brick, buildBrick } from "./rifle";
+import { SKILL } from "./sim/params";
 import { buildSniper } from "./sniper";
 
 /**
@@ -50,12 +51,17 @@ export interface BodyState {
   weapon?: number;
   /** In the middle of a melee swing (rising edge starts the animation). */
   meleeing?: boolean;
+  /** In the middle of the Assassin's spinning slash (rising edge starts the spin). */
+  slashing?: boolean;
+  /** In the Assassin's rolling dive: the body tumbles forward for as long as this is set. */
+  rolling?: boolean;
   /** Which way the body faces (radians, the figure's own yaw), instead of toward its movement. */
   yaw?: number;
 }
 
 const FLASH_SECONDS = 0.09;
 const MELEE_SECONDS = 0.35; // the rifle thrust of a melee swing
+const SPIN_SECONDS = SKILL.slashSpin; // the spinning slash: once right round
 const EQUIP_SECONDS = 0.5; // drawing the rifle: arms come up onto it with a little overshoot
 const AIR_JUMP_SECONDS = 0.4; // the second jump in the air: knees up, then push off
 const SHOT_SECONDS = 0.09; // recoil and muzzle flash after a shot
@@ -271,7 +277,12 @@ function pivot(parent: THREE.Object3D, x: number, y: number): THREE.Group {
 }
 
 /** The characters there are: each is a different set of parts on the same joints. */
-export type CharacterLook = "trooper" | "assassin";
+export type CharacterLook = "trooper" | "assassin" | "dummy";
+
+/** The look of each hero, by its HeroKinds value. */
+export const HERO_LOOKS: readonly CharacterLook[] = ["trooper", "assassin"];
+/** The heroes a player can choose, by HeroKinds value. */
+export const HERO_NAMES: readonly string[] = ["Trooper", "Assassin"];
 
 type Materials = Record<"armor" | "suit" | "ink" | "face" | "metal" | "light", THREE.Material>;
 interface Limbs {
@@ -321,6 +332,13 @@ export class CharacterBody {
   /** 0 = not swinging; 0..1 = how far through a melee swing. */
   private meleeT = 0;
   private wasMeleeing = false;
+  private wasSlashing = false;
+  /** How far round the rolling dive's tumble has got (radians). */
+  private tumble = 0;
+  /** Seconds left of the spinning slash's turn. */
+  private spinT = 0;
+  /** The Assassin's two blades, one in each hand (other looks have none). */
+  private readonly blades: THREE.Mesh[] = [];
   private wasArmed = false;
   private armInit = false;
   private firstPerson = false;
@@ -378,10 +396,13 @@ export class CharacterBody {
     // The figure faces +Z in its own space; `root.rotation.y` turns it.
     this.root.add(this.body);
 
+    const mats = { armor, suit, ink, face, metal, light };
     const limbs =
       look === "assassin"
-        ? this.buildAssassin({ armor, suit, ink, face, metal, light })
-        : this.buildTrooper({ armor, suit, ink, face, metal, light });
+        ? this.buildAssassin(mats)
+        : look === "dummy"
+          ? this.buildDummy(mats)
+          : this.buildTrooper(mats);
     this.legs = limbs.legs;
     this.upper = limbs.upper;
     this.arms = limbs.arms;
@@ -551,6 +572,66 @@ export class CharacterBody {
       part(elbow, plate, tube(0.047, 0.058, 0.2), [0, -0.12, 0]); // gauntlet
       part(elbow, armor, tube(0.06, 0.06, 0.03), [0, -0.235, 0]); // wrist band
       part(elbow, ink, box(0.095, 0.1, 0.11), [0, -ARM_FORE, 0.01]); // glove
+      // A blade in each hand, edge forward (hidden until the blades are what is held).
+      const blade = part(elbow, plate, box(0.012, 0.06, 0.75), [0, -ARM_FORE, 0.42]);
+      blade.visible = false;
+      this.blades.push(blade);
+      elbows.push(elbow);
+      return shoulder;
+    }) as [THREE.Group, THREE.Group];
+    return { legs, upper, arms, elbows: elbows as [THREE.Group, THREE.Group] };
+  }
+
+  /**
+   * The dummy: the base model. A plain jointed mannequin with nothing on it, for practice targets
+   * and for trying things out (a new animation, a hitbox change, a new look started from it).
+   * BONE segments with dark joints, so each bone and the way it moves is easy to read, and the
+   * two hit zones marked in HAZARD: a band round the head (the headshot zone) and a target on the
+   * chest. Same joints and the same hitbox as every other look.
+   */
+  private buildDummy(m: Materials): Limbs {
+    const { armor: mark, ink, face: shell, metal } = m;
+    /** A dark disc at a joint, its axis along X (the way the knees and elbows hinge). */
+    const joint = (parent: THREE.Object3D, r: number, y: number) =>
+      part(parent, ink, tube(r, r, r * 2.2), [0, y, 0], [0, 0, Math.PI / 2]);
+
+    const legs = [-1, 1].map((side) => {
+      const hip = pivot(this.body, side * 0.095, HIP_Y);
+      joint(hip, 0.06, -0.02);
+      part(hip, shell, tube(0.068, 0.056, 0.34), [0, -0.22, 0]); // thigh
+      joint(hip, 0.05, -0.43);
+      part(hip, shell, tube(0.054, 0.044, 0.34), [0, -0.64, 0]); // shin
+      part(hip, metal, box(0.1, 0.08, 0.23), [0, -0.88, 0.04]); // foot
+      return hip;
+    }) as [THREE.Group, THREE.Group];
+
+    const upper = pivot(this.body, 0, HIP_Y);
+    part(upper, metal, box(0.27, 0.13, 0.18), [0, 0, 0]); // pelvis
+    part(upper, ink, tube(0.075, 0.085, 0.1), [0, 0.115, 0]); // waist joint
+    part(upper, shell, box(0.3, 0.36, 0.19), [0, 0.345, 0]); // torso
+    // The chest target: a ring and a dot.
+    const flat: [number, number, number] = [Math.PI / 2, 0, 0];
+    part(upper, mark, tube(0.075, 0.075, 0.012), [0, 0.37, 0.097], flat);
+    part(upper, shell, tube(0.05, 0.05, 0.012), [0, 0.37, 0.101], flat);
+    part(upper, mark, tube(0.022, 0.022, 0.012), [0, 0.37, 0.105], flat);
+    this.headParts.push(part(upper, ink, tube(0.045, 0.05, 0.07), [0, 0.56, 0])); // neck
+
+    // The head: a plain drum inside the head hitbox (1.5..1.8 m), with the band that marks it
+    // and a cross on the face so you can tell which way it is looking.
+    this.headParts.push(part(upper, shell, tube(0.115, 0.125, 0.25), [0, 0.725, 0]));
+    this.headParts.push(part(upper, mark, tube(0.128, 0.13, 0.04), [0, 0.76, 0]));
+    this.headParts.push(part(upper, ink, box(0.09, 0.016, 0.01), [0, 0.68, 0.119]));
+    this.headParts.push(part(upper, ink, box(0.016, 0.09, 0.01), [0, 0.68, 0.119]));
+
+    const elbows: THREE.Group[] = [];
+    const arms = [-1, 1].map((side) => {
+      const shoulder = pivot(upper, side * SHOULDER_X, SHOULDER_Y);
+      joint(shoulder, 0.05, 0);
+      part(shoulder, shell, tube(0.046, 0.04, ARM_UPPER - 0.08), [0, -ARM_UPPER / 2, 0]); // upper arm
+      const elbow = pivot(shoulder, 0, -ARM_UPPER);
+      joint(elbow, 0.042, 0);
+      part(elbow, shell, tube(0.04, 0.046, 0.2), [0, -0.15, 0]); // forearm
+      part(elbow, metal, box(0.085, 0.09, 0.1), [0, -ARM_FORE, 0.01]); // hand
       elbows.push(elbow);
       return shoulder;
     }) as [THREE.Group, THREE.Group];
@@ -622,7 +703,26 @@ export class CharacterBody {
     if (s.alive && s.yaw !== undefined) this.yaw = s.yaw;
     else if (s.alive) this.yaw += angleDelta(this.yaw, targetYaw) * follow(10, dt);
     this.root.position.set(s.x, s.y, s.z);
-    this.root.rotation.y = this.yaw;
+    // The spinning slash: the whole body turns right round once, blades out.
+    if (s.slashing && !this.wasSlashing) this.spinT = SPIN_SECONDS;
+    this.wasSlashing = !!s.slashing;
+    this.spinT = Math.max(0, this.spinT - dt);
+    const spun = this.spinT > 0 ? Math.PI * 2 * smooth(1 - this.spinT / SPIN_SECONDS) : 0;
+    this.root.rotation.y = this.yaw + spun;
+    // The rolling dive: the body tumbles forward about its middle, a turn every spin's length, for as long as it dives.
+    this.tumble = s.rolling ? this.tumble + (dt / SKILL.slashSpin) * Math.PI * 2 : 0;
+    this.root.rotation.x = this.tumble;
+    if (this.tumble !== 0) {
+      // Turn about the hips, not the feet: move the root so the hips stay where they are.
+      const up = HIP_Y * (1 - Math.cos(this.tumble));
+      const back = -HIP_Y * Math.sin(this.tumble);
+      this.root.position.y += up;
+      this.root.position.x += Math.sin(this.yaw) * back;
+      this.root.position.z += Math.cos(this.yaw) * back;
+    }
+    // The blades show in the hands when they are what is held, and during a spin.
+    const bladesOut = this.spinT > 0 || !!s.rolling || (s.alive && s.armed === false);
+    for (const b of this.blades) b.visible = bladesOut && !this.firstPerson;
 
     // Pose weights fade toward the current state.
     const wallRun = s.alive && s.wallRunning === true;
@@ -668,8 +768,9 @@ export class CharacterBody {
       this.holdW = 0;
     }
     this.lastWeapon = weapon;
+    // (The spear launcher, weapon 2, has no body model yet: it shows as the sniper.)
     this.brick.root.visible = weapon === 0;
-    this.sniper.root.visible = weapon === 1;
+    this.sniper.root.visible = weapon !== 0;
     this.wasArmed = armed;
     if (this.equipT > 0) {
       this.equipT += dt / EQUIP_SECONDS;
@@ -793,6 +894,13 @@ export class CharacterBody {
         else this.handQ[1].copy(r.q);
         p.elbowR = lerp(p.elbowR, r.elbow, mm);
         this.handMixR = Math.max(this.handMixR, mm);
+        // The Assassin with the blades out cuts with both at once: the left arm does the same, mirrored.
+        if (this.blades.length > 0 && s.armed === false) {
+          const l = solveArm(-SHOULDER_X, -f[0], f[1], f[2], this.ik);
+          this.handQ[0].copy(l.q);
+          p.elbowL = lerp(p.elbowL, l.elbow, mm);
+          this.handMixL = Math.max(this.handMixL, mm);
+        }
       }
     }
     this.muzzleFlash.visible = this.shootT > 0.55;

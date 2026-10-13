@@ -82,8 +82,18 @@ func (t *Target) live(tick uint64) histEntry {
 func (w *World) SetPractice(on bool) {
 	w.practice = on
 	w.targets = nil
+	w.pickups = [maxPickups]pickup{}
 	if !on {
 		return
+	}
+	for i, at := range w.level.Pickups {
+		if i == maxPickups {
+			break
+		}
+		w.pickups[i] = pickup{
+			placed: true,
+			Entity: Entity{ID: SkillPickupIdBase + uint32(i), Kind: protocol.EntityKindPickup, X: at.X, Y: at.Y, Z: at.Z},
+		}
 	}
 	specs := w.level.Targets
 	if len(specs) > maxTargets {
@@ -262,7 +272,7 @@ func (w *World) applyPractice(p *Player, action PracticeAction) {
 		p.Health = protocol.PlayerHealth{Health: WeaponMaxHealth, Shield: WeaponMaxShield, Alive: true}
 		// Full ammo for both guns, keeping the weapon in hand.
 		slot, gun := p.Weapon.Slot, p.Weapon.Gun
-		p.Weapon = SpawnWeapon(p.Weapon.Rng)
+		p.Weapon = SpawnWeapon(p.Weapon.Rng, p.Health.Hero)
 		if gun == 1 {
 			p.Weapon.Gun = 1
 			p.Weapon.Ammo, p.Weapon.Stash = p.Weapon.Stash, p.Weapon.Ammo

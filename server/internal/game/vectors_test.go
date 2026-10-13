@@ -164,11 +164,25 @@ func TestMovementVectorsThroughWorld(t *testing.T) {
 					t.Skip("sets weapon-dependent speeds: covered by the server's own tests")
 				}
 			}
+			// Nor can one where the Assassin presses dash or its second skill: the world also runs
+			// the weapon, whose slash and dive move the player.
+			for _, step := range v.Steps {
+				if step.Input.Hero != 0 && (step.Input.Dash || step.Input.SkillE) {
+					t.Skip("presses an Assassin skill that moves the player: covered by the server's own tests")
+				}
+			}
 			lv := &game.Level{Collision: *v.world(t), Spawns: []game.Vec3{{}}}
 			w := game.NewWorld(lv)
 			p := game.NewPlayer(1)
 			p.SetInitialState(v.Initial)
 			w.Join(context.Background(), p)
+			// The world decides the hero itself (the input's own claim is ignored), so a vector
+			// that plays another hero chooses it the way a client does. In a practice range that
+			// takes effect at once.
+			if hero := v.Steps[0].Input.Hero; hero != 0 {
+				w.SetPractice(true)
+				w.SetHero(context.Background(), 1, hero)
+			}
 
 			var problems []string
 			tick, next := 0, 0

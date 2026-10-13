@@ -35,7 +35,7 @@ The second gun (weapon slot 2, hitscan): the same keys as the rifle where they a
 Server-authoritative numbers: `headSize` (the top 0.3 m of a target is its head), shield recharge delay and rate,
 `respawnTime`, `spawnProtection`, `maxRewindTicks` (lag-compensation cap, 20 ticks = 333 ms), `historyTicks`
 (position history kept), `eventRedundancyTicks` (how long events are resent in snapshots). Go constants are
-prefixed `Combat`. Also `targetIdBase` (ids of practice targets start here), `targetRespawn` and `targetSpeed` (the strafing speed), shared by the server and the offline dummies.
+prefixed `Combat`. Also `targetIdBase` (ids of practice targets start here), `targetRespawn` and `targetSpeed` (the strafing speed), used by the server's practice targets.
 
 ## Match parameters (`match`)
 `minPlayers` (2), `maxPlayers` (room capacity, 8), `countdownSeconds`, `lengthSeconds` (the 6-minute match) and

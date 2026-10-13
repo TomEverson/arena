@@ -460,5 +460,23 @@
       "axis": "x",
       "range": 7.5
     }
+  ],
+  "pickups": [
+    {
+      "id": "recharge-spawn",
+      "pos": [
+        4,
+        0,
+        31
+      ]
+    },
+    {
+      "id": "recharge-mid",
+      "pos": [
+        -5,
+        0,
+        4
+      ]
+    }
   ]
 }

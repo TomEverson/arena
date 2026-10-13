@@ -6,9 +6,10 @@ import { type ReloadPose, reloadPose } from "./reloadAnim";
 import { type Brick, BRICK_MAG_HOME, BRICK_MUZZLE, BRICK_SIGHT_Y, buildBrick } from "./rifle";
 import { type Bullet, spawnBullet, stepBullet } from "./sim/bullet";
 import type { Hitbox } from "./sim/hitscan";
-import { WEAPON } from "./sim/params";
+import { SKILL, WEAPON } from "./sim/params";
 import type { CollisionWorld } from "./sim/types";
 import { buildSniper, SNIPER_MUZZLE, SNIPER_SIGHT_Y } from "./sniper";
+import { buildSpear, SPEAR_MUZZLE, SPEAR_PAIR_GAP, SPEAR_SIGHT_Y } from "./spear";
 
 /** Visual and audio-free feedback for shooting: crosshair, hit markers, shake, viewmodel, tracers. */
 
@@ -16,6 +17,9 @@ const HIP = new THREE.Vector3(0.2, -0.2, -0.45);
 /** Aiming down sights: the optic's reticle sits exactly at the middle of the screen. */
 const ADS = new THREE.Vector3(0, -BRICK_SIGHT_Y, -0.36);
 /** The sniper's scope axis is lined up with the middle of the screen when aiming. */
+/** The spear launcher comes up so the spear points at the middle of the screen. */
+const ADS_SPEAR = new THREE.Vector3(SPEAR_PAIR_GAP / 2, -SPEAR_SIGHT_Y - 0.02, -0.3); // the pair either side of the middle
+/** Each gun's aimed position and muzzle, by its index in WEAPON_DEFS. */
 const ADS_SNIPER = new THREE.Vector3(0, -SNIPER_SIGHT_Y, 0.1); // eye right up at the eyepiece, so the view through the scope is big
 /** A hitscan shot's tracer is drawn as a very fast bullet. */
 export const HITSCAN_TRACER_SPEED = 2000;
@@ -40,10 +44,17 @@ const mix = (
   a[1] + (b[1] - a[1]) * t,
   a[2] + (b[2] - a[2]) * t,
 ];
+/** How long the spinning slash takes to go right round. */
+const SLASH_SECONDS = SKILL.slashSpin;
+/** How long the rolling dive's forward tumble takes: one turn, as quick as the spin. */
+const ROLL_SECONDS = SKILL.slashSpin;
 /** How long the melee swing animation lasts (matches the weapon's melee lock). */
 const MELEE_SECONDS = 0.35;
 /** Where the left hand grips the magazine during a reload (gun space). */
 const MAG_GRIP = new THREE.Vector3(-0.01, -0.17, -0.28);
+/** With the spear launchers the left hand is on the left launcher's grip: the right hand's pose, mirrored. */
+const SPEAR_LEFT_HAND = new THREE.Vector3(-SPEAR_PAIR_GAP - 0.005, -0.075, -0.09);
+const SPEAR_LEFT_TURN = new THREE.Euler(0.55, -0.15, 0, "YXZ");
 /** Seconds, for the ammo strip's low-ammo blink. */
 const clockSeconds = () => performance.now() / 1000;
 
@@ -54,7 +65,16 @@ export class Fx {
   private readonly marker = document.getElementById("hitmarker") as HTMLDivElement;
   private readonly gun = new THREE.Group();
   private readonly flashMesh: THREE.Mesh;
-  private readonly models: [Brick, Brick];
+  private readonly models: [Brick, Brick, Brick];
+  /** A blade in each fist: the Assassin's hands slot is the pair of blades. */
+  private readonly blade: THREE.Mesh;
+  /** The left fist and its blade (the right is `fist`, which also throws the punch). */
+  private readonly leftFist = new THREE.Group();
+  private blades = false;
+  /** Seconds left of the spinning slash (0 = none). */
+  private slashLeft = 0;
+  /** Seconds left of the rolling dive's tumble (0 = none). */
+  private rollLeft = 0;
   /** Which gun's model is showing (0 rifle, 1 sniper), and whether any gun is in hand. */
   private gunIdx = 0;
   private held = true;
@@ -63,6 +83,7 @@ export class Fx {
   private drawTotal = 0.4;
   private readonly leftHand: THREE.Group;
   private readonly leftHandHome = new THREE.Vector3();
+  private readonly leftHandTurn = new THREE.Euler();
   private readonly reload: ReloadPose = { roll: 0, pitch: 0, drop: 0, mag: 0, hand: 0 };
   /** The model of the gun in hand. */
   private get brick(): Brick {
@@ -86,9 +107,10 @@ export class Fx {
     viewCamera: THREE.PerspectiveCamera,
   ) {
     // The guns (rifle.ts, sniper.ts), parented to the view camera.
-    this.models = [buildBrick(), buildSniper()];
+    this.models = [buildBrick(), buildSniper(), buildSpear()];
     for (const m of this.models) this.gun.add(m.root);
     this.models[1].root.visible = false;
+    this.models[2].root.visible = false;
     this.flashMesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.09, 0.09, 0.05),
       new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
@@ -98,6 +120,7 @@ export class Fx {
     this.gun.add(this.flashMesh);
     this.leftHand = buildHands(this.gun).left;
     this.leftHandHome.copy(this.leftHand.position);
+    this.leftHandTurn.copy(this.leftHand.rotation);
     this.gun.position.copy(HIP);
     // The punching fist: an INK glove on a CONCRETE sleeve with a HAZE cuff, reaching back to the corner.
     const glove = new THREE.MeshLambertMaterial({ color: PALETTE.INK });
@@ -119,6 +142,19 @@ export class Fx {
     box(glove, 0.11, 0.1, 0.14, 0, 0, 0); // the fist
     box(cuff, 0.1, 0.1, 0.03, 0, 0, 0.09);
     box(sleeve, 0.1, 0.1, 0.5, 0, 0, 0.36); // the forearm, back toward the camera
+    // The blade: a long BONE edge held in the fist, pointing forward and a little up.
+    this.blade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.012, 0.07, 0.85),
+      new THREE.MeshLambertMaterial({ color: PALETTE.BONE, flatShading: true }),
+    );
+    this.blade.position.set(0, 0.06, -0.5);
+    this.blade.visible = false;
+    this.fist.add(this.blade);
+    // The left hand: the same fist and blade, mirrored.
+    for (const m of this.fist.children) this.leftFist.add(m.clone());
+    (this.leftFist.children[this.leftFist.children.length - 1] as THREE.Mesh).visible = true;
+    this.leftFist.visible = false;
+    viewCamera.add(this.leftFist);
     this.fist.rotation.set(0.15, -0.12, 0);
     this.fist.visible = false;
     // The gun and fist live in the renderer's own view scene (fixed field of view), lit like the world.
@@ -151,6 +187,27 @@ export class Fx {
     }
   }
 
+  /** Where the gun in hand fires from (gun space). */
+  private muzzle(): THREE.Vector3 {
+    return this.gunIdx === 1 ? SNIPER_MUZZLE : this.gunIdx === 2 ? SPEAR_MUZZLE : BRICK_MUZZLE;
+  }
+
+  /** Whose hands these are: the Assassin's empty hands hold a blade each. */
+  setBlades(on: boolean): void {
+    this.blades = on;
+    this.blade.visible = on;
+  }
+
+  /** The spinning slash: the view turns right round once, flat like a fan, with both blades out. */
+  slash(): void {
+    this.slashLeft = SLASH_SECONDS;
+  }
+
+  /** The rolling dive: the view tumbles forward right over once, like a ball, blades leading. */
+  roll(): void {
+    this.rollLeft = ROLL_SECONDS;
+  }
+
   /** You fired: muzzle flash, rifle kick and camera shake. (The bullet itself is `fireOwn`.) */
   shot(ads: boolean): void {
     this.flashLife = 0.04;
@@ -170,9 +227,7 @@ export class Fx {
     speed?: number,
   ): void {
     this.camera.updateMatrixWorld();
-    const muzzle = this.camera.localToWorld(
-      (this.gunIdx === 1 ? SNIPER_MUZZLE : BRICK_MUZZLE).clone().add(this.gun.position),
-    );
+    const muzzle = this.camera.localToWorld(this.muzzle().clone().add(this.gun.position));
     const aim = new THREE.Vector3(eye[0] + dir[0] * 40, eye[1] + dir[1] * 40, eye[2] + dir[2] * 40);
     const d = aim.sub(muzzle).normalize();
     this.spawnVisual([muzzle.x, muzzle.y, muzzle.z], [d.x, d.y, d.z], speed);
@@ -249,11 +304,10 @@ export class Fx {
    * `drawSeconds`).
    */
   setWeapon(gun: number, held: boolean, drawSeconds = 0): void {
-    this.gunIdx = gun === 1 ? 1 : 0;
+    this.gunIdx = gun === 1 || gun === 2 ? gun : 0;
     this.held = held;
-    this.models[0].root.visible = this.gunIdx === 0;
-    this.models[1].root.visible = this.gunIdx === 1;
-    this.flashMesh.position.copy(this.gunIdx === 1 ? SNIPER_MUZZLE : BRICK_MUZZLE);
+    this.models.forEach((m, i) => (m.root.visible = i === this.gunIdx));
+    this.flashMesh.position.copy(this.muzzle());
     if (drawSeconds > 0) {
       this.drawTotal = drawSeconds;
       this.drawLeft = drawSeconds;
@@ -278,7 +332,9 @@ export class Fx {
   }
 
   /**
-   * Per-frame: animate viewmodel, effects and crosshair. Returns a camera shake offset (radians).
+   * Per-frame: animate viewmodel, effects and crosshair. Returns a camera offset (radians): the
+   * shake, plus the full turn of a spinning slash (in the yaw) or of a rolling dive (in the
+   * pitch). Your aim itself does not move.
    * `reloadT` is the weapon's remaining reload time in seconds (0 when not reloading);
    * `ammoFraction` is the share of a full magazine left, for the rifle's ammo strip.
    */
@@ -291,14 +347,24 @@ export class Fx {
     ammoFraction = 1,
     reloadTotal: number = WEAPON.reloadTime,
   ): { yaw: number; pitch: number } {
-    this.gun.position.lerpVectors(HIP, this.gunIdx === 1 ? ADS_SNIPER : ADS, adsT);
+    const aimed = this.gunIdx === 1 ? ADS_SNIPER : this.gunIdx === 2 ? ADS_SPEAR : ADS;
+    this.gun.position.lerpVectors(HIP, aimed, adsT);
     this.kickBack = Math.max(0, this.kickBack - frameDt * 0.5);
     this.gun.position.z += this.kickBack;
 
     // Reload: follow the keyframe timeline in reloadAnim.ts.
-    const r = reloadPose(reloadT > 0 ? 1 - reloadT / reloadTotal : 0, this.reload);
+    const reloadU = reloadT > 0 ? 1 - reloadT / reloadTotal : 0;
+    // A gun with a reload of its own (the spear launchers) does not do the standard one.
+    const own = this.brick.reload !== undefined;
+    const r = reloadPose(own ? 0 : reloadU, this.reload);
     this.gun.rotation.set(r.pitch, 0, r.roll);
     this.gun.position.y += r.drop;
+    if (own && reloadT > 0) {
+      // Both launchers drop and tip up while the spears go on, then come back level.
+      const down = smooth(reloadU / 0.2) * (1 - smooth((reloadU - 0.85) / 0.15));
+      this.gun.position.y -= 0.1 * down;
+      this.gun.rotation.x = 0.35 * down;
+    }
     // Drawing a gun: it rises into view from below.
     if (this.drawLeft > 0) {
       this.drawLeft = Math.max(0, this.drawLeft - frameDt);
@@ -311,6 +377,8 @@ export class Fx {
     // Empty hands show a resting fist; a punch moves it (and, with a gun, brings the fist in).
     this.fist.visible = !this.held;
     this.fist.position.set(FIST_REST[0], FIST_REST[1], FIST_REST[2]);
+    /** How far through a melee swing this frame is (0..1), or -1 when there is none. */
+    let cut = -1;
     if (this.meleeLeft > 0) {
       this.meleeLeft = Math.max(0, this.meleeLeft - frameDt);
       const u = 1 - this.meleeLeft / MELEE_SECONDS;
@@ -328,12 +396,92 @@ export class Fx {
               : mix(FIST_STRIKE, FIST_REST, smooth((u - 0.55) / 0.45));
       this.fist.position.set(f[0], f[1], f[2]);
       this.fist.visible = true;
+      cut = u;
+    }
+    // Blades: the left hand mirrors the right at rest. During the spinning slash both come up
+    // and out to the sides, edges level, whatever was in hand (a gun dips out of the way).
+    let spin = 0;
+    let tumble = 0;
+    this.leftFist.visible = this.blades && !this.held;
+    this.leftFist.position.set(-FIST_REST[0], FIST_REST[1], FIST_REST[2]);
+    this.leftFist.rotation.set(0.15, 0.12, 0);
+    this.fist.rotation.set(0.15, -0.12, 0);
+    if (this.slashLeft > 0) {
+      this.slashLeft = Math.max(0, this.slashLeft - frameDt);
+      const u = 1 - this.slashLeft / SLASH_SECONDS;
+      spin = Math.PI * 2 * smooth(u);
+      const out = smooth(u / 0.15) * (1 - smooth((u - 0.8) / 0.2));
+      this.gun.position.y -= 0.4 * out;
+      this.fist.visible = this.leftFist.visible = true;
+      this.blade.visible = true;
+      this.fist.position.set(
+        FIST_REST[0] + 0.22 * out,
+        FIST_REST[1] + 0.2 * out,
+        FIST_REST[2] - 0.15 * out,
+      );
+      this.leftFist.position.set(
+        -FIST_REST[0] - 0.22 * out,
+        FIST_REST[1] + 0.2 * out,
+        FIST_REST[2] - 0.15 * out,
+      );
+      this.fist.rotation.set(0.05, -0.12 - 1.1 * out, 0);
+      this.leftFist.rotation.set(0.05, 0.12 + 1.1 * out, 0);
+    } else if (this.rollLeft > 0) {
+      // The rolling dive: tumbling forward, both blades held out ahead, edges up.
+      this.rollLeft = Math.max(0, this.rollLeft - frameDt);
+      const u = 1 - this.rollLeft / ROLL_SECONDS;
+      tumble = -Math.PI * 2 * smooth(u);
+      const out = smooth(u / 0.15) * (1 - smooth((u - 0.8) / 0.2));
+      this.gun.position.y -= 0.4 * out;
+      this.fist.visible = this.leftFist.visible = true;
+      this.blade.visible = true;
+      this.fist.position.set(
+        FIST_REST[0] - 0.08 * out,
+        FIST_REST[1] + 0.16 * out,
+        FIST_REST[2] - 0.25 * out,
+      );
+      this.leftFist.position.set(
+        -FIST_REST[0] + 0.08 * out,
+        FIST_REST[1] + 0.16 * out,
+        FIST_REST[2] - 0.25 * out,
+      );
+      this.fist.rotation.set(0.15 + 0.6 * out, -0.12, 0);
+      this.leftFist.rotation.set(0.15 + 0.6 * out, 0.12, 0);
+    } else {
+      this.blade.visible = this.blades;
+      if (this.blades && cut >= 0) {
+        // The Assassin's melee is a cut with both blades at once: out and up together, then
+        // down and in across each other, and back. (The punch above moved only the right fist.)
+        const wind = smooth(cut / 0.3) * (1 - smooth((cut - 0.3) / 0.2));
+        const strike = smooth((cut - 0.3) / 0.2) * (1 - smooth((cut - 0.55) / 0.45));
+        const x = FIST_REST[0] + 0.2 * wind - 0.16 * strike;
+        const y = FIST_REST[1] + 0.24 * wind + 0.06 * strike;
+        const z = FIST_REST[2] - 0.05 * wind - 0.3 * strike;
+        this.fist.visible = this.leftFist.visible = true;
+        this.fist.position.set(x, y, z);
+        this.leftFist.position.set(-x, y, z);
+        this.fist.rotation.set(
+          0.15 - 0.5 * wind + 0.3 * strike,
+          -0.12 - 0.5 * wind + 0.9 * strike,
+          0,
+        );
+        this.leftFist.rotation.set(
+          0.15 - 0.5 * wind + 0.3 * strike,
+          0.12 + 0.5 * wind - 0.9 * strike,
+          0,
+        );
+      }
     }
     this.brick.mag.position.y = BRICK_MAG_HOME.y + r.mag;
-    this.leftHand.position.copy(this.leftHandHome).lerp(MAG_GRIP, r.hand);
+    // The left hand holds the gun's fore-end, except with the spear launchers: there it holds
+    // the left launcher's grip, as the right hand holds the right one's.
+    const pair = this.gunIdx === 2;
+    this.leftHand.position.copy(pair ? SPEAR_LEFT_HAND : this.leftHandHome).lerp(MAG_GRIP, r.hand);
+    this.leftHand.rotation.copy(pair ? SPEAR_LEFT_TURN : this.leftHandTurn);
     this.leftHand.position.y += r.mag * r.hand;
     this.brick.aim?.(adsT);
     this.brick.update(frameDt, ammoFraction, clockSeconds());
+    this.brick.reload?.(reloadT > 0 ? reloadU : -1);
     this.flashLife = Math.max(0, this.flashLife - frameDt);
     this.flashMesh.visible = this.flashLife > 0;
 
@@ -354,6 +502,6 @@ export class Fx {
 
     this.shake = Math.max(0, this.shake - frameDt * 6);
     const a = this.shake * this.shake * 0.012;
-    return { yaw: (Math.random() - 0.5) * a, pitch: (Math.random() - 0.5) * a };
+    return { yaw: (Math.random() - 0.5) * a + spin, pitch: (Math.random() - 0.5) * a + tumble };
   }
 }

@@ -9,6 +9,7 @@ const (
 	ClientTypePing     = "ping"
 	ClientTypeRespawn  = "respawn"
 	ClientTypeRematch  = "rematch"
+	ClientTypeHero     = "hero"
 	ClientTypePractice = "practice"
 	ServerTypeWelcome  = "welcome"
 	ServerTypeSnapshot = "snapshot"
@@ -26,6 +27,10 @@ const (
 	EntityFlagProtected     uint16 = 128
 	EntityFlagWallRunning   uint16 = 256
 	EntityFlagMeleeing      uint16 = 512
+	EntityFlagGrappling     uint16 = 4
+	EntityFlagHoldingSpear  uint16 = 8192
+	EntityFlagRolling       uint16 = 16384
+	EntityFlagSlashing      uint16 = 4096
 	EntityFlagHoldingSniper uint16 = 1024
 	EntityFlagEmptyHanded   uint16 = 2048
 )
@@ -42,6 +47,8 @@ const (
 	GameEventFlagHeadshot uint8 = 1
 	GameEventFlagKilled   uint8 = 2
 	GameEventFlagMelee    uint8 = 4
+	GameEventFlagBlast    uint8 = 8
+	GameEventFlagSlash    uint8 = 16
 )
 
 // MatchPhases bits.
@@ -52,10 +59,22 @@ const (
 	MatchPhaseEnded     uint8 = 3
 )
 
+// HeroKinds bits.
+const (
+	HeroKindTrooper  uint8 = 0
+	HeroKindAssassin uint8 = 1
+)
+
 // EntityKinds bits.
 const (
-	EntityKindPlayer uint8 = 0
-	EntityKindTarget uint8 = 1
+	EntityKindPlayer  uint8 = 0
+	EntityKindTarget  uint8 = 1
+	EntityKindGrenade uint8 = 2
+	EntityKindBarrier uint8 = 3
+	EntityKindStrike  uint8 = 4
+	EntityKindPickup  uint8 = 5
+	EntityKindHook    uint8 = 6
+	EntityKindSpear   uint8 = 7
 )
 
 // Input: One client command for one tick. jump and dash are "pressed this tick" edges; the rest are held states.
@@ -82,7 +101,19 @@ type Input struct {
 	Reload bool `json:"reload"`
 	// Melee pressed this tick.
 	Melee bool `json:"melee"`
-	// Weapon slot pressed this tick: 0 none, 1 rifle, 2 sniper, 3 empty hands.
+	// First skill pressed this tick (the Trooper's grenade, the Assassin's grapple).
+	SkillQ bool `json:"skillQ"`
+	// First skill button held: the Assassin's grapple reels in while it is (let go and you swing on the line as it is).
+	Reel bool `json:"reel"`
+	// Second skill pressed this tick (the Trooper's barrier, the Assassin's rolling dive).
+	SkillE bool `json:"skillE"`
+	// Ultimate pressed this tick (the Trooper's bombardment, the Assassin's overdrive). Only the server acts on it.
+	Ult bool `json:"ult"`
+	// One of HeroKinds: who the player is, which decides what the skill buttons do. The client sends what it believes; the server overwrites it with the truth before simulating.
+	Hero uint8 `json:"hero"`
+	// The Assassin's overdrive is running. Like hero: the client sends what it believes, the server overwrites it.
+	Overdrive bool `json:"overdrive"`
+	// Weapon slot pressed this tick: 0 none, 1 and 2 the hero's two guns (Trooper: rifle, sniper; Assassin: sniper, thunder spears), 3 hands (Trooper: fists; Assassin: blades).
 	Slot uint8 `json:"slot"`
 	// Run speed multiplier from the weapon in hand (empty hands run faster). Set by whoever simulates from their weapon state; the server recomputes it and ignores what a client sends.
 	RunSpeedMult float64 `json:"runSpeedMult"`
@@ -135,6 +166,34 @@ type PlayerState struct {
 	WallJumps uint8 `json:"wallJumps"`
 	// Seconds before the wall in wallNormal can be grabbed or jumped off again.
 	WallCooldown float64 `json:"wallCooldown"`
+	// Seconds left of the Assassin's rolling dive (0 when not diving).
+	RollT    float64 `json:"rollT"`
+	RollDirX float64 `json:"rollDirX"`
+	RollDirY float64 `json:"rollDirY"`
+	// The unit direction of the dive.
+	RollDirZ float64 `json:"rollDirZ"`
+	// Being pulled to a grapple point (the Assassin's first skill).
+	Grappling bool    `json:"grappling"`
+	GrappleX  float64 `json:"grappleX"`
+	GrappleY  float64 `json:"grappleY"`
+	// The point the grapple is hooked to.
+	GrappleZ float64 `json:"grappleZ"`
+	// A second hook is out as well: the pull is between the two (a V).
+	Grapple2  bool    `json:"grapple2"`
+	Grapple2X float64 `json:"grapple2X"`
+	Grapple2Y float64 `json:"grapple2Y"`
+	// The point the second hook is on.
+	Grapple2Z float64 `json:"grapple2Z"`
+	// How long the first hook's line is: it only gets shorter, and the player cannot go further from the hook than this (that is what makes the swing).
+	GrappleLen float64 `json:"grappleLen"`
+	// The same for the second hook.
+	Grapple2Len float64 `json:"grapple2Len"`
+	// Seconds since the last hook went out.
+	GrappleT float64 `json:"grappleT"`
+	// Seconds the grapple has been reeling without getting closer (it lets go when this runs long: you are circling the hook).
+	GrappleStall float64 `json:"grappleStall"`
+	// Grapples ready (fractional while one recharges).
+	GrappleCharges float64 `json:"grappleCharges"`
 }
 
 // Entity: What other players need to draw and interpolate someone. Every entity carries a teamId.
@@ -148,8 +207,10 @@ type Entity struct {
 	Pitch  float64 `json:"pitch"`
 	// Bit set of EntityFlags.
 	Flags uint16 `json:"flags"`
-	// One of EntityKinds: a player or a practice-range target.
+	// One of EntityKinds. Skill objects are entities too: a grenade in flight, a barrier (yaw 0 spans X, a quarter turn spans Z), a bombardment (flags 1 once the shells are falling), a practice-range recharge pickup (sent only while it can be taken), the point a grappling player is hooked to (teamId is that player's id), a thunder spear (yaw and pitch are the way it points; flags 1 once it has stuck and is about to go off).
 	Kind uint8 `json:"kind"`
+	// One of HeroKinds, for a player: which character to draw.
+	Hero uint8 `json:"hero"`
 }
 
 // WeaponState: Weapon fire-control state. Simulated identically on client and server from the inputs.
@@ -175,6 +236,10 @@ type WeaponState struct {
 	MeleeT float64 `json:"meleeT"`
 	// Seconds until the next melee is allowed.
 	MeleeCooldown float64 `json:"meleeCooldown"`
+	// Seconds until the first skill is ready again; 0 when ready.
+	SkillQT float64 `json:"skillQT"`
+	// Seconds until the second skill is ready again; 0 when ready.
+	SkillET float64 `json:"skillET"`
 	// Seeded random generator state (bullet spread).
 	Rng uint32 `json:"rng"`
 }
@@ -188,6 +253,14 @@ type PlayerHealth struct {
 	RespawnIn float64 `json:"respawnIn"`
 	// Seconds of spawn protection left (ends early when you fire).
 	ProtectedFor float64 `json:"protectedFor"`
+	// Ultimate charge, 0 to 1 (ready at 1). Fills over time and from damage dealt; kept through death.
+	Ult float64 `json:"ult"`
+	// One of HeroKinds: who you are playing this life.
+	Hero uint8 `json:"hero"`
+	// Seconds of the Assassin's overdrive left; 0 when it is not running.
+	Overdrive float64 `json:"overdrive"`
+	// One of HeroKinds: who you will be on your next life (differs from hero after a change mid-life).
+	NextHero uint8 `json:"nextHero"`
 }
 
 // GameEvent: Something that happened that a player should see. Resent in several snapshots; `seq` is per recipient so the client skips ones it has handled.
@@ -304,5 +377,6 @@ type ClientMessage struct {
 	Type   string  `json:"type"`
 	Inputs []Input `json:"inputs,omitempty"`
 	T      float64 `json:"t,omitempty"`
+	Hero   uint8   `json:"hero,omitempty"`
 	Action string  `json:"action,omitempty"`
 }

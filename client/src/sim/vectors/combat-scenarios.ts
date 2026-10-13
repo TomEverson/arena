@@ -2,7 +2,7 @@
 import type { WeaponState } from "../../net/protocol.gen";
 import type { Hitbox } from "../hitscan";
 import { castRay } from "../hitscan";
-import { PARAMS as P } from "../params";
+import { PARAMS as P, SKILL, SNIPER, SPEAR } from "../params";
 import { box, flatWorld } from "../testutil";
 import { spawnWeapon, viewDirection, type WeaponContext, type WeaponInput } from "../weapon";
 import type { HitscanCase, HitscanVector, WeaponVector } from "./combat-format";
@@ -13,6 +13,7 @@ import { loadWorld } from "./node";
 const P_WINDUP = 0.12; // WEAPON.meleeWindup, for the check below
 const STILL: WeaponContext = { hSpeed: 0, onGround: true, crouching: false, sliding: false };
 const HOLD: WeaponInput = { fire: true, reload: false, melee: false, slot: 0, ads: false };
+const IDLE: WeaponInput = { ...HOLD, fire: false };
 const check = (cond: boolean, msg: string) => {
   if (!cond) throw new Error(`verify failed: ${msg}`);
 };
@@ -21,6 +22,8 @@ export interface WeaponScenario {
   name: string;
   description: string;
   seed: number;
+  /** Whose weapons to start with (one of HeroKinds; left out means the Trooper). */
+  hero?: number;
   steps: WeaponVector["steps"];
   verify: (trace: WeaponState[], events: WeaponVector["events"]) => void;
 }
@@ -125,6 +128,131 @@ export const weaponScenarios: WeaponScenario[] = [
       check(
         ev.some((e) => e.reloadFinished),
         "reload finished",
+      );
+    },
+  },
+  {
+    name: "weapon-skills",
+    description:
+      "Both skills pressed every tick: each is used once, then again only when its cooldown ends; firing goes on meanwhile.",
+    seed: 9,
+    steps: [
+      { ticks: 20, input: { ...HOLD, skillQ: true, skillE: true }, ctx: STILL },
+      {
+        ticks: Math.round(SKILL.barrierCooldown / VECTOR_DT) + 30,
+        input: {
+          fire: false,
+          reload: false,
+          melee: false,
+          slot: 0,
+          ads: false,
+          skillQ: true,
+          skillE: true,
+        },
+        ctx: STILL,
+      },
+    ],
+    verify: (t, ev) => {
+      const q = ev.filter((e) => e.grenade).map((e) => e.tick);
+      const e = ev.filter((x) => x.barrier).map((x) => x.tick);
+      check(q[0] === 1 && e[0] === 1, "both used on the first press");
+      check(
+        q[1] === 1 + Math.round(SKILL.grenadeCooldown / VECTOR_DT) &&
+          e[1] === 1 + Math.round(SKILL.barrierCooldown / VECTOR_DT),
+        "each used again exactly one cooldown later",
+      );
+      check(ev.filter((x) => x.fired).length >= 3, "kept firing while the skills were used");
+      check((t[10]?.skillQT ?? 0) > SKILL.grenadeCooldown - 1, "cooldown counting down");
+    },
+  },
+  {
+    name: "weapon-assassin-loadout",
+    hero: 1,
+    description:
+      "The Assassin's slots: 1 the sniper, 2 the thunder spears (two shots, then a reload), 3 the blades; each gun keeps its own rounds.",
+    seed: 13,
+    steps: [
+      { ticks: 1, input: { ...IDLE, hero: 1, slot: 2 }, ctx: STILL },
+      { ticks: 520, input: { ...HOLD, hero: 1 }, ctx: STILL },
+      { ticks: 1, input: { ...IDLE, hero: 1, slot: 3 }, ctx: STILL },
+      { ticks: 20, input: { ...HOLD, hero: 1 }, ctx: STILL },
+      { ticks: 1, input: { ...IDLE, hero: 1, slot: 1 }, ctx: STILL },
+      { ticks: 60, input: { ...HOLD, hero: 1 }, ctx: STILL },
+    ],
+    verify: (t, ev) => {
+      // (t[0] is the state before the first tick.)
+      check(t[1]?.gun === 2 && t[1]?.ammo === SPEAR.magSize, "slot 2 is the spears, full");
+      check(t[1]?.stash === SNIPER.magSize, "the sniper's rounds are put by");
+      const shots = ev.filter((e) => e.fired && e.tick <= 521).length;
+      check(shots >= SPEAR.magSize + 1, "fired the spears, reloaded, fired again");
+      check(
+        ev.some((e) => e.reloadStarted && e.tick <= 521),
+        "reloaded the spears",
+      );
+      check(t[522]?.slot === 2, "slot 3 is the hands (the blades)");
+      check(!ev.some((e) => e.fired && e.tick > 522 && e.tick <= 542), "the blades do not fire");
+      const end = t[t.length - 1];
+      check(end?.gun === 1 && end.slot === 0, "slot 1 is the sniper again");
+      check((end?.ammo ?? 9) < SNIPER.magSize, "and it fires");
+    },
+  },
+  {
+    name: "weapon-slash",
+    hero: 1,
+    description:
+      "The Assassin's two blade skills: the dash button is the spinning slash (ground or air), E is the rolling dive (air only); each has its own cooldown, and the Trooper's skills never fire.",
+    seed: 11,
+    steps: [
+      { ticks: 10, input: { ...IDLE, hero: 1, dash: true, skillE: true }, ctx: STILL },
+      {
+        ticks: Math.round(SKILL.rollCooldown / VECTOR_DT) + 20,
+        input: { ...IDLE, hero: 1, dash: true, skillE: true },
+        ctx: { ...STILL, onGround: false },
+      },
+    ],
+    verify: (_t, ev) => {
+      const slashes = ev.filter((e) => e.slash).map((e) => e.tick);
+      const rolls = ev.filter((e) => e.roll).map((e) => e.tick);
+      check(slashes[0] === 1, "a slash on the first press, standing on the ground");
+      // (Give or take a tick: the cooldowns are counted down in sixtieths.)
+      check(
+        Math.abs((slashes[1] ?? 0) - 1 - Math.round(SKILL.slashCooldown / VECTOR_DT)) <= 1,
+        "the slash again one cooldown later",
+      );
+      check(rolls[0] === 11, "no dive on the ground; one on the first tick in the air");
+      check(
+        Math.abs((rolls[1] ?? 0) - 11 - Math.round(SKILL.rollCooldown / VECTOR_DT)) <= 1,
+        "the dive again one cooldown later",
+      );
+      check(!ev.some((e) => e.grenade || e.barrier), "no Trooper skills for the Assassin");
+    },
+  },
+  {
+    name: "weapon-overdrive",
+    hero: 1,
+    description:
+      "Overdrive: held to the blades, one slash straight after another (the only wait is the spin itself), and holding fire does nothing; afterwards the gun comes out again on a slot press.",
+    seed: 12,
+    steps: [
+      {
+        ticks: 30,
+        input: { ...HOLD, hero: 1, overdrive: true, dash: true },
+        ctx: { ...STILL, onGround: false },
+      },
+      // Afterwards the blades are still in hand: taking the sniper out again is a slot press.
+      { ticks: 1, input: { ...IDLE, hero: 1, slot: 1 }, ctx: { ...STILL, onGround: false } },
+      { ticks: 60, input: { ...HOLD, hero: 1 }, ctx: { ...STILL, onGround: false } },
+    ],
+    verify: (_t, ev) => {
+      const at = ev.filter((e) => e.slash).map((e) => e.tick);
+      const spin = Math.round(SKILL.slashSpin / VECTOR_DT);
+      check(at.length === 2 && at[0] === 1, "E held for half a second: two slashes, not thirty");
+      check(Math.abs((at[1] ?? 0) - 1 - spin) <= 1, "the second as soon as the first spin is over");
+      check(ev[0]?.switched === true, "held to the blades");
+      check(!ev.some((e) => e.fired && e.tick <= 30), "no shots during overdrive");
+      check(
+        ev.some((e) => e.fired && e.tick > 30),
+        "the gun works again afterwards",
       );
     },
   },
@@ -347,7 +475,7 @@ export const weaponScenarios: WeaponScenario[] = [
 ];
 
 export function recordWeapon(sc: WeaponScenario): { vector: WeaponVector; trace: WeaponState[] } {
-  const initial = spawnWeapon(sc.seed);
+  const initial = spawnWeapon(sc.seed, sc.hero);
   const run = runWeaponSteps(initial, sc.steps, VECTOR_DT, 10);
   return {
     vector: {

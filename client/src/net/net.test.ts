@@ -16,6 +16,7 @@ const ent = (id: number, x: number, extra: Partial<Entity> = {}): Entity => ({
   pitch: 0,
   flags: 0,
   kind: 0,
+  hero: 0,
   ...extra,
 });
 

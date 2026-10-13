@@ -28,9 +28,9 @@ Server to client
 | `snapshot` | `tick, ackSeq, queued, you, health, weapon, match, scores, entities, events` | 30 Hz. `you` is your full movement state right after input `ackSeq`; `weapon` and `health` go with it. `entities` are everyone else (see `entitiesFor`). `match` is the room's phase and clock, `scores` everyone's kills and deaths, `events` are recent hits, hurts and kills (resent for 6 ticks; de-duplicate by `seq`). |
 | `pong` | `t, tick` | Echoes the ping; `tick` is the server tick. |
 
-`Input`: `seq, moveX, moveZ, yaw, pitch, jump, dash, slide, ads, fire, reload, viewTick`. `viewTick` is the (fractional) server tick the sender's screen was showing other players at; the server rewinds to it for lag compensation (capped; 0 means no rewind). `jump` and `dash` mean
+`Input`: `seq, moveX, moveZ, yaw, pitch, jump, dash, slide, ads, fire, reload, melee, slot, skillQ, skillE, ult, hero, overdrive, viewTick`. `viewTick` is the (fractional) server tick the sender's screen was showing other players at; the server rewinds to it for lag compensation (capped; 0 means no rewind). `jump` and `dash` mean
 "pressed this tick"; the rest are held states. `Shot`: `seq, tick, actor, x, y, z, dx, dy, dz` (a bullet fired: the origin is the shooter's eye, the direction has the spread applied; `snapshot.shots` resends recent ones from everyone so every client can draw tracers, numbered across the room). `Input` also carries `slot` (weapon slot pressed this tick, 1-3); the weapon state has `slot`, `gun`, `ammo`, `stash` and `switchT`; entities `holdingSniper` and `emptyHanded` flags; and a `Shot` says which `gun` fired it. `Input` also carries `melee` (pressed this tick); the weapon state has `meleeT` and `meleeCooldown`, entities a `meleeing` flag, and hit events a `melee` flag. `Entity`: `id, teamId, x, y, z, yaw, pitch, flags, kind`
-(`flags` is a 16-bit set of `EntityFlags`: crouching, sliding, dashing, onGround, mantling, dead, protected, wallRunning, meleeing).
+(`flags` is a 16-bit set of `EntityFlags`: crouching, sliding, grappling, dashing, onGround, mantling, dead, protected, wallRunning, meleeing, holdingSniper, emptyHanded, slashing, holdingSpear).
 
 ## Delivery assumptions
 Messages travel over one WebSocket (TCP): in order, never lost. The fake `--loss` flag drops

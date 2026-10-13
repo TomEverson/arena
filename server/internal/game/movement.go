@@ -10,11 +10,15 @@ package game
 //
 // StepPlayer is deterministic, takes no hidden state, and never allocates.
 
-import "math"
+import (
+	"math"
+
+	"arena/server/internal/protocol"
+)
 
 // SpawnState returns the initial movement state standing at (x, y, z).
 func SpawnState(x, y, z float64) PlayerState {
-	return PlayerState{X: x, Y: y, Z: z, DashCharges: DashCharges, AirJumps: MaxAirJumps}
+	return PlayerState{X: x, Y: y, Z: z, DashCharges: DashCharges, AirJumps: MaxAirJumps, GrappleCharges: SkillGrappleCharges}
 }
 
 func hSpeed(s *PlayerState) float64 { return math.Hypot(s.VX, s.VZ) }
@@ -103,7 +107,8 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 	if !wasDashing {
 		s.DashCharges = math.Min(DashCharges, s.DashCharges+dt/DashRegenTime)
 	}
-	if in.Dash && s.DashCharges >= 1 && !wasDashing {
+	// (The Assassin has no dash: that button is the spinning slash, see weapon.go.)
+	if in.Dash && s.DashCharges >= 1 && !wasDashing && in.Hero != protocol.HeroKindAssassin {
 		s.DashCharges -= 1
 		s.DashTime = DashDuration
 		if wi.mag > 0 {
@@ -115,14 +120,64 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 		}
 	}
 
+	updateGrapple(s, in, w, dt)
+	wasRolling := s.RollT > 0
+
 	switch {
 	case s.DashTime > 0:
 		// Dash overrides everything: constant velocity, no gravity.
 		endWallRun(s)
+		if in.Hero != protocol.HeroKindAssassin {
+			// (The Assassin's dash is its slash, which stays on the line.)
+			s.Grappling = false
+			s.Grapple2 = false
+		}
 		s.VX = s.DashDirX * DashSpeed
 		s.VZ = s.DashDirZ * DashSpeed
 		s.VY = 0
 		s.DashTime = math.Max(0, s.DashTime-dt)
+	case s.RollT > 0:
+		// The rolling dive: straight along where it was aimed (forward and down) at a fixed
+		// speed, until it hits something or its time runs out. No gravity, no steering.
+		endWallRun(s)
+		s.Sliding = false
+		s.Crouching = false
+		s.VX = s.RollDirX * SkillRollSpeed
+		s.VY = s.RollDirY * SkillRollSpeed
+		s.VZ = s.RollDirZ * SkillRollSpeed
+		s.RollT = math.Max(0, s.RollT-dt)
+		s.JumpBuffer = 0
+	case s.Grappling:
+		// Grapple: on a line. Gravity acts and you can steer, and the line holds you (holdLine),
+		// so you swing. While the button is held the line also reels you in: a pull toward the
+		// hook, or up the middle of two.
+		endWallRun(s)
+		s.Sliding = false
+		s.Crouching = false
+		if wi.mag > 0 {
+			accelerate(s, &wi, RunSpeed*wi.mag, SkillGrappleSteer, dt)
+		}
+		if in.Reel {
+			s.VY -= Gravity * SkillGrappleGravityScale * dt
+			dx, dy, dz, _ := pullDirection(s)
+			s.VX += dx * SkillGrapplePull * dt
+			s.VY += dy * SkillGrapplePull * dt
+			s.VZ += dz * SkillGrapplePull * dt
+		} else {
+			s.VY -= Gravity * dt
+		}
+		holdLine(s, s.GrappleX, s.GrappleY, s.GrappleZ, s.GrappleLen, dt)
+		if s.Grapple2 {
+			holdLine(s, s.Grapple2X, s.Grapple2Y, s.Grapple2Z, s.Grapple2Len, dt)
+		}
+		if speed := math.Sqrt(s.VX*s.VX + s.VY*s.VY + s.VZ*s.VZ); speed > SkillGrappleSpeed {
+			k := SkillGrappleSpeed / speed
+			s.VX *= k
+			s.VY *= k
+			s.VZ *= k
+		}
+		s.GrappleT += dt
+		s.JumpBuffer = 0
 	default:
 		updateWallRun(s, in, &wi, w)
 		if s.WallRunning {
@@ -147,6 +202,39 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 	}
 
 	hit := integrate(s, w, dt)
+	if s.Grappling {
+		_, _, _, d1 := toHook(s, s.GrappleX, s.GrappleY, s.GrappleZ)
+		d2 := 0.0
+		if s.Grapple2 {
+			_, _, _, d2 = toHook(s, s.Grapple2X, s.Grapple2Y, s.Grapple2Z)
+		}
+		reeledOut := false
+		if in.Reel {
+			// Reeling takes the line in as you come closer. Getting no closer for a while means
+			// you are circling the hook (or something is in the way): it lets go.
+			if d1 < s.GrappleLen-0.02 || (s.Grapple2 && d2 < s.Grapple2Len-0.02) {
+				s.GrappleStall = 0
+			} else {
+				s.GrappleStall += dt
+			}
+			s.GrappleLen = math.Min(s.GrappleLen, d1)
+			if s.Grapple2 {
+				s.Grapple2Len = math.Min(s.Grapple2Len, d2)
+			}
+			_, _, _, together := pullDirection(s)
+			reeledOut = together < SkillGrappleSplit || s.GrappleStall >= SkillGrappleStallTime
+		} else {
+			s.GrappleStall = 0
+		}
+		// Let go: on reaching a hook; reeling, once between two hooks (the lines pull against
+		// each other) or stalled; on crouch; or when it has gone on too long. The speed is kept:
+		// the fling.
+		// (Landing lets go too, unless you are reeling: a line is for the air.)
+		landed := s.OnGround && !in.Reel && s.GrappleT > dt
+		if nearestHook(s) <= SkillGrappleArrive || reeledOut || landed || in.Slide || s.GrappleT >= SkillGrappleMaxTime {
+			endGrapple(s, false)
+		}
+	}
 
 	if wasDashing && s.DashTime <= 0 {
 		// Dash just ended: keep some momentum.
@@ -156,7 +244,18 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 
 	probeGround(s, w, wasGround)
 
-	if hit.ok && !s.OnGround {
+	if wasRolling {
+		// The dive ends when its time is up, or early on hitting the ground (the slam) or a
+		// wall; part of the speed is kept.
+		if hit.ok || s.OnGround {
+			s.RollT = 0
+		}
+		if s.RollT <= 0 {
+			s.VX *= SkillRollExitScale
+			s.VY *= SkillRollExitScale
+			s.VZ *= SkillRollExitScale
+		}
+	} else if hit.ok && !s.OnGround {
 		tryStartMantle(s, w, &wi, &hit)
 	}
 }
@@ -303,7 +402,8 @@ func tryJump(s *PlayerState, in *Input, w *CollisionWorld) {
 		return
 	}
 	// Air jump: only on a fresh press (a buffered press must not burn it just before landing).
-	if in.Jump && !canGroundJump && s.AirJumps > 0 {
+	// (The Assassin has no air jump: the grapple and the dive are its air movement.)
+	if in.Jump && !canGroundJump && s.AirJumps > 0 && in.Hero != protocol.HeroKindAssassin {
 		s.AirJumps--
 		s.VY = AirJumpSpeed
 		s.JumpBuffer = 0
@@ -442,6 +542,161 @@ func probeGround(s *PlayerState, w *CollisionWorld, wasGround bool) {
 	} else {
 		s.OnGround = false
 	}
+}
+
+// --- Grapple (the Assassin's first skill) -----------------------------------
+
+// toHook is the unit direction from the player's chest to a hook at (hx, hy, hz), and the
+// distance (never zero).
+func toHook(s *PlayerState, hx, hy, hz float64) (dx, dy, dz, dist float64) {
+	dx = hx - s.X
+	dy = hy - (s.Y + bodyHeight(s)/2)
+	dz = hz - s.Z
+	dist = math.Max(1e-6, math.Sqrt(dx*dx+dy*dy+dz*dz))
+	return dx / dist, dy / dist, dz / dist, dist
+}
+
+// holdLine: the line to a hook at (hx, hy, hz) holds. Once the player is as far from the hook as
+// the line is long, any speed away from the hook is taken out (what is left is the swing around
+// it), and a little pull is added if the line has been stretched.
+func holdLine(s *PlayerState, hx, hy, hz, length, dt float64) {
+	ux, uy, uz, dist := toHook(s, hx, hy, hz)
+	if dist < length {
+		return
+	}
+	if toward := s.VX*ux + s.VY*uy + s.VZ*uz; toward < 0 {
+		s.VX -= ux * toward
+		s.VY -= uy * toward
+		s.VZ -= uz * toward
+	}
+	back := (dist - length) * SkillGrappleStretch * dt
+	s.VX += ux * back
+	s.VY += uy * back
+	s.VZ += uz * back
+}
+
+// nearestHook is how far the nearer hook is.
+func nearestHook(s *PlayerState) float64 {
+	_, _, _, a := toHook(s, s.GrappleX, s.GrappleY, s.GrappleZ)
+	if !s.Grapple2 {
+		return a
+	}
+	_, _, _, b := toHook(s, s.Grapple2X, s.Grapple2Y, s.Grapple2Z)
+	return math.Min(a, b)
+}
+
+// pullDirection is which way the grapple pulls: straight at one hook, or with two, along the
+// middle of the V they make (the two unit directions added together). together is how hard the
+// two lines pull together, 0 to 1: it falls to nothing as the player comes between the hooks.
+func pullDirection(s *PlayerState) (x, y, z, together float64) {
+	ax, ay, az, _ := toHook(s, s.GrappleX, s.GrappleY, s.GrappleZ)
+	if !s.Grapple2 {
+		return ax, ay, az, 1
+	}
+	bx, by, bz, _ := toHook(s, s.Grapple2X, s.Grapple2Y, s.Grapple2Z)
+	x, y, z = ax+bx, ay+by, az+bz
+	l := math.Sqrt(x*x + y*y + z*z)
+	if l < 1e-6 {
+		return 0, 0, 0, 0
+	}
+	return x / l, y / l, z / l, l / 2
+}
+
+// endGrapple lets go of the grapple, keeping the speed (scaled by SkillGrappleExitScale); a jump adds a hop.
+func endGrapple(s *PlayerState, hop bool) {
+	s.Grappling = false
+	s.Grapple2 = false
+	s.GrappleT = 0
+	s.GrappleStall = 0
+	s.VX *= SkillGrappleExitScale
+	s.VY *= SkillGrappleExitScale
+	s.VZ *= SkillGrappleExitScale
+	if hop {
+		s.VY = math.Max(s.VY, SkillGrappleHop)
+	}
+}
+
+// updateGrapple: charges come back one at a time (at once during overdrive). A press hooks the
+// first solid surface in view within range and starts the pull. A press in the middle of a pull
+// adds a second hook without letting go of the first, so the pull goes between the two (a V);
+// with two out already, the older one is dropped for the new one. A jump lets go. Only the
+// Assassin (in.Hero) has it.
+func updateGrapple(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
+	if in.Overdrive {
+		s.GrappleCharges = SkillGrappleCharges
+	} else {
+		s.GrappleCharges = math.Min(SkillGrappleCharges, s.GrappleCharges+dt/SkillGrappleRegen)
+	}
+	if in.Hero != protocol.HeroKindAssassin {
+		s.Grappling = false
+		s.Grapple2 = false
+		return
+	}
+	if s.Grappling && in.Jump {
+		endGrapple(s, true)
+	}
+	if !in.SkillQ || s.GrappleCharges < 1 {
+		return
+	}
+	cp := math.Cos(in.Pitch)
+	dx, dy, dz := -math.Sin(in.Yaw)*cp, math.Sin(in.Pitch), -math.Cos(in.Yaw)*cp
+	hit := CastRay(w, nil, s.X, s.Y+eyeHeight(s), s.Z, dx, dy, dz, SkillGrappleRange)
+	if hit.Kind != RayWorld {
+		return // nothing to hook: the charge is kept
+	}
+	s.GrappleCharges -= 1
+	s.GrappleT = 0
+	s.GrappleStall = 0
+	if !s.Grappling {
+		s.Grappling = true
+		s.Grapple2 = false
+		s.GrappleX, s.GrappleY, s.GrappleZ = hit.X, hit.Y, hit.Z
+		_, _, _, s.GrappleLen = toHook(s, hit.X, hit.Y, hit.Z)
+	} else {
+		if s.Grapple2 {
+			// Two hooks out already: the older one goes, the newer becomes the first. Pressing
+			// again and again like this is how grapples are chained.
+			s.GrappleX, s.GrappleY, s.GrappleZ = s.Grapple2X, s.Grapple2Y, s.Grapple2Z
+			s.GrappleLen = s.Grapple2Len
+		}
+		s.Grapple2 = true
+		s.Grapple2X, s.Grapple2Y, s.Grapple2Z = hit.X, hit.Y, hit.Z
+		_, _, _, s.Grapple2Len = toHook(s, hit.X, hit.Y, hit.Z)
+	}
+	// The hook biting: a kick toward it, and the air jump back, so one grapple leads into the next.
+	kx, ky, kz, _ := toHook(s, hit.X, hit.Y, hit.Z)
+	s.VX += kx * SkillGrappleKick
+	s.VY += ky * SkillGrappleKick
+	s.VZ += kz * SkillGrappleKick
+	s.AirJumps = MaxAirJumps
+	s.DashTime = 0
+	s.OnGround = false
+}
+
+// SlashLunge is the dash of the Assassin's spinning slash: a real dash straight ahead, the same
+// speed and length as the Trooper's (it starts on the next tick). Called by whoever steps the
+// weapon, on the tick the slash happens, on both sides. It does not let go of a grapple.
+func SlashLunge(s *PlayerState, yaw float64) {
+	s.DashTime = DashDuration
+	s.DashDirX = -math.Sin(yaw)
+	s.DashDirZ = -math.Cos(yaw)
+	s.RollT = 0
+}
+
+// StartRoll starts the Assassin's rolling dive: forward and down, a slam to the front. It
+// follows the view but always points down by at least SkillRollMinDive, so it comes down ahead
+// of you even when you are looking level. Called like SlashLunge, on the tick the weapon step
+// says the dive began. It lets go of a grapple: a dive is a commitment.
+func StartRoll(s *PlayerState, yaw, pitch float64) {
+	down := math.Min(pitch, -SkillRollMinDive)
+	cp := math.Cos(down)
+	s.RollT = SkillRollTime
+	s.RollDirX = -math.Sin(yaw) * cp
+	s.RollDirY = math.Sin(down)
+	s.RollDirZ = -math.Cos(yaw) * cp
+	s.Grappling = false
+	s.Grapple2 = false
+	s.DashTime = 0
 }
 
 // --- Wall run and wall jump ------------------------------------------------

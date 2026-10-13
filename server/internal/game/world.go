@@ -55,6 +55,8 @@ type Level struct {
 	Spawns    []Vec3
 	// Targets are the practice range's dummies; only practice rooms use them.
 	Targets []TargetSpec
+	// Pickups are where the practice range's recharge pickups sit (floor level); only practice rooms use them.
+	Pickups []Vec3
 }
 
 // TargetSpec places one practice target: it stands still, or strafes back and forth.
@@ -113,6 +115,11 @@ type Player struct {
 
 	initial    PlayerState
 	hasInitial bool
+	// rollHit is who this rolling dive has already cut (each body is cut once per dive).
+	rollHit  [8]uint32
+	rollHits int
+	// slashFor is how many more ticks others are told the player is mid-slash (for the animation).
+	slashFor int
 }
 
 // NewPlayer allocates a player and its snapshot buffer pool.
@@ -125,12 +132,12 @@ func NewPlayer(id uint32) *Player {
 		Free:   make(chan *Snapshot, snapshotBuffers),
 
 		catchUpCredit: catchUpCreditMax,
-		Weapon:        SpawnWeapon(id*2654435761 + 1),
+		Weapon:        SpawnWeapon(id*2654435761+1, protocol.HeroKindTrooper),
 	}
 	for i := 0; i < snapshotBuffers; i++ {
 		p.Free <- &Snapshot{
 			Type:     protocol.ServerTypeSnapshot,
-			Entities: make([]Entity, 0, MaxPlayers),
+			Entities: make([]Entity, 0, MaxPlayers+maxTargets+maxSkillEntities),
 			Events:   make([]protocol.GameEvent, 0, eventRingSize),
 			Shots:    make([]protocol.Shot, 0, shotRingSize),
 			Scores:   make([]protocol.Score, 0, MaxPlayers),
@@ -172,6 +179,7 @@ const (
 	cmdRespawn
 	cmdRematch
 	cmdPractice
+	cmdHero
 )
 
 type command struct {
@@ -180,6 +188,7 @@ type command struct {
 	id     uint32  // leave, input
 	input  Input   // input
 	action PracticeAction
+	hero   uint8 // hero
 }
 
 // World is the authoritative game state.
@@ -189,9 +198,11 @@ type World struct {
 	players   []*Player // cap MaxPlayers, never grows
 	inbox     chan command
 	nextSpawn int
-	boxes     [MaxPlayers + maxTargets]Hitbox // scratch: target hitboxes for one bullet step
+	boxes     [MaxPlayers + maxTargets + maxBarriers]Hitbox // scratch: target hitboxes for one bullet step
 
 	bullets [maxBullets]liveBullet // projectiles in flight (see bullets.go)
+	skills  skills                 // grenades, barriers and bombardments (see skills.go)
+	pickups [maxPickups]pickup     // the practice range's recharge pickups (see skills.go)
 	shots   shotLog                // recent shots, for clients to draw tracers
 
 	cfg   MatchConfig
@@ -268,6 +279,17 @@ func (w *World) Practice(ctx context.Context, id uint32, action PracticeAction) 
 	}
 }
 
+// SetHero records which hero a player wants to be. It takes effect on their next life, or at
+// once where it cannot be used to dodge a fight: in the practice range, outside a live match,
+// while they are dead, or while they still have spawn protection (so a player who has just
+// joined or respawned can still pick).
+func (w *World) SetHero(ctx context.Context, id uint32, hero uint8) {
+	select {
+	case w.inbox <- command{kind: cmdHero, id: id, hero: hero}:
+	case <-ctx.Done():
+	}
+}
+
 // SubmitInput queues a client input. It never blocks: if the inbox is full
 // the input is dropped.
 func (w *World) SubmitInput(id uint32, in Input) {
@@ -301,6 +323,7 @@ func (w *World) Step() {
 	// Positions at the end of this tick, for lag compensation of later shots.
 	w.stepTargets()
 	w.stepBullets()
+	w.stepSkills()
 	for _, p := range w.players {
 		w.recordHistory(p)
 	}
@@ -336,21 +359,29 @@ func (w *World) stepPlayer(p *Player) {
 		if !p.Health.Alive || !w.canAct() {
 			continue // dead, or in a countdown/results screen: frozen, but the input is acknowledged
 		}
+		// Who the player is decides what the skill buttons do: the client's own claim is ignored.
+		in.Hero, in.Overdrive = p.Health.Hero, p.Health.Overdrive > 0
 		// The weapon in hand sets run speed and the aim slowdown; the client's own values are ignored.
 		in.RunSpeedMult, in.ADSSpeedMult = movementMods(&p.Weapon)
+		wasRolling := p.State.RollT > 0
 		StepPlayer(&p.State, &in, &w.level.Collision, TickDT)
-		ctx := WeaponContext{HSpeed: hSpeed(&p.State), OnGround: p.State.OnGround, Crouching: p.State.Crouching, Sliding: p.State.Sliding}
+		ctx := WeaponContext{HSpeed: hSpeed(&p.State), OnGround: p.State.OnGround, Crouching: p.State.Crouching, Sliding: p.State.Sliding, Grappling: p.State.Grappling}
 		shot := StepWeapon(&p.Weapon, &in, &ctx, TickDT)
 		if shot.Fired {
-			if d := activeDef(&p.Weapon); d.hitscan {
+			switch d := activeDef(&p.Weapon); {
+			case d.hitscan:
 				w.resolveShot(p, &in, &shot, d)
-			} else {
+			case d.spear:
+				w.fireSpear(p, &in, &shot)
+			default:
 				w.fireBullet(p, &in, &shot)
 			}
 		}
 		if shot.MeleeStrike {
 			w.resolveMelee(p, &in)
 		}
+		w.useSkills(p, &in, &shot)
+		w.stepRoll(p, &in, wasRolling)
 		p.Entity.Yaw = in.Yaw
 		p.Entity.Pitch = in.Pitch
 	}
@@ -361,6 +392,7 @@ func (w *World) stepPlayer(p *Player) {
 func (p *Player) syncEntity() {
 	s := &p.State
 	p.Entity.X, p.Entity.Y, p.Entity.Z = s.X, s.Y, s.Z
+	p.Entity.Hero = p.Health.Hero
 	var f uint16
 	if s.Crouching {
 		f |= protocol.EntityFlagCrouching
@@ -380,14 +412,25 @@ func (p *Player) syncEntity() {
 	if s.WallRunning {
 		f |= protocol.EntityFlagWallRunning
 	}
+	if s.Grappling {
+		f |= protocol.EntityFlagGrappling
+	}
+	if p.slashFor > 0 {
+		f |= protocol.EntityFlagSlashing
+	}
+	if s.RollT > 0 {
+		f |= protocol.EntityFlagRolling
+	}
 	if p.Weapon.MeleeCooldown > WeaponMeleeCooldown-WeaponMeleeLock {
 		f |= protocol.EntityFlagMeleeing
 	}
-	switch p.Weapon.Slot {
-	case 1:
-		f |= protocol.EntityFlagHoldingSniper
-	case emptyHands:
+	switch {
+	case p.Weapon.Slot == emptyHands:
 		f |= protocol.EntityFlagEmptyHanded
+	case p.Weapon.Gun == 1:
+		f |= protocol.EntityFlagHoldingSniper
+	case p.Weapon.Gun == 2:
+		f |= protocol.EntityFlagHoldingSpear
 	}
 	if !p.Health.Alive {
 		f |= protocol.EntityFlagDead
@@ -418,7 +461,7 @@ func (w *World) apply(c command) {
 			w.playerCount.Add(1)
 			if p.hasInitial {
 				p.State = p.initial
-				p.Health = protocol.PlayerHealth{Health: WeaponMaxHealth, Shield: WeaponMaxShield, Alive: true}
+				p.Health = protocol.PlayerHealth{Health: WeaponMaxHealth, Shield: WeaponMaxShield, Alive: true, Hero: p.Health.NextHero, NextHero: p.Health.NextHero}
 				p.sinceDamage = 1e9
 				p.syncEntity()
 			} else {
@@ -443,6 +486,23 @@ func (w *World) apply(c command) {
 				if c.input.Seq > p.lastQueuedSeq {
 					p.lastQueuedSeq = c.input.Seq
 					p.pushInput(c.input)
+				}
+				return
+			}
+		}
+	case cmdHero:
+		if c.hero > maxHero {
+			return
+		}
+		for _, p := range w.players {
+			if p.ID == c.id {
+				p.Health.NextHero = c.hero
+				if p.Health.Hero != c.hero && (w.practice || !w.canDamage() || !p.Health.Alive || p.Health.ProtectedFor > 0) {
+					p.Health.Hero = c.hero
+					p.Health.Overdrive = 0
+					p.Weapon = SpawnWeapon(p.Weapon.Rng, c.hero) // the new hero's own weapons
+					p.State.Grappling, p.State.Grapple2 = false, false
+					p.syncEntity()
 				}
 				return
 			}
@@ -512,5 +572,5 @@ func (w *World) entitiesFor(viewer *Player, dst []Entity) []Entity {
 	for i := range w.targets {
 		dst = append(dst, w.targets[i].Entity)
 	}
-	return dst
+	return w.skillEntities(dst)
 }

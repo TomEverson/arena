@@ -2,18 +2,7 @@ import * as THREE from "three";
 
 import greybox from "../../levels/greybox.json";
 import { AudioEngine, type MoveSound, MoveSoundTracker, StepCounter } from "./audio";
-import { type BodyState, CharacterBody } from "./character";
-import {
-  aliveHitboxes,
-  type Dummy,
-  DUMMY_HEIGHT,
-  killDummy,
-  knockDummy,
-  makeDummies,
-  resetDummies,
-  stepDummies,
-} from "./dummies";
-import { DummyViews } from "./dummyView";
+import { type BodyState, CharacterBody, HERO_LOOKS, HERO_NAMES } from "./character";
 import { Fx, HITSCAN_TRACER_SPEED } from "./fx";
 import { HitFeedback } from "./hitFeedback";
 import { CombatHud } from "./hud";
@@ -29,9 +18,11 @@ import { INTERP_TICKS, RemoteTracks } from "./net/interpolation";
 import { Predictor } from "./net/prediction";
 import {
   EntityFlags,
+  EntityKinds,
   EventKinds,
   type GameEvent,
   GameEventFlags,
+  HeroKinds,
   type MatchInfo,
   type PlayerHealth,
   type Score,
@@ -50,34 +41,30 @@ import { PALETTE } from "./palette";
 import { PracticeStats } from "./practiceStats";
 import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
-import { type Bullet, spawnBullet, stepBullet } from "./sim/bullet";
-import { castRay, type Hitbox } from "./sim/hitscan";
+import type { Hitbox } from "./sim/hitscan";
 import { buildCollisionWorld, type Level, parseLevel } from "./sim/level";
-import { findMeleeTarget } from "./sim/melee";
-import { bodyHeight, eyeHeight, hSpeed, spawnState, stepPlayer } from "./sim/movement";
-import { COMBAT, PARAMS, WEAPON } from "./sim/params";
+import { bodyHeight, eyeHeight, hSpeed, spawnState } from "./sim/movement";
+import { COMBAT, PARAMS, SKILL } from "./sim/params";
 import { emptyInput, type PlayerState } from "./sim/types";
 import {
   activeDef,
-  applyDamage,
-  damageFor,
   EMPTY_HANDS,
-  movementMods,
+  LOADOUTS,
   type ShotResult,
   spawnWeapon,
   spreadDegrees,
-  stepWeapon,
   viewDirection,
   WEAPON_DEFS,
   type WeaponState,
 } from "./sim/weapon";
+import { type GrappleLine, isSkillPose, SkillViews } from "./skillView";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const hud = document.getElementById("hud") as HTMLDivElement;
 const hint = document.getElementById("hint") as HTMLDivElement;
 
 // --- Level -----------------------------------------------------------------
-// The level starts as the greybox (also the offline practice course); online, the server's
+// The level starts as the greybox; once connected, the server's
 // welcome names the room's map and `useLevel` swaps to it before the first snapshot.
 let level = parseLevel(greybox);
 let world = buildCollisionWorld(level);
@@ -111,10 +98,6 @@ const view = new RetroRenderer(canvas, scene);
 window.addEventListener("resize", () => view.resize());
 
 const HIP_FOV = 75;
-const HITSTOP_TICKS = 4; // about 67 ms: dummies freeze when one dies
-
-const dummies: Dummy[] = makeDummies(level.targets);
-const dummyViews = new DummyViews(scene, dummies);
 
 // Your own body is the Dummy too, seen from inside: no head, arms or rifle (the viewmodel has
 // those), just the torso and legs you see when you look down, in every pose the body has.
@@ -122,9 +105,20 @@ const dummyViews = new DummyViews(scene, dummies);
 const SELF_BODY_BACK = 0.25;
 /** Your body shows when the camera pitch is below this (radians, negative = looking down). */
 const SELF_BODY_SHOW_PITCH = -0.45;
-const selfBody = new CharacterBody(scene, 99);
+let selfBody = new CharacterBody(scene, 99);
 let selfBodyShown = false;
 selfBody.setFirstPerson(true);
+/** The hero our own body is built as (a HeroKinds value). */
+let selfHero: number = HeroKinds.trooper;
+/** We became another hero: rebuild the body you see when you look down. */
+function useSelfHero(hero: number): void {
+  if (hero === selfHero) return;
+  selfHero = hero;
+  fx.setBlades(hero === HeroKinds.assassin);
+  scene.remove(selfBody.root);
+  selfBody = new CharacterBody(scene, 99, HERO_LOOKS[hero] ?? "trooper");
+  selfBody.setFirstPerson(true);
+}
 const selfState: BodyState = {
   x: 0,
   y: 0,
@@ -138,6 +132,7 @@ const fx = new Fx(scene, view.camera, view.viewScene, view.viewCamera);
 const hitFeedback = new HitFeedback();
 const ammoEl = document.getElementById("ammo") as HTMLDivElement;
 const slotsEl = document.getElementById("slots") as HTMLDivElement;
+const skillsEl = document.getElementById("skills") as HTMLDivElement;
 
 const DT = 1 / TICK_RATE;
 
@@ -159,7 +154,9 @@ for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, () 
 /** The sounds for one weapon step: shot, dry click, reload start and finish. */
 function shotSounds(shot: ShotResult): void {
   if (shot.fired) {
-    if (currentDef()?.hitscan) audio.shotSniper();
+    const d = currentDef();
+    if (d?.hitscan) audio.shotSniper();
+    else if (d?.spear) audio.skill();
     else audio.shot();
   }
   if (shot.switched) {
@@ -175,9 +172,18 @@ function shotSounds(shot: ShotResult): void {
     audio.swing();
     fx.melee();
   }
+  if (shot.grenade || shot.barrier) audio.skill();
+  if (shot.slash) {
+    audio.swing();
+    fx.slash();
+  }
+  if (shot.roll) {
+    audio.swing();
+    fx.roll();
+  }
 }
 
-/** The weapon state the player is using right now (predicted online, local offline). */
+/** The weapon state the player is using right now (predicted; a fresh one until the server has answered). */
 function currentWeapon(): WeaponState {
   return predictor ? predictor.weapon : weapon;
 }
@@ -188,7 +194,16 @@ let syncedGun = 1;
 
 // --- Input -----------------------------------------------------------------
 const held = new Set<string>();
-const pressed = { jump: false, dash: false, reload: false, melee: false, slot: 0 };
+const pressed = {
+  jump: false,
+  dash: false,
+  reload: false,
+  melee: false,
+  slot: 0,
+  skillQ: false,
+  skillE: false,
+  ult: false,
+};
 
 window.addEventListener("keydown", (e) => {
   if (e.code === "Tab") e.preventDefault(); // Tab shows the scoreboard, not the browser's focus ring
@@ -198,6 +213,9 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") pressed.dash = true;
   if (e.code === "KeyR") pressed.reload = true;
   if (e.code === "KeyV") pressed.melee = true;
+  if (e.code === "KeyQ") pressed.skillQ = true;
+  if (e.code === "KeyE") pressed.skillE = true;
+  if (e.code === "KeyF") pressed.ult = true;
   if (e.code === "Digit1") pressed.slot = 1;
   if (e.code === "Digit2") pressed.slot = 2;
   if (e.code === "Digit3") pressed.slot = 3;
@@ -208,12 +226,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyH") practiceRefill();
   if (e.code === "KeyT") practiceStart();
   if (e.code === "KeyP") {
-    if (net)
-      net.sendRespawn(); // the server owns our position; the snapshot corrects us
-    else {
-      player = spawnState(spawnPos[0], spawnPos[1], spawnPos[2]);
-      prevPlayer = player;
-    }
+    net?.sendRespawn(); // the server owns our position; the snapshot corrects us
   }
 });
 window.addEventListener("keyup", (e) => held.delete(e.code));
@@ -235,6 +248,32 @@ document.addEventListener("mousedown", (e) => {
 });
 document.addEventListener("mouseup", (e) => held.delete(`Mouse${e.button}`));
 document.addEventListener("contextmenu", (e) => e.preventDefault());
+// The hero picker on the pause screen (the overlay shown while the mouse is released).
+const heroesEl = document.getElementById("heroes") as HTMLDivElement;
+const HERO_KEY = "arena.hero";
+/** The hero chosen last time (kept in the browser), sent to the server when we join. */
+const savedHero = (): number => {
+  const n = Number(localStorage.getItem(HERO_KEY));
+  return Number.isInteger(n) && n >= 0 && n < HERO_NAMES.length ? n : HeroKinds.trooper;
+};
+/** Draw the picker: who you are now, and who you will be next life if you have changed. */
+function showHeroes(hero: number, next: number): void {
+  const html =
+    `<span class="label">Hero</span>` +
+    HERO_NAMES.map(
+      (name, i) => `<button data-hero="${i}"${i === next ? ' class="on"' : ""}>${name}</button>`,
+    ).join("") +
+    `<small>${next === hero ? "" : `You become the ${HERO_NAMES[next] ?? "?"} on your next life.`}</small>`;
+  if (heroesEl.innerHTML !== html) heroesEl.innerHTML = html;
+}
+heroesEl.addEventListener("click", (e) => {
+  e.stopPropagation(); // a click here chooses a hero: it must not also resume the game
+  const hero = Number((e.target as HTMLElement).dataset.hero);
+  if (!Number.isInteger(hero)) return;
+  localStorage.setItem(HERO_KEY, String(hero));
+  net?.sendHero(hero);
+});
+showHeroes(HeroKinds.trooper, savedHero());
 const lockPointer = () => void canvas.requestPointerLock();
 hint.addEventListener("click", lockPointer);
 canvas.addEventListener("click", lockPointer);
@@ -250,15 +289,20 @@ const axis = (pos: string, neg: string) => Number(held.has(pos)) - Number(held.h
 // Online (default): the server owns the truth. We predict our own movement with the
 // same stepPlayer, send numbered inputs, and reconcile against snapshots. Other
 // players are drawn ~100 ms in the past, interpolated between snapshots.
-// Offline (?offline, or no server reachable): plain local simulation for tuning.
+// There is no offline mode: without a server there is no game ("down" below), only a message.
 let net: NetClient | null = null;
-let netMode: "connecting" | "online" | "offline" = "connecting";
+let netMode: "connecting" | "online" | "down" = "connecting";
 let netNote = "";
 let predictor: Predictor | null = null;
 const smoother = new CorrectionSmoother();
 const clock = new ServerClock();
 const remotes = new RemoteTracks();
 const remoteViews = new RemoteViews(scene);
+const skillViews = new SkillViews(scene);
+/** Bombardments already on screen (a new one sounds its warning once). */
+const knownStrikes = new Set<number>();
+let shellSoundIn = 0;
+let hooksWere = 0;
 /** After a melee hit lands on you, corrections blend more gently for a moment (the shove arrives). */
 const KNOCK_WINDOW_MS = 500;
 const KNOCK_SNAP_DISTANCE = 6;
@@ -286,40 +330,33 @@ const practiceEl = document.getElementById("practice") as HTMLDivElement;
 const menuEl = document.getElementById("menu") as HTMLDivElement;
 const menuNote = document.getElementById("menu-note") as HTMLDivElement;
 
-/** Practice tools and the stats panel are on in the practice range, and in offline mode (local dummies). */
-const inRange = () => (netMode === "online" ? gameMode === "practice" : netMode === "offline");
+/** Practice tools and the stats panel are on in the practice range. */
+const inRange = () => netMode === "online" && gameMode === "practice";
 
 /** K: reset the targets and the stats. */
 function practiceReset(): void {
   if (!inRange()) return;
   practiceStats.reset();
-  if (netMode === "online") net?.sendPractice("reset");
-  else resetDummies(dummies);
+  net?.sendPractice("reset");
 }
 
 /** H: refill health and ammo. */
 function practiceRefill(): void {
   if (!inRange()) return;
-  if (netMode === "online") net?.sendPractice("refill");
-  else weapon = spawnWeapon(1);
+  net?.sendPractice("refill");
 }
 
 /** T: back to the start of the movement course. */
 function practiceStart(): void {
   if (!inRange()) return;
-  if (netMode === "online") {
-    net?.sendPractice("start");
-  } else {
-    player = spawnState(spawnPos[0], spawnPos[1], spawnPos[2]);
-    prevPlayer = player;
-  }
+  net?.sendPractice("start");
 }
 
 function practiceHtml(): string {
   const s = practiceStats;
   const secs = (v: number | null) => (v === null ? "–" : `${v.toFixed(2)}s`);
   return (
-    `<b>${netMode === "offline" ? "PRACTICE (offline)" : "PRACTICE RANGE"}</b><br>` +
+    `<b>PRACTICE RANGE</b><br>` +
     `shots ${s.shots}  hits ${s.hits}  accuracy <b>${(s.accuracy * 100).toFixed(0)}%</b><br>` +
     `headshots ${s.headshots} (${(s.headshotShare * 100).toFixed(0)}%)  damage ${Math.round(s.damage)}<br>` +
     `kills ${s.kills}  TTK last <b>${secs(s.lastTtk)}</b>  avg ${secs(s.averageTtk)}  best ${secs(s.bestTtk)}` +
@@ -377,10 +414,6 @@ const HEAD_GAP = 0.15;
 
 /** Where a target's head is on screen right now (for the marker that follows them), or null. */
 function headAnchor(id: number): { x: number; y: number } | null {
-  if (netMode === "offline") {
-    const d = dummies[id];
-    return d ? view.toScreen(d.x, d.y + DUMMY_HEIGHT + HEAD_GAP, d.z) : null;
-  }
   const pose = clock.ready
     ? remotes.sample(id, clock.tickAt(performance.now()) - INTERP_TICKS)
     : null;
@@ -389,9 +422,13 @@ function headAnchor(id: number): { x: number; y: number } | null {
   return view.toScreen(pose.x, pose.y + height + HEAD_GAP, pose.z);
 }
 
-function goOffline(note: string): void {
-  netMode = "offline";
+/** The server cannot be reached, or the connection dropped: stop, and say so. There is no offline play. */
+const NO_SERVER = "Cannot reach the game server. Start it (pnpm dev) and try again.";
+function serverDown(note: string): void {
+  netMode = "down";
   netNote = note;
+  if (!roomInfoEl.querySelector(".err"))
+    roomInfoEl.innerHTML = `<span class="err">${note}</span> <a href="${location.href}">Try again</a>`;
   net = null;
   predictor = null;
   health = null;
@@ -407,6 +444,7 @@ function startNet(code: string): void {
       myId = w.playerId;
       roomCode = w.room;
       combatHud.setPlayerId(w.playerId);
+      if (savedHero() !== HeroKinds.trooper) net?.sendHero(savedHero()); // who we were last time
       gameMode = w.mode === "practice" ? "practice" : "ffa";
       if (w.level !== level.name) {
         const next = levelByName(w.level);
@@ -418,6 +456,8 @@ function startNet(code: string): void {
       clock.onSnapshot(s.tick, performance.now());
       remotes.push(s.tick, s.entities);
       health = s.health;
+      useSelfHero(s.health.hero);
+      showHeroes(s.health.hero, s.health.nextHero);
       match = s.match;
       scores = s.scores;
       for (const sh of shotFeed.fresh(s.shots)) if (sh.actor !== myId) pendingShots.push(sh);
@@ -454,9 +494,9 @@ function startNet(code: string): void {
       const why = closeReason(closeCode);
       if (why) {
         roomInfoEl.innerHTML = `<span class="err">${why}</span> <a href="${location.pathname}">Start a new room</a>`;
-        goOffline(why);
+        serverDown(why);
       } else {
-        goOffline(wasConnected ? "connection lost: offline mode" : "no server: offline mode");
+        serverDown(wasConnected ? "Connection to the server lost." : NO_SERVER);
       }
     },
   });
@@ -473,7 +513,7 @@ async function startRoom(mode: GameMode): Promise<void> {
     history.replaceState(null, "", url);
     startNet(code);
   } catch {
-    goOffline("no server: offline mode");
+    serverDown(NO_SERVER);
     menuNote.textContent = "";
   }
 }
@@ -483,10 +523,7 @@ document
   .getElementById("play-practice")
   ?.addEventListener("click", () => void startRoom("practice"));
 
-if (new URLSearchParams(location.search).has("offline")) {
-  netMode = "offline";
-  netNote = "(?offline)";
-} else {
+{
   const code = roomFromUrl(location.search);
   const mode = modeFromUrl(location.search);
   if (code)
@@ -498,10 +535,8 @@ if (new URLSearchParams(location.search).has("offline")) {
 
 // --- Simulation ------------------------------------------------------------
 let simTicks = 0;
-let weapon = spawnWeapon(1);
-let shotsFired = 0;
-let hitstopTicks = 0;
-let killLog = "no kills yet";
+/** Shown until the server has sent our real weapon. */
+const weapon = spawnWeapon(1);
 
 /** Other players as the local screen currently draws them (effects only: the server decides hits). */
 function remoteHitboxes(renderTick: number): Hitbox[] {
@@ -509,6 +544,25 @@ function remoteHitboxes(renderTick: number): Hitbox[] {
   for (const id of remotes.ids()) {
     const pose = remotes.sample(id, renderTick);
     if (!pose || (pose.flags & EntityFlags.dead) !== 0) continue;
+    if (pose.kind === EntityKinds.barrier) {
+      // A barrier stops your bullets too: its box, with no head zone (yaw 0 spans X).
+      const alongX = Math.abs(Math.sin(pose.yaw)) < 0.5;
+      const hx = (alongX ? SKILL.barrierWidth : SKILL.barrierThickness) / 2;
+      const hz = (alongX ? SKILL.barrierThickness : SKILL.barrierWidth) / 2;
+      const top = pose.y + SKILL.barrierHeight;
+      boxes.push({
+        id,
+        headMinY: top + 1,
+        minX: pose.x - hx,
+        maxX: pose.x + hx,
+        minY: pose.y,
+        maxY: top,
+        minZ: pose.z - hz,
+        maxZ: pose.z + hz,
+      });
+      continue;
+    }
+    if (isSkillPose(pose)) continue; // grenades and bombardments are not things you can shoot
     const height =
       pose.flags & EntityFlags.sliding
         ? PARAMS.slideHeight
@@ -537,109 +591,12 @@ function fireShotOnline(shot: ShotResult, ads: boolean): void {
   const origin: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
   const dir = viewDirection(look.yaw + shot.spreadYaw, look.pitch + shot.spreadPitch);
   fx.shot(ads);
-  // The picture of the shot (the server decides hits): a bullet to fly, or for the sniper a near-instant streak.
-  fx.fireOwn(origin, dir, currentDef()?.hitscan ? HITSCAN_TRACER_SPEED : undefined);
+  // The picture of the shot (the server decides hits): a bullet to fly, or for the sniper a
+  // near-instant streak. A thunder spear is its own object, sent by the server.
+  if (!currentDef()?.spear)
+    fx.fireOwn(origin, dir, currentDef()?.hitscan ? HITSCAN_TRACER_SPEED : undefined);
   look.yaw += shot.kickYaw;
   look.pitch = clampPitch(look.pitch + shot.kickPitch);
-}
-
-/** Offline: bullets in flight, flown by the sim tick against the dummies. */
-const localBullets: Bullet[] = [];
-
-function fireShot(shot: ShotResult, ads: boolean): void {
-  shotsFired++;
-  practiceStats.onShot();
-  const origin: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
-  const dir = viewDirection(look.yaw + shot.spreadYaw, look.pitch + shot.spreadPitch);
-  fx.shot(ads);
-  const def = currentDef() ?? WEAPON_DEFS[0];
-  if (def.hitscan) {
-    // The sniper hits instantly along the aim line.
-    fx.fireOwn(origin, dir, HITSCAN_TRACER_SPEED);
-    const hit = castRay(world, aliveHitboxes(dummies), origin, dir, def.range);
-    if (hit.kind === "target")
-      onLocalBulletHit(hit.targetId, hit.headshot, damageFor(hit.headshot, def));
-  } else {
-    fx.fireOwn(origin, dir);
-    if (localBullets.length < 64) localBullets.push(spawnBullet(origin, dir));
-  }
-
-  // View kick: the player counters it with the mouse.
-  look.yaw += shot.kickYaw;
-  look.pitch = clampPitch(look.pitch + shot.kickPitch);
-}
-
-/** Fly the offline bullets one tick; a bullet that reaches a dummy hurts it. */
-function stepLocalBullets(): void {
-  for (let i = localBullets.length - 1; i >= 0; i--) {
-    const b = localBullets[i];
-    if (!b) continue;
-    const hit = stepBullet(b, DT, world, aliveHitboxes(dummies));
-    if (hit.kind === "target") onLocalBulletHit(hit.targetId, hit.headshot);
-    if (b.done) localBullets.splice(i, 1);
-  }
-}
-
-/** An offline bullet hit dummy `id`: damage, stats, hit marker, sound, health bar. */
-function onLocalBulletHit(id: number, headshot: boolean, amount?: number, melee = false): void {
-  const d = dummies[id];
-  if (d?.alive) {
-    if (d.firstHitAt === null) {
-      d.firstHitAt = simTicks * DT;
-      d.shotsAtFirstHit = shotsFired;
-    }
-    d.hits++;
-    if (headshot) d.headshots++;
-    const dmg = amount ?? damageFor(headshot);
-    const result = applyDamage(d, dmg);
-    practiceStats.onHit({
-      targetId: d.id,
-      damage: dmg,
-      headshot,
-      killed: result.killed,
-      tick: simTicks,
-    });
-    dummyViews.flash(d.id);
-    if (melee) audio.meleeHit(result.killed);
-    else audio.hit(headshot, result.killed);
-    hitFeedback.onHit(
-      {
-        targetId: d.id,
-        health: d.health,
-        shield: d.shield,
-        damage: dmg,
-        headshot,
-        killed: result.killed,
-      },
-      performance.now(),
-    );
-    if (result.killed) {
-      const ttk = simTicks * DT - (d.firstHitAt ?? 0);
-      killLog = `last kill ${ttk.toFixed(2)}s | ${shotsFired - d.shotsAtFirstHit + 1} shots, ${d.hits} hits, ${d.headshots} head`;
-      killDummy(d);
-      fx.hitMarker("kill");
-      hitstopTicks = HITSTOP_TICKS;
-    } else {
-      fx.hitMarker(headshot ? "head" : "body");
-    }
-  }
-}
-
-/** Offline: a melee blow landed. */
-function localMelee(): void {
-  const eye: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
-  const dir = viewDirection(look.yaw, look.pitch);
-  const hit = findMeleeTarget(world, aliveHitboxes(dummies), eye, dir);
-  if (hit.targetId >= 0) {
-    onLocalBulletHit(hit.targetId, false, WEAPON.meleeDamage, true);
-    const d = dummies[hit.targetId];
-    if (d?.alive) {
-      const ax = d.x - player.x;
-      const az = d.z - player.z;
-      const l = Math.hypot(ax, az);
-      if (l > 1e-6) knockDummy(d, ax / l, az / l);
-    }
-  }
 }
 
 const sim = new FixedTimestep(() => {
@@ -658,6 +615,13 @@ const sim = new FixedTimestep(() => {
     reload: pressed.reload,
     melee: pressed.melee,
     slot: pressed.slot,
+    skillQ: pressed.skillQ,
+    reel: held.has("KeyQ"), // the Assassin's grapple reels in while Q stays down
+    skillE: pressed.skillE,
+    ult: pressed.ult,
+    // What we believe we are, so the prediction matches; the server uses its own truth.
+    hero: selfHero,
+    overdrive: (health?.overdrive ?? 0) > 0,
   };
   prevPlayer = player;
   if (predictor) {
@@ -672,34 +636,16 @@ const sim = new FixedTimestep(() => {
       practiceStats.onShot();
       fireShotOnline(predictor.lastShot, ads);
     }
-  } else if (netMode === "offline") {
-    // Offline practice: local movement, local weapon, local dummies.
-    player = stepPlayer(player, { ...input, ...movementMods(weapon) }, world, DT);
-    stepDummies(dummies, DT, hitstopTicks > 0);
-    stepLocalBullets();
-    if (hitstopTicks > 0) hitstopTicks--;
-    const res = stepWeapon(
-      weapon,
-      input,
-      {
-        hSpeed: hSpeed(player),
-        onGround: player.onGround,
-        crouching: player.crouching,
-        sliding: player.sliding,
-      },
-      DT,
-    );
-    weapon = res.state;
-    shotSounds(res.shot);
-    if (res.shot.meleeStrike) localMelee();
-    if (res.shot.fired) fireShot(res.shot, ads);
-  } // else: still connecting, wait for the first snapshot
+  } // else: still connecting (or no server): nothing to simulate
 
   pressed.jump = false;
   pressed.dash = false;
   pressed.reload = false;
   pressed.melee = false;
   pressed.slot = 0;
+  pressed.skillQ = false;
+  pressed.skillE = false;
+  pressed.ult = false;
 });
 
 function netHud(): string {
@@ -810,16 +756,64 @@ function frame(nowMs: number): void {
 
   // Other players: where they were INTERP_TICKS ago, interpolated between snapshots.
   const renderTick = clock.tickAt(nowMs) - INTERP_TICKS;
+  const poses = clock.ready
+    ? remotes.ids().flatMap((id) => {
+        const pose = remotes.sample(id, renderTick);
+        return pose ? [pose] : [];
+      })
+    : [];
   remoteViews.update(
-    clock.ready
-      ? remotes.ids().flatMap((id) => {
-          const pose = remotes.sample(id, renderTick);
-          return pose ? [pose] : [];
-        })
-      : [],
+    poses.filter((p) => !isSkillPose(p)),
     frameDt,
     cam.position,
   );
+  // Grenades, barriers and bombardments, and the sounds they make.
+  const skillPoses = poses.filter(isSkillPose);
+  for (const p of skillPoses) {
+    if (p.kind === EntityKinds.strike && !knownStrikes.has(p.id)) audio.strikeWarning(p);
+  }
+  knownStrikes.clear();
+  for (const p of skillPoses) if (p.kind === EntityKinds.strike) knownStrikes.add(p.id);
+  // Grapple lines: ours from the predicted state (no delay), everyone else's from their hook.
+  const lines: GrappleLine[] = [];
+  if (player.grappling && !dead) {
+    // One line from each hand, so two hooks read as a V.
+    const side = player.grapple2 ? 0.25 : 0;
+    const rx = Math.cos(look.yaw) * side;
+    const rz = -Math.sin(look.yaw) * side;
+    const hand = cam.position.y - 0.35;
+    lines.push({
+      from: [cam.position.x - rx, hand, cam.position.z - rz],
+      to: [player.grappleX, player.grappleY, player.grappleZ],
+    });
+    if (player.grapple2)
+      lines.push({
+        from: [cam.position.x + rx, hand, cam.position.z + rz],
+        to: [player.grapple2X, player.grapple2Y, player.grapple2Z],
+      });
+  }
+  for (const hook of skillPoses) {
+    if (hook.kind !== EntityKinds.hook || hook.teamId === myId) continue;
+    const owner = poses.find((p) => p.id === hook.teamId);
+    if (owner)
+      lines.push({ from: [owner.x, owner.y + 1.2, owner.z], to: [hook.x, hook.y, hook.z] });
+  }
+  // A sound for each hook that goes out (the first, and the second of a V).
+  const hooksOut = player.grappling ? (player.grapple2 ? 2 : 1) : 0;
+  if (hooksOut > hooksWere) audio.grapple();
+  hooksWere = hooksOut;
+  const skillSounds = skillViews.update(
+    skillPoses.filter((p) => p.kind !== EntityKinds.hook),
+    frameDt,
+    lines,
+  );
+  for (const at of skillSounds.blasts) audio.explosion(at);
+  for (const at of skillSounds.taken) audio.recharge(at);
+  shellSoundIn -= frameDt;
+  if (skillSounds.shelling.length > 0 && shellSoundIn <= 0) {
+    shellSoundIn = SKILL.bombardInterval;
+    for (const at of skillSounds.shelling) audio.explosion(at, 0.5);
+  }
   // Other players' bullets start when the screen reaches the moment they were fired, and every
   // bullet on screen flies on (it ends at a wall or at a person, like the real one).
   while (clock.ready && pendingShots[0] && pendingShots[0].tick <= renderTick) {
@@ -836,7 +830,7 @@ function frame(nowMs: number): void {
   fx.stepBullets(
     frameDt,
     world,
-    netMode === "online" && clock.ready ? remoteHitboxes(renderTick) : aliveHitboxes(dummies),
+    netMode === "online" && clock.ready ? remoteHitboxes(renderTick) : [],
   );
   updateSound(frameDt, renderTick, cam);
   const activeWeapon = predictor ? predictor.weapon : weapon;
@@ -874,8 +868,6 @@ function frame(nowMs: number): void {
     player.wallRunning && health?.alive !== false ? Math.sign(wallOnRight) * WALL_ROLL : 0;
   camRoll += (rollTarget - camRoll) * (1 - Math.exp(-frameDt * 10));
   cam.rotation.set(look.pitch + shake.pitch, look.yaw + shake.yaw, camRoll);
-  if (netMode === "offline") dummyViews.update(dummies, frameDt, cam.position);
-  else dummyViews.hideAll(); // online, the targets are other players
   const inMatch = match !== null && canAct(match.phase);
   combatHud.update(netMode === "online" ? health : null, inMatch);
   matchHud.update(
@@ -905,13 +897,43 @@ function frame(nowMs: number): void {
               : ""
       }</small>`
     : "<small>EMPTY HANDS</small>";
-  const slotsHtml = ["1 Brick", "2 Needle", "3 Fists"]
+  // The hero's own three: two guns (indices into WEAPON_DEFS) and what the hands are.
+  const guns = LOADOUTS[selfHero] ?? [0, 1];
+  const slotsHtml = [
+    `1 ${WEAPON_DEFS[guns[0]]?.name ?? "?"}`,
+    `2 ${WEAPON_DEFS[guns[1]]?.name ?? "?"}`,
+    selfHero === HeroKinds.assassin ? "3 Blades" : "3 Fists",
+  ]
     .map((name, i) => {
-      const on = (i === 2 ? !heldNow : heldNow && activeWeapon.gun === i) ? ' class="on"' : "";
+      const on = (i === 2 ? !heldNow : heldNow && activeWeapon.gun === guns[i])
+        ? ' class="on"'
+        : "";
       return `<span${on}>${name}</span>`;
     })
     .join("");
   if (slotsEl.innerHTML !== slotsHtml) slotsEl.innerHTML = slotsHtml;
+  // Skills: ready (lit), or the seconds left; the ultimate shows its charge.
+  const skill = (key: string, name: string, left: number) =>
+    `<span${left <= 0 ? ' class="on"' : ""}>${key} ${name}${left > 0 ? ` ${Math.ceil(left)}s` : ""}</span>`;
+  const ult = health?.ult ?? 0;
+  const ultimate = (name: string) =>
+    `<span${ult >= 1 ? ' class="on ult"' : ""}>F ${name}${ult >= 1 ? "" : ` ${Math.floor(ult * 100)}%`}</span>`;
+  const overdrive = health?.overdrive ?? 0;
+  const hooks = Math.floor(player.grappleCharges + 1e-6);
+  const skillsHtml =
+    selfHero === HeroKinds.trooper
+      ? skill("Q", "Grenade", activeWeapon.skillQT) +
+        skill("E", "Barrier", activeWeapon.skillET) +
+        ultimate("Bombardment")
+      : // The Assassin: grapple charges as dots, the spinning slash (its dash button), the
+        // rolling dive (in the air only), and overdrive.
+        `<span${hooks > 0 ? ' class="on"' : ""}>Q Grapple ${"●".repeat(hooks)}${"○".repeat(SKILL.grappleCharges - hooks)}</span>` +
+        skill("Shift", "Slash", activeWeapon.skillQT) +
+        skill("E", "Dive", activeWeapon.skillET) +
+        (overdrive > 0
+          ? `<span class="on ult">OVERDRIVE ${overdrive.toFixed(1)}s</span>`
+          : ultimate("Overdrive"));
+  if (skillsEl.innerHTML !== skillsHtml) skillsEl.innerHTML = skillsHtml;
   view.render();
 
   const state = [
@@ -929,8 +951,7 @@ function frame(nowMs: number): void {
     `speed ${hSpeed(player).toFixed(1)} m/s | ${state} | height ${bodyHeight(player).toFixed(1)}\n` +
     `jumps ${"●".repeat(player.airJumps)}${"○".repeat(PARAMS.maxAirJumps - player.airJumps)}  dash ${"●".repeat(Math.floor(player.dashCharges))}${"○".repeat(PARAMS.dashCharges - Math.floor(player.dashCharges))}  ` +
     `(${(player.dashCharges % 1).toFixed(2)})\n` +
-    `${killLog}\n` +
-    `WASD move · Space jump (beside a wall at speed you run along it, jump again to kick off) · V melee (or left click with empty hands) · 1 2 3 weapons · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
+    `WASD move · Space jump (beside a wall at speed you run along it, jump again to kick off) · Q, E, F skills (Trooper: grenade, barrier, bombardment · Assassin: grapple (hold Q to reel in, let go to swing, Space or C to drop), dive in the air, overdrive; its Shift is a spinning slash, and it has no dash or double jump) · V melee (or left click with empty hands) · 1 2 3 weapons · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
     `${fps.toFixed(0)} fps (${fps > 0 ? (1000 / fps).toFixed(1) : "-"} ms) | render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks}\n` +
     netHud();
   requestAnimationFrame(frame);

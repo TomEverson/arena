@@ -12,6 +12,10 @@ export const EntityFlags = {
   protected: 128,
   wallRunning: 256,
   meleeing: 512,
+  grappling: 4,
+  holdingSpear: 8192,
+  rolling: 16384,
+  slashing: 4096,
   holdingSniper: 1024,
   emptyHanded: 2048,
 } as const;
@@ -28,6 +32,8 @@ export const GameEventFlags = {
   headshot: 1,
   killed: 2,
   melee: 4,
+  blast: 8,
+  slash: 16,
 } as const;
 
 /** MatchPhases bits. */
@@ -38,10 +44,22 @@ export const MatchPhases = {
   ended: 3,
 } as const;
 
+/** HeroKinds bits. */
+export const HeroKinds = {
+  trooper: 0,
+  assassin: 1,
+} as const;
+
 /** EntityKinds bits. */
 export const EntityKinds = {
   player: 0,
   target: 1,
+  grenade: 2,
+  barrier: 3,
+  strike: 4,
+  pickup: 5,
+  hook: 6,
+  spear: 7,
 } as const;
 
 /** One client command for one tick. jump and dash are "pressed this tick" edges; the rest are held states. */
@@ -68,7 +86,19 @@ export interface Input {
   reload: boolean;
   /** Melee pressed this tick. */
   melee: boolean;
-  /** Weapon slot pressed this tick: 0 none, 1 rifle, 2 sniper, 3 empty hands. */
+  /** First skill pressed this tick (the Trooper's grenade, the Assassin's grapple). */
+  skillQ: boolean;
+  /** First skill button held: the Assassin's grapple reels in while it is (let go and you swing on the line as it is). */
+  reel: boolean;
+  /** Second skill pressed this tick (the Trooper's barrier, the Assassin's rolling dive). */
+  skillE: boolean;
+  /** Ultimate pressed this tick (the Trooper's bombardment, the Assassin's overdrive). Only the server acts on it. */
+  ult: boolean;
+  /** One of HeroKinds: who the player is, which decides what the skill buttons do. The client sends what it believes; the server overwrites it with the truth before simulating. */
+  hero: number;
+  /** The Assassin's overdrive is running. Like hero: the client sends what it believes, the server overwrites it. */
+  overdrive: boolean;
+  /** Weapon slot pressed this tick: 0 none, 1 and 2 the hero's two guns (Trooper: rifle, sniper; Assassin: sniper, thunder spears), 3 hands (Trooper: fists; Assassin: blades). */
   slot: number;
   /** Run speed multiplier from the weapon in hand (empty hands run faster). Set by whoever simulates from their weapon state; the server recomputes it and ignores what a client sends. */
   runSpeedMult: number;
@@ -121,6 +151,34 @@ export interface PlayerState {
   wallJumps: number;
   /** Seconds before the wall in wallNormal can be grabbed or jumped off again. */
   wallCooldown: number;
+  /** Seconds left of the Assassin's rolling dive (0 when not diving). */
+  rollT: number;
+  rollDirX: number;
+  rollDirY: number;
+  /** The unit direction of the dive. */
+  rollDirZ: number;
+  /** Being pulled to a grapple point (the Assassin's first skill). */
+  grappling: boolean;
+  grappleX: number;
+  grappleY: number;
+  /** The point the grapple is hooked to. */
+  grappleZ: number;
+  /** A second hook is out as well: the pull is between the two (a V). */
+  grapple2: boolean;
+  grapple2X: number;
+  grapple2Y: number;
+  /** The point the second hook is on. */
+  grapple2Z: number;
+  /** How long the first hook's line is: it only gets shorter, and the player cannot go further from the hook than this (that is what makes the swing). */
+  grappleLen: number;
+  /** The same for the second hook. */
+  grapple2Len: number;
+  /** Seconds since the last hook went out. */
+  grappleT: number;
+  /** Seconds the grapple has been reeling without getting closer (it lets go when this runs long: you are circling the hook). */
+  grappleStall: number;
+  /** Grapples ready (fractional while one recharges). */
+  grappleCharges: number;
 }
 
 /** What other players need to draw and interpolate someone. Every entity carries a teamId. */
@@ -134,8 +192,10 @@ export interface Entity {
   pitch: number;
   /** Bit set of EntityFlags. */
   flags: number;
-  /** One of EntityKinds: a player or a practice-range target. */
+  /** One of EntityKinds. Skill objects are entities too: a grenade in flight, a barrier (yaw 0 spans X, a quarter turn spans Z), a bombardment (flags 1 once the shells are falling), a practice-range recharge pickup (sent only while it can be taken), the point a grappling player is hooked to (teamId is that player's id), a thunder spear (yaw and pitch are the way it points; flags 1 once it has stuck and is about to go off). */
   kind: number;
+  /** One of HeroKinds, for a player: which character to draw. */
+  hero: number;
 }
 
 /** Weapon fire-control state. Simulated identically on client and server from the inputs. */
@@ -161,6 +221,10 @@ export interface WeaponState {
   meleeT: number;
   /** Seconds until the next melee is allowed. */
   meleeCooldown: number;
+  /** Seconds until the first skill is ready again; 0 when ready. */
+  skillQT: number;
+  /** Seconds until the second skill is ready again; 0 when ready. */
+  skillET: number;
   /** Seeded random generator state (bullet spread). */
   rng: number;
 }
@@ -174,6 +238,14 @@ export interface PlayerHealth {
   respawnIn: number;
   /** Seconds of spawn protection left (ends early when you fire). */
   protectedFor: number;
+  /** Ultimate charge, 0 to 1 (ready at 1). Fills over time and from damage dealt; kept through death. */
+  ult: number;
+  /** One of HeroKinds: who you are playing this life. */
+  hero: number;
+  /** Seconds of the Assassin's overdrive left; 0 when it is not running. */
+  overdrive: number;
+  /** One of HeroKinds: who you will be on your next life (differs from hero after a change mid-life). */
+  nextHero: number;
 }
 
 /** Something that happened that a player should see. Resent in several snapshots; `seq` is per recipient so the client skips ones it has handled. */
@@ -261,6 +333,13 @@ export interface RematchMessage {
   type: "rematch";
 }
 
+/** Choose a hero. It takes effect on your next life, or at once in the practice range, outside a live match, while dead, or during spawn protection. */
+export interface HeroMessage {
+  type: "hero";
+  /** One of HeroKinds. */
+  hero: number;
+}
+
 /** A practice-range helper (ignored in other modes): refill health and ammo, teleport back to the course start, or reset the targets. */
 export interface PracticeMessage {
   type: "practice";
@@ -320,6 +399,7 @@ export type ClientMessage =
   | PingMessage
   | RespawnMessage
   | RematchMessage
+  | HeroMessage
   | PracticeMessage;
 
 export type ServerMessage =

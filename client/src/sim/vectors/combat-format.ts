@@ -67,7 +67,11 @@ const interesting = (r: ShotResult) =>
   r.dryFire ||
   r.meleeStarted ||
   r.meleeStrike ||
-  r.switched;
+  r.switched ||
+  r.grenade ||
+  r.barrier ||
+  r.slash ||
+  r.roll;
 
 /** Run steps through the live weapon sim, collecting events and checkpoints. */
 export function runWeaponSteps(

@@ -25,7 +25,7 @@ export class MatchHud {
   private readonly board = document.getElementById("scoreboard") as HTMLDivElement;
   private readonly results = document.getElementById("results") as HTMLDivElement;
 
-  /** Per frame. Pass null before the first snapshot or when offline. */
+  /** Per frame. Pass null before the first snapshot. */
   update(
     match: MatchInfo | null,
     scores: readonly Score[],

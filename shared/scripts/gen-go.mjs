@@ -46,7 +46,11 @@ ${emit("Sniper", params.sniper)}
 // Combat tuning (shared/params.json "combat"), prefixed with Combat.
 ${emit("Combat", params.combat)}
 // Match flow (shared/params.json "match"), prefixed with Match.
-${emit("Match", params.match)}`;
+${emit("Match", params.match)}
+// Thunder spear launcher tuning (shared/params.json "spear"), prefixed with Spear.
+${emit("Spear", params.spear)}
+// Hero skills (shared/params.json "skill"), prefixed with Skill.
+${emit("Skill", params.skill)}`;
 
 const formatted = execFileSync("gofmt", [], { input: raw, encoding: "utf8" });
 

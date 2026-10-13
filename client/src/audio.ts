@@ -292,6 +292,53 @@ export class AudioEngine {
     if (killed) this.tone(o, "triangle", 880, 880, 0.2, 0.3, 0.05);
   }
 
+  /** Using a skill (a grenade thrown, a barrier placed): a short pneumatic thump. */
+  skill(): void {
+    const o = this.dest();
+    if (!o) return;
+    this.hiss(o, "bandpass", 900, 300, 0.09, 0.5);
+    this.tone(o, "sine", 220, 110, 0.08, 0.3);
+  }
+
+  /** Your grapple firing and biting: a sharp hiss, then a rising whine as it reels you in. */
+  grapple(): void {
+    const o = this.dest();
+    if (!o) return;
+    this.hiss(o, "bandpass", 3000, 900, 0.07, 0.5);
+    this.tone(o, "sawtooth", 180, 520, 0.35, 0.18, 0.04);
+  }
+
+  /** A recharge pickup taken: three quick rising notes. */
+  recharge(at: { x: number; y: number; z: number }): void {
+    const o = this.dest(at);
+    if (!o) return;
+    [523, 659, 880].forEach((f, i) => this.tone(o, "triangle", f, f, 0.12, 0.35, i * 0.07));
+  }
+
+  /** A skill that is not ready: a dull double click. */
+  skillDenied(): void {
+    const o = this.dest();
+    if (!o) return;
+    this.tone(o, "square", 140, 120, 0.04, 0.12);
+    this.tone(o, "square", 140, 120, 0.04, 0.12, 0.07);
+  }
+
+  /** An explosion somewhere in the world: a crack, a deep boom and a rumbling tail. */
+  explosion(at: { x: number; y: number; z: number }, size = 1): void {
+    const o = this.dest(at);
+    if (!o) return;
+    this.hiss(o, "bandpass", 1800, 150, 0.18, 1.2 * size);
+    this.tone(o, "sine", 90, 26, 0.5, 1.4 * size);
+    this.hiss(o, "lowpass", 600, 60, 0.9, 0.6 * size, 0.03);
+  }
+
+  /** A bombardment being called in: a rising siren for the two seconds of warning. */
+  strikeWarning(at: { x: number; y: number; z: number }): void {
+    const o = this.dest(at);
+    if (!o) return;
+    this.tone(o, "sawtooth", 320, 880, 1.9, 0.5);
+  }
+
   /** Your own sniper shot: a hard crack, a deep boom and a long tail, then the bolt. */
   shotSniper(): void {
     const o = this.dest();

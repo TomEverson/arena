@@ -55,7 +55,7 @@ func TestEncodeSnapshot(t *testing.T) {
 	for _, want := range []string{
 		`"type":"snapshot"`, `"tick":12`, `"ackSeq":7`, `"queued":1`,
 		`"you":{"x":1.5,"y":2,"z":-3`, `"onGround":true`, `"airJumps":1`,
-		`"entities":[{"id":2,"teamId":2,"x":4,"y":5,"z":6,"yaw":0.5,"pitch":0,"flags":16,"kind":0}]`,
+		`"entities":[{"id":2,"teamId":2,"x":4,"y":5,"z":6,"yaw":0.5,"pitch":0,"flags":16,"kind":0,"hero":0}]`,
 	} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("snapshot %s missing %s", b, want)

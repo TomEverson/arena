@@ -10,7 +10,8 @@
  * on (state, input, world, dt). No engine physics.
  */
 import { blocked, overlaps, playerBox, rampSurface, supportHeight } from "./collision";
-import { PARAMS as P } from "./params";
+import { castRay } from "./hitscan";
+import { PARAMS as P, SKILL } from "./params";
 import type { Aabb, CollisionWorld, PlayerInput, PlayerState } from "./types";
 
 export function spawnState(x: number, y: number, z: number): PlayerState {
@@ -47,8 +48,28 @@ export function spawnState(x: number, y: number, z: number): PlayerState {
     wallNormalZ: 0,
     wallJumps: 0,
     wallCooldown: 0,
+    rollT: 0,
+    rollDirX: 0,
+    rollDirY: 0,
+    rollDirZ: 0,
+    grappling: false,
+    grappleX: 0,
+    grappleY: 0,
+    grappleZ: 0,
+    grapple2: false,
+    grapple2X: 0,
+    grapple2Y: 0,
+    grapple2Z: 0,
+    grappleLen: 0,
+    grapple2Len: 0,
+    grappleT: 0,
+    grappleStall: 0,
+    grappleCharges: SKILL.grappleCharges,
   };
 }
+
+/** HeroKinds.assassin (protocol): the hero with the grapple. */
+const HERO_ASSASSIN = 1;
 
 export const hSpeed = (s: PlayerState): number => Math.hypot(s.vx, s.vz);
 export const bodyHeight = (s: PlayerState): number =>
@@ -123,7 +144,8 @@ export function stepPlayer(
   if (!wasDashing) {
     s.dashCharges = Math.min(P.dashCharges, s.dashCharges + dt / P.dashRegenTime);
   }
-  if (input.dash && s.dashCharges >= 1 && !wasDashing) {
+  // (The Assassin has no dash: that button is the spinning slash, see weapon.ts.)
+  if (input.dash && s.dashCharges >= 1 && !wasDashing && input.hero !== HERO_ASSASSIN) {
     s.dashCharges -= 1;
     s.dashTime = P.dashDuration;
     if (wish.mag > 0) {
@@ -135,13 +157,58 @@ export function stepPlayer(
     }
   }
 
+  updateGrapple(s, input, world, dt);
+  const wasRolling = s.rollT > 0;
+
   if (s.dashTime > 0) {
     // Dash overrides everything: constant velocity, no gravity.
     endWallRun(s);
+    if (input.hero !== HERO_ASSASSIN) {
+      // (The Assassin's dash is its slash, which stays on the line.)
+      s.grappling = false;
+      s.grapple2 = false;
+    }
     s.vx = s.dashDirX * P.dashSpeed;
     s.vz = s.dashDirZ * P.dashSpeed;
     s.vy = 0;
     s.dashTime = Math.max(0, s.dashTime - dt);
+  } else if (s.rollT > 0) {
+    // The rolling dive: straight along where it was aimed (forward and down) at a fixed speed,
+    // until it hits something or its time runs out. No gravity, no steering.
+    endWallRun(s);
+    s.sliding = false;
+    s.crouching = false;
+    s.vx = s.rollDirX * SKILL.rollSpeed;
+    s.vy = s.rollDirY * SKILL.rollSpeed;
+    s.vz = s.rollDirZ * SKILL.rollSpeed;
+    s.rollT = Math.max(0, s.rollT - dt);
+    s.jumpBuffer = 0;
+  } else if (s.grappling) {
+    // Grapple: on a line. Gravity acts and you can steer, and the line holds you (holdLine), so
+    // you swing. While the button is held the line also reels you in: a pull toward the hook,
+    // or up the middle of two.
+    endWallRun(s);
+    s.sliding = false;
+    s.crouching = false;
+    if (wish.mag > 0) accelerate(s, wish, P.runSpeed * wish.mag, SKILL.grappleSteer, dt);
+    s.vy -= P.gravity * (input.reel ? SKILL.grappleGravityScale : 1) * dt;
+    if (input.reel) {
+      const [dx, dy, dz] = pullDirection(s);
+      s.vx += dx * SKILL.grapplePull * dt;
+      s.vy += dy * SKILL.grapplePull * dt;
+      s.vz += dz * SKILL.grapplePull * dt;
+    }
+    holdLine(s, s.grappleX, s.grappleY, s.grappleZ, s.grappleLen, dt);
+    if (s.grapple2) holdLine(s, s.grapple2X, s.grapple2Y, s.grapple2Z, s.grapple2Len, dt);
+    const speed = Math.hypot(s.vx, s.vy, s.vz);
+    if (speed > SKILL.grappleSpeed) {
+      const k = SKILL.grappleSpeed / speed;
+      s.vx *= k;
+      s.vy *= k;
+      s.vz *= k;
+    }
+    s.grappleT += dt;
+    s.jumpBuffer = 0;
   } else {
     updateWallRun(s, input, wish, world);
     if (s.wallRunning) {
@@ -158,6 +225,35 @@ export function stepPlayer(
   }
 
   const hit = integrate(s, world, dt);
+  if (s.grappling) {
+    const d1 = toHook(s, s.grappleX, s.grappleY, s.grappleZ)[3];
+    const d2 = s.grapple2 ? toHook(s, s.grapple2X, s.grapple2Y, s.grapple2Z)[3] : 0;
+    if (input.reel) {
+      // Reeling takes the line in as you come closer. Getting no closer for a while means you
+      // are circling the hook (or something is in the way): it lets go.
+      const closer = d1 < s.grappleLen - 0.02 || (s.grapple2 && d2 < s.grapple2Len - 0.02);
+      s.grappleStall = closer ? 0 : s.grappleStall + dt;
+      s.grappleLen = Math.min(s.grappleLen, d1);
+      if (s.grapple2) s.grapple2Len = Math.min(s.grapple2Len, d2);
+    } else {
+      s.grappleStall = 0;
+    }
+    // Let go: on reaching a hook; reeling, once between two hooks (the lines pull against each
+    // other) or stalled; on crouch; or when it has gone on too long. The speed is kept: the fling.
+    const reeledOut =
+      input.reel &&
+      (pullDirection(s)[3] < SKILL.grappleSplit || s.grappleStall >= SKILL.grappleStallTime);
+    // (Landing lets go too, unless you are reeling: a line is for the air.)
+    const landed = s.onGround && !input.reel && s.grappleT > dt;
+    if (
+      nearestHook(s) <= SKILL.grappleArrive ||
+      reeledOut ||
+      landed ||
+      input.slide ||
+      s.grappleT >= SKILL.grappleMaxTime
+    )
+      endGrapple(s, false);
+  }
 
   if (wasDashing && s.dashTime <= 0) {
     // Dash just ended: keep some momentum.
@@ -167,7 +263,16 @@ export function stepPlayer(
 
   probeGround(s, world, wasGround);
 
-  if (hit && !s.onGround) tryStartMantle(s, world, wish, hit);
+  if (wasRolling) {
+    // The dive ends when its time is up, or early on hitting the ground (the slam) or a wall;
+    // part of the speed is kept.
+    if (hit || s.onGround) s.rollT = 0;
+    if (s.rollT <= 0) {
+      s.vx *= SKILL.rollExitScale;
+      s.vy *= SKILL.rollExitScale;
+      s.vz *= SKILL.rollExitScale;
+    }
+  } else if (hit && !s.onGround) tryStartMantle(s, world, wish, hit);
 
   return s;
 }
@@ -301,7 +406,8 @@ function tryJump(s: PlayerState, input: PlayerInput, world: CollisionWorld): voi
     return;
   }
   // Air jump: only on a fresh press (a buffered press must not burn it just before landing).
-  if (input.jump && !canGroundJump && s.airJumps > 0) {
+  // (The Assassin has no air jump: the grapple and the dive are its air movement.)
+  if (input.jump && !canGroundJump && s.airJumps > 0 && input.hero !== HERO_ASSASSIN) {
     s.airJumps -= 1;
     s.vy = P.airJumpSpeed;
     s.jumpBuffer = 0;
@@ -407,6 +513,181 @@ function probeGround(s: PlayerState, world: CollisionWorld, wasGround: boolean):
   } else {
     s.onGround = false;
   }
+}
+
+// --- Grapple (the Assassin's first skill) ------------------------------------
+
+/** From the player's chest to a hook at (hx, hy, hz): the unit direction and the distance (never zero). */
+function toHook(
+  s: PlayerState,
+  hx: number,
+  hy: number,
+  hz: number,
+): [number, number, number, number] {
+  const dx = hx - s.x;
+  const dy = hy - (s.y + bodyHeight(s) / 2);
+  const dz = hz - s.z;
+  const dist = Math.max(1e-6, Math.hypot(dx, dy, dz));
+  return [dx / dist, dy / dist, dz / dist, dist];
+}
+
+/**
+ * The line to a hook at (hx, hy, hz) holds: once the player is as far from the hook as the line
+ * is long, any speed away from the hook is taken out (what is left is the swing around it), and
+ * a little pull is added if the line has been stretched.
+ */
+function holdLine(
+  s: PlayerState,
+  hx: number,
+  hy: number,
+  hz: number,
+  len: number,
+  dt: number,
+): void {
+  const [ux, uy, uz, dist] = toHook(s, hx, hy, hz);
+  if (dist < len) return;
+  const toward = s.vx * ux + s.vy * uy + s.vz * uz;
+  if (toward < 0) {
+    s.vx -= ux * toward;
+    s.vy -= uy * toward;
+    s.vz -= uz * toward;
+  }
+  const back = (dist - len) * SKILL.grappleStretch * dt;
+  s.vx += ux * back;
+  s.vy += uy * back;
+  s.vz += uz * back;
+}
+
+/** How far the nearer hook is. */
+function nearestHook(s: PlayerState): number {
+  const a = toHook(s, s.grappleX, s.grappleY, s.grappleZ)[3];
+  return s.grapple2 ? Math.min(a, toHook(s, s.grapple2X, s.grapple2Y, s.grapple2Z)[3]) : a;
+}
+
+/**
+ * Which way the grapple pulls: straight at one hook, or with two, along the middle of the V they
+ * make (the two unit directions added together). The fourth number is how hard the two lines
+ * pull together, 0 to 1: it falls to nothing as the player comes between the hooks.
+ */
+function pullDirection(s: PlayerState): [number, number, number, number] {
+  const a = toHook(s, s.grappleX, s.grappleY, s.grappleZ);
+  if (!s.grapple2) return [a[0], a[1], a[2], 1];
+  const b = toHook(s, s.grapple2X, s.grapple2Y, s.grapple2Z);
+  const x = a[0] + b[0];
+  const y = a[1] + b[1];
+  const z = a[2] + b[2];
+  const len = Math.hypot(x, y, z);
+  if (len < 1e-6) return [0, 0, 0, 0];
+  return [x / len, y / len, z / len, len / 2];
+}
+
+/** Let go of the grapple, keeping the speed (scaled by grappleExitScale); a jump adds a hop. */
+function endGrapple(s: PlayerState, hop: boolean): void {
+  s.grappling = false;
+  s.grapple2 = false;
+  s.grappleT = 0;
+  s.grappleStall = 0;
+  s.vx *= SKILL.grappleExitScale;
+  s.vy *= SKILL.grappleExitScale;
+  s.vz *= SKILL.grappleExitScale;
+  if (hop) s.vy = Math.max(s.vy, SKILL.grappleHop);
+}
+
+/**
+ * Charges come back one at a time (at once during overdrive). A press hooks the first solid
+ * surface in view within range: from then on you are on a line (see the grapple branch of
+ * stepPlayer), free to swing, and reeled in while the button stays held. A press in the middle of a pull adds a
+ * second hook without letting go of the first, so the pull goes between the two (a V); with two
+ * out already, the older one is dropped for the new one. A jump lets go with a hop, crouch lets go without. Only the Assassin
+ * (input.hero) has it.
+ */
+function updateGrapple(
+  s: PlayerState,
+  input: PlayerInput,
+  world: CollisionWorld,
+  dt: number,
+): void {
+  s.grappleCharges = input.overdrive
+    ? SKILL.grappleCharges
+    : Math.min(SKILL.grappleCharges, s.grappleCharges + dt / SKILL.grappleRegen);
+  if (input.hero !== HERO_ASSASSIN) {
+    s.grappling = false;
+    s.grapple2 = false;
+    return;
+  }
+  if (s.grappling && input.jump) endGrapple(s, true);
+  if (!input.skillQ || s.grappleCharges < 1) return;
+  const cp = Math.cos(input.pitch);
+  const dir: [number, number, number] = [
+    -Math.sin(input.yaw) * cp,
+    Math.sin(input.pitch),
+    -Math.cos(input.yaw) * cp,
+  ];
+  const hit = castRay(world, [], [s.x, s.y + eyeHeight(s), s.z], dir, SKILL.grappleRange);
+  if (hit.kind !== "world") return; // nothing to hook: the charge is kept
+  s.grappleCharges -= 1;
+  s.grappleT = 0;
+  s.grappleStall = 0;
+  if (!s.grappling) {
+    s.grappling = true;
+    s.grapple2 = false;
+    s.grappleX = hit.x;
+    s.grappleY = hit.y;
+    s.grappleZ = hit.z;
+    s.grappleLen = toHook(s, hit.x, hit.y, hit.z)[3];
+  } else {
+    if (s.grapple2) {
+      // Two hooks out already: the older one goes, the newer becomes the first. Pressing again
+      // and again like this is how grapples are chained.
+      s.grappleX = s.grapple2X;
+      s.grappleY = s.grapple2Y;
+      s.grappleZ = s.grapple2Z;
+      s.grappleLen = s.grapple2Len;
+    }
+    s.grapple2 = true;
+    s.grapple2X = hit.x;
+    s.grapple2Y = hit.y;
+    s.grapple2Z = hit.z;
+    s.grapple2Len = toHook(s, hit.x, hit.y, hit.z)[3];
+  }
+  // The hook biting: a kick toward it, and the air jump back, so one grapple leads into the next.
+  const [kx, ky, kz] = toHook(s, hit.x, hit.y, hit.z);
+  s.vx += kx * SKILL.grappleKick;
+  s.vy += ky * SKILL.grappleKick;
+  s.vz += kz * SKILL.grappleKick;
+  s.airJumps = P.maxAirJumps;
+  s.dashTime = 0;
+  s.onGround = false;
+}
+
+/**
+ * The dash of the Assassin's spinning slash: a real dash straight ahead, the same speed and
+ * length as the Trooper's (it starts on the next tick). Called by whoever steps the weapon, on
+ * the tick the slash happens, on both sides. It does not let go of a grapple.
+ */
+export function slashLunge(s: PlayerState, yaw: number): void {
+  s.dashTime = P.dashDuration;
+  s.dashDirX = -Math.sin(yaw);
+  s.dashDirZ = -Math.cos(yaw);
+  s.rollT = 0;
+}
+
+/**
+ * Start the Assassin's rolling dive: forward and down, a slam to the front. It follows the view
+ * but always points down by at least rollMinDive, so it comes down ahead of you even when you
+ * are looking level. Called like slashLunge, on the tick the weapon step says the dive began.
+ * It lets go of a grapple: a dive is a commitment.
+ */
+export function startRoll(s: PlayerState, yaw: number, pitch: number): void {
+  const down = Math.min(pitch, -SKILL.rollMinDive);
+  const cp = Math.cos(down);
+  s.rollT = SKILL.rollTime;
+  s.rollDirX = -Math.sin(yaw) * cp;
+  s.rollDirY = Math.sin(down);
+  s.rollDirZ = -Math.cos(yaw) * cp;
+  s.grappling = false;
+  s.grapple2 = false;
+  s.dashTime = 0;
 }
 
 // --- Wall run and wall jump -------------------------------------------------

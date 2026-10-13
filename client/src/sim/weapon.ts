@@ -9,7 +9,7 @@
  * the view direction and does not move the view.
  */
 import type { WeaponState } from "../net/protocol.gen";
-import { PARAMS, SNIPER, WEAPON as W } from "./params";
+import { PARAMS, SKILL, SNIPER, SPEAR, WEAPON as W } from "./params";
 
 export type { WeaponState };
 
@@ -20,6 +20,8 @@ export interface WeaponDef {
   name: string;
   /** Hits instantly along the aim line instead of firing a bullet. */
   hitscan: boolean;
+  /** Fires a thunder spear: it flies, sticks, and explodes (the server flies it, see skills.go). */
+  spear: boolean;
   rpm: number;
   magSize: number;
   reloadTime: number;
@@ -45,10 +47,21 @@ export interface WeaponDef {
   adsSpeedMult: number;
 }
 
-export const WEAPON_DEFS: readonly [WeaponDef, WeaponDef] = [
-  { name: "Brick", hitscan: false, ...W },
-  { name: "Needle", hitscan: true, ...SNIPER },
+export const WEAPON_DEFS: readonly [WeaponDef, WeaponDef, WeaponDef] = [
+  { name: "Brick", hitscan: false, spear: false, ...W },
+  { name: "Needle", hitscan: true, spear: false, ...SNIPER },
+  { name: "Spears", hitscan: false, spear: true, ...SPEAR },
 ];
+
+/**
+ * Each hero's two guns (indices into WEAPON_DEFS), for slots 1 and 2. Slot 3 is the hands: the
+ * Trooper's fists, the Assassin's blades.
+ */
+export const LOADOUTS: readonly (readonly [number, number])[] = [
+  [0, 1], // Trooper: rifle, sniper
+  [1, 2], // Assassin: sniper, thunder spears
+];
+const loadout = (hero: number): readonly [number, number] => LOADOUTS[hero] ?? [0, 1];
 
 /** The slot value of empty hands (no gun). */
 export const EMPTY_HANDS = 2;
@@ -86,6 +99,15 @@ export interface WeaponInput {
   melee: boolean;
   /** Weapon slot pressed this tick: 0 none, 1 rifle, 2 sniper, 3 empty hands. */
   slot: number;
+  /** Skills pressed this tick (see SKILL in params.ts). Left out means not pressed. */
+  skillQ?: boolean;
+  skillE?: boolean;
+  /** Dash pressed this tick: for the Assassin that is the spinning slash (the Trooper's dash is movement). */
+  dash?: boolean;
+  /** One of HeroKinds (left out means the Trooper): decides what the skill buttons do. */
+  hero?: number;
+  /** The Assassin's overdrive is running: slashes back to back, and the gun is put away. */
+  overdrive?: boolean;
   ads: boolean;
 }
 
@@ -95,6 +117,8 @@ export interface WeaponContext {
   onGround: boolean;
   crouching: boolean;
   sliding: boolean;
+  /** Being pulled by a grapple: shooting is allowed but very loose. */
+  grappling?: boolean;
 }
 
 export interface ShotResult {
@@ -115,14 +139,26 @@ export interface ShotResult {
   meleeStarted: boolean;
   /** A melee swing landed this tick: the caller finds who it hit (see melee.ts). */
   meleeStrike: boolean;
+  /** A skill was used this tick (it was off cooldown): the server throws the grenade or places the barrier. */
+  grenade: boolean;
+  barrier: boolean;
+  /** The Assassin's spinning slash happened this tick: the server finds who it hit, and the caller applies the lunge. */
+  slash: boolean;
+  /** The Assassin's rolling dive began this tick: the caller starts it (movement), the server finds who it hits. */
+  roll: boolean;
 }
 
-export function spawnWeapon(seed = 1): WeaponState {
+/** HeroKinds (protocol). */
+const HERO_TROOPER = 0;
+const HERO_ASSASSIN = 1;
+
+export function spawnWeapon(seed = 1, hero = HERO_TROOPER): WeaponState {
+  const [first, second] = loadout(hero);
   return {
     slot: 0,
-    gun: 0,
-    ammo: W.magSize,
-    stash: SNIPER.magSize,
+    gun: first,
+    ammo: WEAPON_DEFS[first]?.magSize ?? 0,
+    stash: WEAPON_DEFS[second]?.magSize ?? 0,
     switchT: 0,
     reloadT: 0,
     cooldown: 0,
@@ -130,6 +166,8 @@ export function spawnWeapon(seed = 1): WeaponState {
     sinceShot: 1e9,
     meleeT: 0,
     meleeCooldown: 0,
+    skillQT: 0,
+    skillET: 0,
     rng: seed >>> 0 || 1,
   };
 }
@@ -156,6 +194,7 @@ export function spreadDegrees(
   if (ctx.sliding) bloom *= d.slideBloomScale;
   if (ads) bloom *= d.adsBloomScale;
   spread += bloom + Math.min(d.shotBloomMax, burst * d.shotBloom);
+  if (ctx.grappling) spread += SKILL.grappleBloom;
   // Crouching steadies hipfire a lot, sliding a little; aiming down sights is already tight.
   if (!ads) {
     if (ctx.crouching) spread *= d.crouchHipMult;
@@ -176,6 +215,10 @@ const NO_SHOT: ShotResult = {
   switched: false,
   meleeStarted: false,
   meleeStrike: false,
+  grenade: false,
+  barrier: false,
+  slash: false,
+  roll: false,
 };
 
 export function stepWeapon(
@@ -192,16 +235,49 @@ export function stepWeapon(
   w.cooldown -= dt;
   w.meleeCooldown = Math.max(0, w.meleeCooldown - dt);
   w.switchT = Math.max(0, w.switchT - dt);
+  w.skillQT = Math.max(0, w.skillQT - dt);
+  w.skillET = Math.max(0, w.skillET - dt);
 
-  // Switch weapon: 1 rifle, 2 sniper, 3 empty hands. The old gun is put away (a reload is lost)
-  // and the new one is ready after the draw. Each gun keeps its own rounds.
-  const want = input.slot - 1;
+  // Skills: a press when the skill is off cooldown uses it, whatever the hands are doing.
+  const hero = input.hero ?? HERO_TROOPER;
+  if (hero === HERO_TROOPER) {
+    if (input.skillQ && w.skillQT <= 0) {
+      w.skillQT = SKILL.grenadeCooldown;
+      shot.grenade = true;
+    }
+    if (input.skillE && w.skillET <= 0) {
+      w.skillET = SKILL.barrierCooldown;
+      shot.barrier = true;
+    }
+  } else if (hero === HERO_ASSASSIN) {
+    // The dash button is the spinning slash, on the ground or in the air; E is the rolling dive,
+    // in the air only. (Q is the grapple, which is movement: see movement.ts.) Their cooldowns
+    // are skillQT and skillET. In overdrive the only wait is for the move itself to finish.
+    if (input.overdrive) {
+      w.skillQT = Math.min(w.skillQT, SKILL.slashSpin);
+      w.skillET = Math.min(w.skillET, SKILL.rollTime);
+    }
+    if (input.dash && w.skillQT <= 0) {
+      w.skillQT = input.overdrive ? SKILL.slashSpin : SKILL.slashCooldown;
+      shot.slash = true;
+    }
+    if (input.skillE && w.skillET <= 0 && !ctx.onGround) {
+      w.skillET = input.overdrive ? SKILL.rollTime : SKILL.rollCooldown;
+      shot.roll = true;
+    }
+  }
+
+  // Switch weapon: 1 and 2 are the hero's two guns, 3 the hands. The old gun is put away (a
+  // reload is lost) and the new one is ready after the draw. Each gun keeps its own rounds.
+  // In overdrive the Assassin is held to the blades.
+  const want = hero === HERO_ASSASSIN && input.overdrive ? EMPTY_HANDS : input.slot - 1;
   if (want >= 0 && want <= EMPTY_HANDS && want !== w.slot) {
-    if (want !== EMPTY_HANDS && want !== w.gun) {
+    const gun = want === EMPTY_HANDS ? w.gun : (loadout(hero)[want] ?? w.gun);
+    if (gun !== w.gun) {
       const held = w.ammo;
       w.ammo = w.stash;
       w.stash = held;
-      w.gun = want;
+      w.gun = gun;
     }
     const quick = want === EMPTY_HANDS || w.slot === EMPTY_HANDS;
     w.slot = want;
@@ -225,7 +301,8 @@ export function stepWeapon(
     shot.meleeStarted = true;
   }
   const swinging = w.meleeCooldown > W.meleeCooldown - W.meleeLock;
-  const ready = def !== null && w.switchT <= 0;
+  // In overdrive the Assassin's gun is put away: blades only.
+  const ready = def !== null && w.switchT <= 0 && !(hero === HERO_ASSASSIN && input.overdrive);
 
   // Reload
   if (w.reloadT > 0) {

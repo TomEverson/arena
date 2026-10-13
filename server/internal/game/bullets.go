@@ -93,7 +93,7 @@ func (w *World) fillBoxes(shooter *Player, view float64) int {
 		w.boxes[n] = Hitbox{ID: t.ID, HeadMinY: box.MaxY - CombatHeadSize, Aabb: box}
 		n++
 	}
-	return n
+	return w.barrierBoxes(n) // barriers stop bullets too (they do not move, so no rewind)
 }
 
 // fireBullet spawns the bullet for a shot and catches it up with real time (see the top of this file).
@@ -153,6 +153,13 @@ func (w *World) applyHit(shooter *Player, hit RayHit, d *weaponDef) {
 
 // dealDamage hurts the player or practice target with this id (extra adds event flags, e.g. melee).
 func (w *World) dealDamage(shooter *Player, id uint32, amount float64, headshot bool, extra uint8) bool {
+	if id >= SkillBarrierIdBase {
+		if b := w.barrierByID(id); b != nil && w.canDamage() {
+			w.damageBarrier(shooter, b, amount, extra)
+			return true
+		}
+		return false
+	}
 	if id >= CombatTargetIdBase {
 		if t := w.targetByID(id); t != nil && w.canDamage() {
 			w.damageTarget(shooter, t, amount, headshot, extra)
@@ -177,7 +184,12 @@ func (w *World) resolveMelee(shooter *Player, in *Input) {
 	dx, dy, dz := ViewDirection(in.Yaw, in.Pitch)
 	n := w.fillBoxes(shooter, w.rewindView(in.ViewTick))
 	id, _ := FindMeleeTarget(&w.level.Collision, w.boxes[:n], ex, ey, ez, dx, dy, dz)
-	if id >= 0 && w.dealDamage(shooter, uint32(id), WeaponMeleeDamage, false, protocol.GameEventFlagMelee) {
+	// The Assassin with the blades out cuts; everyone else punches (or swings the gun).
+	amount := float64(WeaponMeleeDamage)
+	if shooter.Health.Hero == protocol.HeroKindAssassin && shooter.Weapon.Slot == emptyHands {
+		amount = SkillBladeDamage
+	}
+	if id >= 0 && w.dealDamage(shooter, uint32(id), amount, false, protocol.GameEventFlagMelee) {
 		if uint32(id) >= CombatTargetIdBase {
 			if t := w.targetByID(uint32(id)); t != nil && !t.spec.WallRun && t.Health.Alive {
 				ax, az := t.x+t.kx-s.X, t.z+t.kz-s.Z

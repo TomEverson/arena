@@ -109,6 +109,11 @@ export class NetClient {
     this.send({ type: "practice", action });
   }
 
+  /** Choose a hero (one of HeroKinds). The server decides when it takes effect. */
+  sendHero(hero: number): void {
+    this.send({ type: "hero", hero });
+  }
+
   /** Vote for another match while the results are showing. */
   sendRematch(): void {
     this.send({ type: "rematch" });

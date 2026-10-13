@@ -27,10 +27,11 @@ export interface CollisionWorld {
 }
 
 /**
- * One tick of player intent: the wire Input without the sequence number, pitch
- * and view tick (those are filled in when the input is sent). Edge buttons are "pressed this tick".
+ * One tick of player intent: the wire Input without the sequence number and view tick (those
+ * are filled in when the input is sent). Edge buttons are "pressed this tick". Pitch is here
+ * because the grapple aims with it.
  */
-export type PlayerInput = Omit<Input, "seq" | "pitch" | "viewTick">;
+export type PlayerInput = Omit<Input, "seq" | "viewTick">;
 
 /**
  * Complete movement state. Defined once in /protocol/messages.json and generated
@@ -43,6 +44,7 @@ export const emptyInput = (): PlayerInput => ({
   moveX: 0,
   moveZ: 0,
   yaw: 0,
+  pitch: 0,
   jump: false,
   dash: false,
   slide: false,
@@ -50,6 +52,12 @@ export const emptyInput = (): PlayerInput => ({
   fire: false,
   reload: false,
   melee: false,
+  skillQ: false,
+  reel: false,
+  skillE: false,
+  ult: false,
+  hero: 0,
+  overdrive: false,
   slot: 0,
   runSpeedMult: 1,
   adsSpeedMult: P.adsSpeedMult,

@@ -27,12 +27,18 @@ type rawTarget struct {
 	Range float64    `json:"range"`
 }
 
+type rawPickup struct {
+	ID  string     `json:"id"`
+	Pos [3]float64 `json:"pos"`
+}
+
 type rawLevel struct {
 	Name       string      `json:"name"`
 	Boxes      []rawBox    `json:"boxes"`
 	Ramps      []rawBox    `json:"ramps"`
 	SpawnZones []rawBox    `json:"spawnZones"`
 	Targets    []rawTarget `json:"targets"`
+	Pickups    []rawPickup `json:"pickups"`
 }
 
 func finite(v [3]float64) bool {
@@ -102,6 +108,12 @@ func Parse(data []byte) (*game.Level, error) {
 			return nil, err
 		}
 		lv.Targets = append(lv.Targets, spec)
+	}
+	for i, p := range raw.Pickups {
+		if !finite(p.Pos) {
+			return nil, fmt.Errorf("level: pickups[%d].pos: expected finite numbers", i)
+		}
+		lv.Pickups = append(lv.Pickups, game.Vec3{X: p.Pos[0], Y: p.Pos[1], Z: p.Pos[2]})
 	}
 	return lv, nil
 }

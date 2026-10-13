@@ -73,7 +73,7 @@ describe("character looks", () => {
       const isGun = o.children.some(
         (c) => c instanceof THREE.Mesh && c.material instanceof THREE.MeshBasicMaterial,
       );
-      if (isGun) return;
+      if (isGun || !o.visible) return; // hidden parts (blades not in hand) do not count
       if (o instanceof THREE.Mesh) out.push(o as THREE.Mesh);
       o.children.forEach(walk);
     };
@@ -81,7 +81,7 @@ describe("character looks", () => {
     return out;
   }
 
-  it.each<CharacterLook>(["trooper", "assassin"])(
+  it.each<CharacterLook>(["trooper", "assassin", "dummy"])(
     "%s stands inside the hitbox, feet on the floor, head in the head zone",
     (look) => {
       const body = new CharacterBody(new THREE.Scene(), 0, look);

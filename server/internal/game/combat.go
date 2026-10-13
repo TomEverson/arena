@@ -44,9 +44,12 @@ func (w *World) resetLifeAt(p *Player, sp Vec3) {
 		Shield:       WeaponMaxShield,
 		Alive:        true,
 		ProtectedFor: w.spawnProtection(),
+		Ult:          p.Health.Ult,      // the ultimate's charge is kept through death
+		Hero:         p.Health.NextHero, // a hero chosen mid-life starts here
+		NextHero:     p.Health.NextHero,
 	}
 	p.State = SpawnState(sp.X, sp.Y, sp.Z)
-	p.Weapon = SpawnWeapon(p.Weapon.Rng)
+	p.Weapon = SpawnWeapon(p.Weapon.Rng, p.Health.Hero)
 	p.sinceDamage = 1e9
 	p.syncEntity()
 }
@@ -63,6 +66,12 @@ func (w *World) updateLife(p *Player) {
 	}
 	if h.ProtectedFor > 0 {
 		h.ProtectedFor = math.Max(0, h.ProtectedFor-TickDT)
+	}
+	if h.Overdrive > 0 {
+		h.Overdrive = math.Max(0, h.Overdrive-TickDT)
+	}
+	if w.canDamage() {
+		chargeUlt(p, TickDT/SkillUltChargeSeconds) // the ultimate fills slowly on its own while the match is live
 	}
 	p.sinceDamage += TickDT
 	if p.sinceDamage > CombatShieldRechargeDelay && h.Shield < WeaponMaxShield {
@@ -212,6 +221,10 @@ func (w *World) damage(shooter, victim *Player, amount float64, headshot bool, e
 	h := &victim.Health
 	killed := takeDamage(h, amount)
 	victim.sinceDamage = 0
+	self := shooter == victim // your own grenade or bombardment
+	if !self {
+		chargeUlt(shooter, amount/SkillUltChargeDamage) // damage dealt fills the ultimate
+	}
 
 	flags := extra
 	if headshot {
@@ -231,10 +244,12 @@ func (w *World) damage(shooter, victim *Player, amount float64, headshot bool, e
 	h.RespawnIn = CombatRespawnTime
 	h.ProtectedFor = 0
 	victim.Deaths++
-	shooter.Kills++
-	// A kill restores health and shield to full.
-	shooter.Health.Health = WeaponMaxHealth
-	shooter.Health.Shield = WeaponMaxShield
+	if !self { // killing yourself is a death, not a kill
+		shooter.Kills++
+		// A kill restores health and shield to full.
+		shooter.Health.Health = WeaponMaxHealth
+		shooter.Health.Shield = WeaponMaxShield
+	}
 	for _, q := range w.players {
 		q.pushEvent(w.tick, protocol.EventKindKill, shooter.ID, victim.ID, 0, flags&protocol.GameEventFlagHeadshot, 0, 0)
 	}

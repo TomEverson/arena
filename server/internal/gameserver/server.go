@@ -219,6 +219,8 @@ func (s *Server) handle(
 		if action, ok := practiceActions[msg.Action]; ok {
 			room.World.Practice(ctx, id, action) // the world ignores it outside a practice range
 		}
+	case protocol.ClientTypeHero:
+		room.World.SetHero(ctx, id, msg.Hero)
 	case protocol.ClientTypeRematch:
 		room.World.Rematch(ctx, id)
 	}

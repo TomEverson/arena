@@ -1,18 +1,19 @@
 import type * as THREE from "three";
 
-import { type BodyState, CharacterBody } from "./character";
+import { type BodyState, CharacterBody, type CharacterLook, HERO_LOOKS } from "./character";
 import type { Pose } from "./net/interpolation";
-import { EntityFlags } from "./net/protocol.gen";
+import { EntityFlags, EntityKinds } from "./net/protocol.gen";
 
 interface View {
+  look: CharacterLook;
   body: CharacterBody;
   state: BodyState;
   lastY: number;
 }
 
 /**
- * Bodies for everyone else (other players and practice-range targets), drawn with the shared
- * character body (character.ts). Visual only: hitboxes live in the sim. They flash when hit.
+ * Bodies for everyone else, drawn with the shared character body (character.ts): other players
+ * as the hero they chose, practice-range targets as the dummy with empty hands. Visual only: hitboxes live in the sim. They flash when hit.
  */
 export class RemoteViews {
   private readonly views = new Map<number, View>();
@@ -29,10 +30,18 @@ export class RemoteViews {
     const seen = new Set<number>();
     for (const pose of poses) {
       seen.add(pose.id);
+      const target = pose.kind === EntityKinds.target;
+      // Practice-range targets are the plain dummy; a player is whichever hero they chose.
+      const look = target ? "dummy" : (HERO_LOOKS[pose.hero] ?? "trooper");
       let v = this.views.get(pose.id);
+      if (v && v.look !== look) {
+        this.scene.remove(v.body.root); // they changed hero: a new body
+        v = undefined;
+      }
       if (!v) {
         v = {
-          body: new CharacterBody(this.scene, pose.id),
+          look,
+          body: new CharacterBody(this.scene, pose.id, look),
           state: { x: 0, y: 0, z: 0, onGround: true, sliding: false, alive: true, armed: true },
           lastY: pose.y,
         };
@@ -45,8 +54,15 @@ export class RemoteViews {
       s.sliding = (pose.flags & EntityFlags.sliding) !== 0;
       s.wallRunning = (pose.flags & EntityFlags.wallRunning) !== 0;
       s.meleeing = (pose.flags & EntityFlags.meleeing) !== 0;
-      s.armed = (pose.flags & EntityFlags.emptyHanded) === 0;
-      s.weapon = (pose.flags & EntityFlags.holdingSniper) !== 0 ? 1 : 0;
+      s.slashing = (pose.flags & EntityFlags.slashing) !== 0;
+      s.rolling = (pose.flags & EntityFlags.rolling) !== 0;
+      s.armed = !target && (pose.flags & EntityFlags.emptyHanded) === 0; // a target holds nothing
+      s.weapon =
+        (pose.flags & EntityFlags.holdingSpear) !== 0
+          ? 2
+          : (pose.flags & EntityFlags.holdingSniper) !== 0
+            ? 1
+            : 0;
       s.crouching = (pose.flags & EntityFlags.crouching) !== 0;
       s.dashing = (pose.flags & EntityFlags.dashing) !== 0;
       s.alive = (pose.flags & EntityFlags.dead) === 0;

@@ -18,6 +18,7 @@ Living notes for the browser multiplayer FPS. This is where ideas, decisions and
 | [06-repo-and-setup.md](06-repo-and-setup.md) | Monorepo layout, tooling, dev loop, AI-coding rules |
 | [07-open-questions.md](07-open-questions.md) | Everything still undecided |
 | [08-roadmap.md](08-roadmap.md) | Milestones in order |
+| [09-heroes.md](09-heroes.md) | Heroes and their skills: Trooper and Assassin |
 
 ## Decision Log
 | Date | Decision |
@@ -29,3 +30,4 @@ Living notes for the browser multiplayer FPS. This is where ideas, decisions and
 | 2026-10-12 | Build and test with 2 players (two teams of one); design for 32 |
 | 2026-10-12 | pnpm workspaces + Turborepo instead of Makefile |
 | 2026-10-12 | Client lint and format with ESLint + Prettier (type-aware lint needs TypeScript 6); see 06-repo-and-setup.md |
+| 2026-10-13 | Heroes with skills (Q, E, ultimate), starting with Trooper and Assassin; Trooper built first; see 09-heroes.md |

@@ -17,6 +17,8 @@ export interface Pose {
   flags: number;
   /** An EntityKinds value: a player or a practice-range target. */
   kind: number;
+  /** A HeroKinds value: which character a player is. */
+  hero: number;
 }
 
 interface Sample {
@@ -90,6 +92,7 @@ export class RemoteTracks {
       pitch: lerp(a.e.pitch, b.e.pitch, t),
       flags: a.e.flags,
       kind: a.e.kind,
+      hero: a.e.hero,
     };
   }
 }

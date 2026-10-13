@@ -20,6 +20,26 @@ func TestLoadGreybox(t *testing.T) {
 	}
 }
 
+func TestGreyboxHasRechargePickupsWithStandingRoom(t *testing.T) {
+	lv, err := Load("../../../levels/greybox.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lv.Pickups) != 2 {
+		t.Fatalf("pickups = %d, want 2", len(lv.Pickups))
+	}
+	for i, at := range lv.Pickups {
+		for _, b := range lv.Collision.Boxes {
+			inX := at.X+0.3 > b.MinX && at.X-0.3 < b.MaxX
+			inZ := at.Z+0.3 > b.MinZ && at.Z-0.3 < b.MaxZ
+			inY := at.Y+1.8 > b.MinY && at.Y < b.MaxY-0.001
+			if inX && inZ && inY {
+				t.Fatalf("pickup %d (%v, %v, %v) is inside a box %+v", i, at.X, at.Y, at.Z, b)
+			}
+		}
+	}
+}
+
 func TestLoadsPracticeTargets(t *testing.T) {
 	lv, err := Load("../../../levels/greybox.json")
 	if err != nil {

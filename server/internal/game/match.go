@@ -95,8 +95,10 @@ func (w *World) startMatch() {
 	m.suddenDeath = false
 	m.winner = 0
 	spawns := w.level.Spawns
+	w.clearSkills()
 	for i, p := range w.players {
 		p.Kills, p.Deaths, p.rematch = 0, 0, false
+		p.Health.Ult = 0
 		sp := spawns[i%len(spawns)]
 		sp.X += float64(i / len(spawns)) // a few players may share a spawn: spread them a little
 		w.resetLifeAt(p, sp)
