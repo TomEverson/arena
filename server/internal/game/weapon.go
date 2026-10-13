@@ -16,11 +16,12 @@ type WeaponState = protocol.WeaponState
 
 const degToRad = math.Pi / 180
 
-// weaponDef is what differs between guns. Slot 0 is the rifle (a projectile weapon), slot 1 the
-// sniper (hitscan). Mirrors WEAPON_DEFS in client/src/sim/weapon.ts.
+// weaponDef is what differs between guns. Slot 0 is the rifle, slot 1 the sniper: both fire
+// bullets that fly (bullets.go). Mirrors WEAPON_DEFS in client/src/sim/weapon.ts.
 type weaponDef struct {
-	hitscan         bool
-	spear           bool // fires a thunder spear: it flies, sticks and explodes (skills.go)
+	spear           bool    // fires a thunder spear: it flies, sticks and explodes (skills.go)
+	bulletSpeed     float64 // the bullet's muzzle speed, m/s (unused by the spears)
+	bulletGravity   float64 // how fast the bullet falls, m/s²
 	rpm             float64
 	magSize         int
 	reloadTime      float64
@@ -59,7 +60,7 @@ func loadout(hero uint8) [2]uint8 {
 
 var weaponDefs = [3]weaponDef{
 	{
-		hitscan: false, rpm: WeaponRpm, magSize: WeaponMagSize, reloadTime: WeaponReloadTime,
+		bulletSpeed: WeaponBulletSpeed, bulletGravity: WeaponBulletGravity, rpm: WeaponRpm, magSize: WeaponMagSize, reloadTime: WeaponReloadTime,
 		damage: WeaponDamage, headshotMult: WeaponHeadshotMult, rng: WeaponRange,
 		hipSpread: WeaponHipSpread, adsSpread: WeaponAdsSpread, moveBloom: WeaponMoveBloom, airBloom: WeaponAirBloom,
 		adsBloomScale: WeaponAdsBloomScale, crouchHipMult: WeaponCrouchHipMult, slideHipMult: WeaponSlideHipMult,
@@ -67,7 +68,7 @@ var weaponDefs = [3]weaponDef{
 		recoilResetTime: WeaponRecoilResetTime, recoilPitch: WeaponRecoilPitch[:], recoilYaw: WeaponRecoilYaw[:], adsSpeedMult: WeaponAdsSpeedMult,
 	},
 	{
-		hitscan: true, rpm: SniperRpm, magSize: SniperMagSize, reloadTime: SniperReloadTime,
+		bulletSpeed: SniperBulletSpeed, bulletGravity: SniperBulletGravity, rpm: SniperRpm, magSize: SniperMagSize, reloadTime: SniperReloadTime,
 		damage: SniperDamage, headshotMult: SniperHeadshotMult, rng: SniperRange,
 		hipSpread: SniperHipSpread, adsSpread: SniperAdsSpread, moveBloom: SniperMoveBloom, airBloom: SniperAirBloom,
 		adsBloomScale: SniperAdsBloomScale, crouchHipMult: SniperCrouchHipMult, slideHipMult: SniperSlideHipMult,
@@ -139,10 +140,14 @@ type ShotResult struct {
 	// Grenade and Barrier: a skill was used this tick (it was off cooldown).
 	Grenade bool `json:"grenade"`
 	Barrier bool `json:"barrier"`
-	// Slash: the Assassin's spinning slash happened this tick (the caller finds who it hit and applies the lunge).
+	// Slash: the Assassin's dash cut dashes this tick, its wind-up over (the caller finds who it cuts and applies the dash).
 	Slash bool `json:"slash"`
-	// Roll: the Assassin's rolling dive began this tick (the caller starts it and finds who it hits).
+	// SlashStarted: the dash cut's wind-up started this tick (the blades are drawn and cut the X).
+	SlashStarted bool `json:"slashStarted"`
+	// Roll: the Assassin's rolling dive dives this tick, its wind-up over (the caller starts it and finds who it hits).
 	Roll bool `json:"roll"`
+	// RollStarted: the rolling dive's wind-up started this tick (the blades are drawn).
+	RollStarted bool `json:"rollStarted"`
 }
 
 // SpawnWeapon returns a hero's weapons, full, with the first gun in hand and the given random seed.
@@ -228,35 +233,62 @@ func StepWeapon(w *WeaponState, in *Input, ctx *WeaponContext, dt float64) ShotR
 			shot.Barrier = true
 		}
 	case protocol.HeroKindAssassin:
-		// The dash button is the spinning slash, on the ground or in the air; E is the rolling
+		// The dash button is the dash cut, on the ground or in the air; E is the rolling
 		// dive, in the air only. (Q is the grapple, which is movement: see movement.go.) Their
 		// cooldowns are SkillQT and SkillET. In overdrive the only wait is for the move itself.
 		if in.Overdrive {
 			w.SkillQT = math.Min(w.SkillQT, SkillSlashSpin)
 			w.SkillET = math.Min(w.SkillET, SkillRollTime)
 		}
-		if in.Dash && w.SkillQT <= 0 {
+		// The dash cut has a wind-up: the press draws the blades and cuts the X, then it dashes.
+		if w.SlashT > 0 {
+			w.SlashT -= dt
+			if w.SlashT <= 0 {
+				w.SlashT = 0
+				shot.Slash = true
+			}
+		} else if in.Dash && w.SkillQT <= 0 {
 			w.SkillQT = SkillSlashCooldown
 			if in.Overdrive {
 				w.SkillQT = SkillSlashSpin
 			}
-			shot.Slash = true
+			w.SlashT = SkillSlashWindup
+			shot.SlashStarted = true
 		}
-		if in.SkillE && w.SkillET <= 0 && !ctx.OnGround {
+		// The rolling dive has a wind-up too: the press (in the air) draws the blades, then it
+		// dives. Landing before the wind-up is over calls it off, and the skill is ready again.
+		if w.DiveT > 0 {
+			w.DiveT -= dt
+			if ctx.OnGround {
+				w.DiveT = 0
+				w.SkillET = 0
+			} else if w.DiveT <= 0 {
+				w.DiveT = 0
+				shot.Roll = true
+			}
+		} else if in.SkillE && w.SkillET <= 0 && !ctx.OnGround {
 			w.SkillET = SkillRollCooldown
 			if in.Overdrive {
 				w.SkillET = SkillRollTime
 			}
-			shot.Roll = true
+			w.DiveT = SkillRollWindup
+			shot.RollStarted = true
 		}
 	}
 
 	// Switch weapon: 1 and 2 are the hero's two guns, 3 the hands. The old gun is put away (a
 	// reload is lost) and the new one is ready after the draw. Each gun keeps its own rounds.
-	// In overdrive the Assassin is held to the blades.
+	// In overdrive the Assassin has the blades and the spears, not the sniper: a sniper in hand
+	// is put away for the blades, and its slot does nothing.
+	od := in.Hero == protocol.HeroKindAssassin && in.Overdrive
+	barred := func(slot int) bool {
+		return od && slot != emptyHands && !weaponDefs[loadout(in.Hero)[slot]].spear
+	}
 	want := int(in.Slot) - 1
-	if in.Hero == protocol.HeroKindAssassin && in.Overdrive {
+	if barred(int(w.Slot)) {
 		want = emptyHands
+	} else if want >= 0 && want < emptyHands && barred(want) {
+		want = -1
 	}
 	if want >= 0 && want <= emptyHands && want != int(w.Slot) {
 		gun := w.Gun
@@ -293,8 +325,15 @@ func StepWeapon(w *WeaponState, in *Input, ctx *WeaponContext, dt float64) ShotR
 		shot.MeleeStarted = true
 	}
 	swinging := w.MeleeCooldown > WeaponMeleeCooldown-WeaponMeleeLock
-	// In overdrive the Assassin's gun is put away: blades only.
-	ready := def != nil && w.SwitchT <= 0 && !(in.Hero == protocol.HeroKindAssassin && in.Overdrive)
+	// (In overdrive only the spears fire, and they reload faster.)
+	ready := def != nil && w.SwitchT <= 0 && !(od && !def.spear)
+	reloadTime := 0.0
+	if def != nil {
+		reloadTime = def.reloadTime
+		if od {
+			reloadTime *= SkillOverdriveReload
+		}
+	}
 
 	// Reload
 	if w.ReloadT > 0 {
@@ -307,7 +346,7 @@ func StepWeapon(w *WeaponState, in *Input, ctx *WeaponContext, dt float64) ShotR
 			shot.ReloadFinished = true
 		}
 	} else if in.Reload && ready && int(w.Ammo) < def.magSize {
-		w.ReloadT = def.reloadTime
+		w.ReloadT = reloadTime
 		shot.ReloadStarted = true
 	}
 
@@ -335,7 +374,7 @@ func StepWeapon(w *WeaponState, in *Input, ctx *WeaponContext, dt float64) ShotR
 		} else if w.ReloadT <= 0 {
 			// Empty: start reloading automatically.
 			shot.DryFire = true
-			w.ReloadT = def.reloadTime
+			w.ReloadT = reloadTime
 			shot.ReloadStarted = true
 		}
 	}

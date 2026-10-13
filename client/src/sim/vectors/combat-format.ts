@@ -71,7 +71,9 @@ const interesting = (r: ShotResult) =>
   r.grenade ||
   r.barrier ||
   r.slash ||
-  r.roll;
+  r.slashStarted ||
+  r.roll ||
+  r.rollStarted;
 
 /** Run steps through the live weapon sim, collecting events and checkpoints. */
 export function runWeaponSteps(

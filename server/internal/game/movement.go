@@ -94,6 +94,12 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 	} else {
 		s.JumpBuffer = math.Max(0, s.JumpBuffer-dt)
 	}
+	// Slowed by a bullet hit (the server sets SlowT): running is slower until it runs out.
+	slow := 1.0
+	if s.SlowT > 0 {
+		slow = HitSlowMult
+	}
+	s.SlowT = math.Max(0, s.SlowT-dt)
 
 	if s.Mantling {
 		stepMantle(s, dt)
@@ -147,10 +153,11 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 		s.VZ = s.RollDirZ * SkillRollSpeed
 		s.RollT = math.Max(0, s.RollT-dt)
 		s.JumpBuffer = 0
-	case s.Grappling:
+	case s.Grappling && (!s.OnGround || in.Reel):
 		// Grapple: on a line. Gravity acts and you can steer, and the line holds you (holdLine),
 		// so you swing. While the button is held the line also reels you in: a pull toward the
-		// hook, or up the middle of two.
+		// hook, or up the middle of two. (Standing on the ground without reeling, you keep the
+		// line but move as usual: see below.)
 		endWallRun(s)
 		s.Sliding = false
 		s.Crouching = false
@@ -189,7 +196,7 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 		} else {
 			updateSlide(s, in, w, dt)
 			updateCrouch(s, in, w)
-			updateHorizontalVelocity(s, &wi, dt)
+			updateHorizontalVelocity(s, &wi, slow, dt)
 			if !tryWallJump(s, in, w) {
 				tryJump(s, in, w)
 			}
@@ -197,6 +204,15 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 				s.VY = math.Max(-TerminalVelocity, s.VY-Gravity*dt)
 			} else if s.VY < 0 {
 				s.VY = 0
+			}
+		}
+		if s.Grappling {
+			// On the ground with a line out and the button up: the line is kept (it only lets go
+			// on a jump or a crouch), and still will not let you get further from the hook than
+			// it is long.
+			holdLine(s, s.GrappleX, s.GrappleY, s.GrappleZ, s.GrappleLen, dt)
+			if s.Grapple2 {
+				holdLine(s, s.Grapple2X, s.Grapple2Y, s.Grapple2Z, s.Grapple2Len, dt)
 			}
 		}
 	}
@@ -229,9 +245,9 @@ func StepPlayer(s *PlayerState, in *Input, w *CollisionWorld, dt float64) {
 		// Let go: on reaching a hook; reeling, once between two hooks (the lines pull against
 		// each other) or stalled; on crouch; or when it has gone on too long. The speed is kept:
 		// the fling.
-		// (Landing lets go too, unless you are reeling: a line is for the air.)
-		landed := s.OnGround && !in.Reel && s.GrappleT > dt
-		if nearestHook(s) <= SkillGrappleArrive || reeledOut || landed || in.Slide || s.GrappleT >= SkillGrappleMaxTime {
+		// (Letting go of the button does not let go of the line, in the air or on the ground: a
+		// jump does, see updateGrapple.)
+		if nearestHook(s) <= SkillGrappleArrive || reeledOut || in.Slide || s.GrappleT >= SkillGrappleMaxTime {
 			endGrapple(s, false)
 		}
 	}
@@ -340,7 +356,7 @@ func reduceSpeed(s *PlayerState, drop, floor float64) {
 	s.VZ *= k
 }
 
-func updateHorizontalVelocity(s *PlayerState, wi *wish, dt float64) {
+func updateHorizontalVelocity(s *PlayerState, wi *wish, slow, dt float64) {
 	if s.Sliding && s.OnGround && hSpeed(s) >= SlideEndSpeed {
 		// Momentum slide: fixed direction, linear decay.
 		reduceSpeed(s, SlideDecel*dt, 0)
@@ -352,7 +368,7 @@ func updateHorizontalVelocity(s *PlayerState, wi *wish, dt float64) {
 		if s.Sliding || s.Crouching {
 			base = CrouchSpeed
 		}
-		wishSpeed := base * wi.mag * wi.speed
+		wishSpeed := base * wi.mag * wi.speed * slow
 		if wi.mag == 0 {
 			reduceSpeed(s, math.Max(hSpeed(s), StopSpeed)*GroundFriction*dt, 0)
 		} else {
@@ -368,7 +384,7 @@ func updateHorizontalVelocity(s *PlayerState, wi *wish, dt float64) {
 	// Air: steer freely but never gain speed beyond what we had (or run speed).
 	before := hSpeed(s)
 	if wi.mag > 0 {
-		accelerate(s, wi, RunSpeed*wi.run*wi.mag, AirAccel, dt)
+		accelerate(s, wi, RunSpeed*wi.run*wi.mag*slow, AirAccel, dt)
 	}
 	limit := math.Max(before, RunSpeed*wi.run)
 	after := hSpeed(s)
@@ -388,6 +404,9 @@ func tryJump(s *PlayerState, in *Input, w *CollisionWorld) {
 				return
 			}
 			endSlide(s)
+			// A jump out of a slide costs part of its speed (never below run speed), so chained
+			// slide-jumps wind down.
+			reduceSpeed(s, hSpeed(s)*(1-SlideJumpKeep), RunSpeed)
 		}
 		if s.Crouching {
 			if !fitsStanding(s, w) {

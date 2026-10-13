@@ -38,9 +38,14 @@ function leadPoint(
   return { x: px, y: py + 0.5 * WEAPON.bulletGravity * flight * flight, z: pz };
 }
 
+/** How close a fighter gets before it stops walking in and starts to strafe and shoot. */
+const FIGHT_RANGE = 14;
+
 /**
- * Aim at the other player as drawn on our own screen, strafe, close in when far, and shoot
- * when we can see them. A perfect-aim player who reacts to exactly what the screen shows.
+ * Aim at the other player as drawn on our own screen, walk in until they are close, then strafe
+ * and shoot while we can see them. A perfect-aim player who reacts to exactly what the screen
+ * shows. It holds its fire on the way in: a fight that is over before the strafing starts is
+ * two players walking straight at each other, which lag compensation does nothing for.
  */
 export function makeFighter(world: CollisionWorld): Brain {
   return (bot, tick) => {
@@ -86,10 +91,10 @@ export function makeFighter(world: CollisionWorld): Brain {
     return {
       yaw,
       pitch,
-      moveZ: flat > 14 ? 1 : 0,
-      moveX: flat > 14 ? 0 : Math.floor(tick / 45) % 2 === 0 ? 1 : -1, // strafe: left, right, left...
+      moveZ: flat > FIGHT_RANGE ? 1 : 0,
+      moveX: flat > FIGHT_RANGE ? 0 : Math.floor(tick / 45) % 2 === 0 ? 1 : -1, // strafe: left, right, left...
       ads: true,
-      fire: sees && !ghost,
+      fire: sees && !ghost && flat <= FIGHT_RANGE + 2,
     };
   };
 }

@@ -162,6 +162,25 @@ describe("grappling rig (assassin)", () => {
     expect(visibleNames(body)).toBe(before);
   });
 
+  it("holds a blade in each hand when the Assassin has no gun out, and a swing draws no third", () => {
+    const body = new CharacterBody(new THREE.Scene(), 0, "assassin");
+    body.update(still(), 1 / 60, viewer);
+    const withGun = visibleNames(body);
+    for (let i = 0; i < 40; i++) body.update(still({ armed: false }), 1 / 60, viewer);
+    const bladesOut = visibleNames(body);
+    for (let i = 0; i < 9; i++)
+      body.update(still({ armed: false, meleeing: true }), 1 / 60, viewer);
+    expect(visibleNames(body)).toBe(bladesOut);
+    const trooper = new CharacterBody(new THREE.Scene(), 0, "trooper");
+    trooper.update(still(), 1 / 60, viewer);
+    const armed = visibleNames(trooper);
+    for (let i = 0; i < 40; i++) trooper.update(still({ armed: false }), 1 / 60, viewer);
+    // Both put the same gun away; the Assassin also brings two blades out.
+    const gun = armed - visibleNames(trooper);
+    expect(gun).toBeGreaterThan(0);
+    expect(bladesOut).toBe(withGun - gun + 2);
+  });
+
   it("fires a cable at the wall on a wall run, on the wall's side, and reels it in after", () => {
     const body = new CharacterBody(new THREE.Scene(), 0, "assassin");
     const run = (wallSide: number) =>

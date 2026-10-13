@@ -56,7 +56,7 @@ func (d *duel) step(a, b *Input) {
 }
 
 // settle runs ticks with no input, so bullets in flight reach their targets: a 10 m shot at
-// 300 m/s lands about two ticks after it is fired.
+// 500 m/s lands about a tick after it is fired.
 func (d *duel) settle(ticks int) {
 	for i := 0; i < ticks; i++ {
 		d.step(nil, nil)
@@ -495,7 +495,8 @@ func TestCombatStepDoesNotAllocate(t *testing.T) {
 // --- Projectiles -----------------------------------------------------------
 
 func TestBulletsTakeTimeToArrive(t *testing.T) {
-	d := newDuel(t, nil, Vec3{}, Vec3{Z: -45}) // 45 m away: 0.15 s of flight, nine ticks
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -45}) // 45 m away: several ticks of flight
+	want := int(math.Round(45 / (WeaponBulletSpeed * TickDT)))
 	d.step(aimedShot(-0.0), nil)
 	if len(eventsOf(d.a, protocol.EventKindHit)) != 0 {
 		t.Fatal("a 45 m shot cannot land on the tick it is fired")
@@ -507,8 +508,73 @@ func TestBulletsTakeTimeToArrive(t *testing.T) {
 			landed = i
 		}
 	}
-	if landed < 7 || landed > 11 {
-		t.Fatalf("the bullet landed %d ticks after the shot, want about 9 (45 m at 300 m/s)", landed)
+	if landed < want-2 || landed > want+2 {
+		t.Fatalf("the bullet landed %d ticks after the shot, want about %d (45 m at %v m/s)", landed, want, float64(WeaponBulletSpeed))
+	}
+}
+
+// --- Slow on hit and the dash reset ----------------------------------------
+
+func TestARifleHitSlowsTheVictim(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
+	strafe := &Input{MoveX: 1}
+	for i := 0; i < 60; i++ {
+		d.step(nil, strafe)
+	}
+	if got := hSpeed(&d.b.State); math.Abs(got-RunSpeed) > 0.01 {
+		t.Fatalf("victim runs at %v before the hit, want %v", got, float64(RunSpeed))
+	}
+	d.b.State.X = -0.3 // back in front of the shooter, about to cross the line of fire
+	d.step(aimedShot(bodyPitch), strafe)
+	for i := 0; i < 4; i++ {
+		d.step(nil, strafe)
+	}
+	if len(eventsOf(d.b, protocol.EventKindHurt)) != 1 || d.b.State.SlowT <= 0 {
+		t.Fatalf("the hit should slow the victim: hurt events %d, SlowT %v", len(eventsOf(d.b, protocol.EventKindHurt)), d.b.State.SlowT)
+	}
+	slowest := math.Inf(1)
+	for i := 0; i < 60; i++ {
+		d.step(nil, strafe)
+		slowest = math.Min(slowest, hSpeed(&d.b.State))
+	}
+	if want := RunSpeed * HitSlowMult; math.Abs(slowest-want) > 0.3 {
+		t.Fatalf("slowed to %v, want about %v", slowest, want)
+	}
+	if got := hSpeed(&d.b.State); d.b.State.SlowT != 0 || math.Abs(got-RunSpeed) > 0.01 {
+		t.Fatalf("the slow should wear off: SlowT %v, speed %v", d.b.State.SlowT, got)
+	}
+}
+
+func TestASniperHitSlowsToo(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
+	for i := 0; i < 40; i++ {
+		d.step(&Input{Slot: 2}, nil)
+	}
+	d.step(&Input{Fire: true, ADS: true, Pitch: bodyPitch, Slot: 2}, nil)
+	d.settle(2)
+	if len(eventsOf(d.b, protocol.EventKindHurt)) != 1 {
+		t.Fatalf("the sniper shot should have hit, hurt events = %d", len(eventsOf(d.b, protocol.EventKindHurt)))
+	}
+	if d.b.State.SlowT <= 0 {
+		t.Fatalf("a sniper hit should slow the victim, SlowT = %v", d.b.State.SlowT)
+	}
+}
+
+func TestAKillGivesBothDashesBack(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
+	d.a.State.DashCharges = 0
+	for i := 0; i < 300 && d.b.Health.Alive; i++ {
+		d.step(aimedShot(bodyPitch), nil)
+		if d.b.Health.Alive && d.a.State.DashCharges >= 1 {
+			t.Fatalf("a dash came back before the kill (tick %d): the test proves nothing", i)
+		}
+	}
+	d.settle(4)
+	if d.b.Health.Alive {
+		t.Fatal("victim never died")
+	}
+	if d.a.State.DashCharges != DashCharges {
+		t.Fatalf("dash charges after a kill = %v, want %v", d.a.State.DashCharges, float64(DashCharges))
 	}
 }
 
@@ -727,15 +793,26 @@ func (d *duel) drawn() { d.idle(int(math.Ceil(WeaponSwitchTime*TickRate)) + 2) }
 
 func sniperShot(pitch float64) *Input { return &Input{Fire: true, ADS: true, Pitch: pitch} }
 
-func TestSniperHitsInstantlyForMoreDamage(t *testing.T) {
-	d := newDuel(t, nil, Vec3{}, Vec3{Z: -60}) // 60 m: a rifle bullet would take 12 ticks
+func TestSniperBulletTakesTimeAndDoesMoreDamage(t *testing.T) {
+	d := newDuel(t, nil, Vec3{}, Vec3{Z: -60}) // 60 m: several ticks of flight
 	d.step(slotInput(2), nil)
 	d.drawn()
-	d.step(sniperShot(0), nil) // level at eye height: the head, no drop
-	hit := eventsOf(d.a, protocol.EventKindHit)
-	if len(hit) != 1 {
-		t.Fatalf("a hitscan shot should land on the tick it is fired, got %d hits", len(hit))
+	d.step(sniperShot(0), nil) // level at eye height: the head (the drop over 60 m is a few cm)
+	if n := len(eventsOf(d.a, protocol.EventKindHit)); n != 0 {
+		t.Fatalf("the sniper fires a bullet: it cannot land on the tick it is fired, got %d hits", n)
 	}
+	want := int(math.Round(60 / (SniperBulletSpeed * TickDT)))
+	landed := -1
+	for i := 1; i <= 20 && landed < 0; i++ {
+		d.step(nil, nil)
+		if len(eventsOf(d.a, protocol.EventKindHit)) > 0 {
+			landed = i
+		}
+	}
+	if landed < want-2 || landed > want+2 {
+		t.Fatalf("the sniper bullet landed %d ticks after the shot, want about %d", landed, want)
+	}
+	hit := eventsOf(d.a, protocol.EventKindHit)
 	if hit[0].Amount != SniperDamage*SniperHeadshotMult || hit[0].Flags&protocol.GameEventFlagHeadshot == 0 {
 		t.Fatalf("sniper headshot = %+v, want %v damage and the headshot flag", hit[0], float64(SniperDamage*SniperHeadshotMult))
 	}
@@ -750,12 +827,14 @@ func TestSniperBodyShotAndTheBoltCycle(t *testing.T) {
 	d.drawn()
 	d.step(sniperShot(bodyPitch*0.3), nil)
 	d.step(sniperShot(bodyPitch*0.3), nil) // held fire: the bolt is cycling, no second shot
+	d.idle(6)                              // the bullet's flight
 	hits := eventsOf(d.a, protocol.EventKindHit)
 	if len(hits) != 1 || hits[0].Amount != SniperDamage || hits[0].Flags&protocol.GameEventFlagHeadshot != 0 {
 		t.Fatalf("sniper body shot hits = %+v, want one for %v", hits, float64(SniperDamage))
 	}
-	d.idle(int(math.Ceil(60/SniperRpm*TickRate)) - 2)
+	d.idle(int(math.Ceil(60/SniperRpm*TickRate)) - 8)
 	d.step(sniperShot(bodyPitch*0.3), nil)
+	d.idle(6)
 	if n := len(eventsOf(d.a, protocol.EventKindHit)); n != 2 {
 		t.Fatalf("hits after the bolt cycle = %d, want 2", n)
 	}
@@ -818,8 +897,9 @@ func TestWeaponInHandIsShownToOthers(t *testing.T) {
 }
 
 func TestSniperLagCompensation(t *testing.T) {
-	// A target at 30 m sprints sideways. The sniper's hit is judged where the shooter's screen
-	// showed it, like any hitscan: aiming at where it was seen hits it.
+	// A target at 30 m sprints sideways. The sniper's bullet flies through the world the shooter's
+	// screen showed (5 ticks old here), so leading the target as it was seen hits it: the bullet
+	// reaches 30 m in its third tick of flight, where the target was seen three ticks on.
 	d := newDuel(t, nil, Vec3{}, Vec3{X: -4, Z: -30})
 	d.step(slotInput(2), &Input{MoveX: 1})
 	for i := 0; i < int(math.Ceil(WeaponSwitchTime*TickRate))+2; i++ {
@@ -827,7 +907,7 @@ func TestSniperLagCompensation(t *testing.T) {
 	}
 	// Where the shooter saw the target 5 ticks ago:
 	view := float64(d.w.tick) - 5
-	box, _ := d.w.hitboxAt(d.b, view)
+	box, _ := d.w.hitboxAt(d.b, view+3)
 	cx := (box.MinX + box.MaxX) / 2
 	yaw := math.Atan2(-cx, 30)
 	shot := sniperShot(0)
@@ -835,7 +915,7 @@ func TestSniperLagCompensation(t *testing.T) {
 	shot.ViewTick = view
 	d.step(shot, &Input{MoveX: 1})
 	if len(eventsOf(d.a, protocol.EventKindHit)) != 1 {
-		t.Fatal("a sniper shot aimed at where the screen showed the target should hit it")
+		t.Fatal("a sniper shot that leads the target as the screen showed it should hit it")
 	}
 }
 

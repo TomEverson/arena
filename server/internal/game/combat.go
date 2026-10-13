@@ -195,26 +195,7 @@ func (w *World) rewindView(claimed float64) float64 {
 	return math.Max(claimed, cur-CombatMaxRewindTicks)
 }
 
-// --- Shots -----------------------------------------------------------------
-
-// resolveShot traces one hitscan shot (the sniper's) from shooter against everyone else, as the
-// shooter saw them. Projectile weapons (the rifle) use fireBullet in bullets.go.
-func (w *World) resolveShot(shooter *Player, in *Input, shot *ShotResult, d *weaponDef) {
-	shooter.Health.ProtectedFor = 0 // firing ends spawn protection
-
-	s := &shooter.State
-	ox, oy, oz := s.X, s.Y+eyeHeight(s), s.Z
-	dx, dy, dz := ViewDirection(in.Yaw+shot.SpreadYaw, in.Pitch+shot.SpreadPitch)
-	w.shots.push(protocol.Shot{Tick: uint32(w.tick), Actor: shooter.ID, Gun: shooter.Weapon.Gun, X: ox, Y: oy, Z: oz, Dx: dx, Dy: dy, Dz: dz})
-
-	view := w.rewindView(in.ViewTick)
-	n := w.fillBoxes(shooter, view)
-	hit := CastRay(&w.level.Collision, w.boxes[:n], ox, oy, oz, dx, dy, dz, d.rng)
-	if hit.Kind != RayTarget {
-		return
-	}
-	w.applyHit(shooter, hit, d)
-}
+// --- Damage ----------------------------------------------------------------
 
 // damage applies a hit: shield first, then health; handles death and the kill reward.
 func (w *World) damage(shooter, victim *Player, amount float64, headshot bool, extra uint8) {
@@ -249,6 +230,7 @@ func (w *World) damage(shooter, victim *Player, amount float64, headshot bool, e
 		// A kill restores health and shield to full.
 		shooter.Health.Health = WeaponMaxHealth
 		shooter.Health.Shield = WeaponMaxShield
+		shooter.State.DashCharges = DashCharges // and gives both dashes back
 	}
 	for _, q := range w.players {
 		q.pushEvent(w.tick, protocol.EventKindKill, shooter.ID, victim.ID, 0, flags&protocol.GameEventFlagHeadshot, 0, 0)

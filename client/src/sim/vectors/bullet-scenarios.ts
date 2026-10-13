@@ -1,6 +1,6 @@
 /** Scenarios recorded into /testvectors/bullet. */
 import type { Hitbox } from "../hitscan";
-import { PARAMS as P, WEAPON as W } from "../params";
+import { PARAMS as P, SNIPER, WEAPON as W } from "../params";
 import { box, flatWorld } from "../testutil";
 import { viewDirection } from "../weapon";
 import { type BulletStepRecord, type BulletVector, runBullet, VECTOR_DT } from "./bullet-format";
@@ -15,6 +15,7 @@ export interface BulletScenario {
   dir: [number, number, number];
   speed?: number;
   range?: number;
+  gravity?: number;
   /** Target boxes at step i. */
   targets?: (step: number) => Hitbox[];
   /** How many steps' worth of targets to record. */
@@ -135,8 +136,8 @@ export const bulletScenarios: BulletScenario[] = [
       "A target runs across at 10 m/s, 30 m ahead: a shot aimed at where it will be hits; a shot at where it is misses.",
     world: { boxes: open.boxes, ramps: open.ramps },
     origin: EYE,
-    // 30 m at 300 m/s is 0.1 s; the target runs 1 m by then: lead it by about 1 m (atan(1/30)).
-    dir: viewDirection(-Math.atan2(1, 30), 0.003),
+    // The target runs 10 m/s for as long as the bullet takes to fly 30 m: lead it by that much.
+    dir: viewDirection(-Math.atan2((10 * 30) / W.bulletSpeed, 30), 0.003),
     targetSteps: 40,
     targets: (i) => [target(3, (10 * i) / 60, -30)],
     verify: (steps) => {
@@ -170,6 +171,24 @@ export const bulletScenarios: BulletScenario[] = [
       check(l.hit.kind === "world" && l.y < 1.3, "dropped over 30 cm before the wall");
     },
   },
+  {
+    name: "bullet-sniper",
+    description:
+      "The sniper's bullet (its own speed, drop and range): level from eye height at a target 100 m away, it takes time to arrive and still lands on the head.",
+    world: { boxes: open.boxes, ramps: open.ramps },
+    origin: EYE,
+    dir: FORWARD,
+    speed: SNIPER.bulletSpeed,
+    range: SNIPER.range,
+    gravity: SNIPER.bulletGravity,
+    targets: () => [target(9, 0, -100)],
+    verify: (steps) => {
+      const l = last(steps);
+      check(steps.length > 3, "not instant: it flies for several ticks");
+      check(l.hit.kind === "target" && l.hit.targetId === 9 && l.hit.headshot, "a headshot");
+      check(l.y < 1.6 - 0.05, "it dropped on the way");
+    },
+  },
 ];
 
 export function recordBullet(sc: BulletScenario): BulletVector {
@@ -182,6 +201,7 @@ export function recordBullet(sc: BulletScenario): BulletVector {
     dir,
     speed: sc.speed ?? W.bulletSpeed,
     range: sc.range ?? W.range,
+    gravity: sc.gravity ?? W.bulletGravity,
     targets: Array.from({ length: targetSteps }, (_, i) => sc.targets?.(i) ?? []),
   };
   const steps = runBullet(base, loadWorld(sc.world));

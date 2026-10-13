@@ -28,6 +28,8 @@ export interface BulletVector {
   dir: [number, number, number];
   speed: number;
   range: number;
+  /** How fast the bullet falls (m/s²): each gun has its own. */
+  gravity: number;
   /** The target boxes for each step (entry i is used for step i; the last repeats if short). */
   targets: Hitbox[][];
   /** What the bullet looked like after each step, until it was done. */
@@ -48,7 +50,7 @@ export function runBullet(
   const b: Bullet = spawnBullet(v.origin, v.dir, v.speed);
   const out: BulletStepRecord[] = [];
   for (let i = 0; i < MAX_STEPS && !b.done; i++) {
-    const hit = stepBullet(b, v.dt, world, targetsAt(v, i), v.range);
+    const hit = stepBullet(b, v.dt, world, targetsAt(v, i), v.range, v.gravity);
     out.push({
       x: b.x,
       y: b.y,

@@ -247,6 +247,7 @@ func (w *World) damageTarget(shooter *Player, t *Target, amount float64, headsho
 	if killed {
 		t.Health.Alive = false
 		t.Health.RespawnIn = CombatTargetRespawn
+		shooter.State.DashCharges = DashCharges // a kill gives both dashes back, as against a player
 		for _, q := range w.players {
 			q.pushEvent(w.tick, protocol.EventKindKill, shooter.ID, t.ID, 0, flags&protocol.GameEventFlagHeadshot, 0, 0)
 		}

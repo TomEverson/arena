@@ -440,6 +440,34 @@ func airborneAssassin(t *testing.T, victimAt Vec3) *duel {
 	return d
 }
 
+// slashWindupTicks is how many ticks after the press the dash cut's dash has certainly begun.
+var slashWindupTicks = int(math.Ceil(SkillSlashWindup*TickRate)) + 1
+
+// cut presses the dash cut and waits out its wind-up: the dash has just begun.
+func (d *duel) cut() {
+	d.step(&Input{Dash: true}, nil)
+	d.idle(slashWindupTicks)
+}
+
+func TestTheDashCutWindsUpBeforeItDashes(t *testing.T) {
+	d := airborneAssassin(t, Vec3{Y: 4, Z: -2})
+	d.step(&Input{Dash: true}, nil)
+	if d.a.Weapon.SlashT <= 0 || d.a.State.DashTime > 0 || d.b.Health.Shield != WeaponMaxShield {
+		t.Fatalf("on the press it should only wind up: SlashT %v, DashTime %v, victim shield %v", d.a.Weapon.SlashT, d.a.State.DashTime, d.b.Health.Shield)
+	}
+	if d.a.Entity.Flags&protocol.EntityFlagSlashing == 0 {
+		t.Fatal("others should see the blades come out during the wind-up")
+	}
+	d.idle(slashWindupTicks - 4)
+	if d.a.State.DashTime > 0 {
+		t.Fatal("it dashed before the wind-up was over")
+	}
+	d.idle(4)
+	if d.a.State.DashTime <= 0 || d.a.Weapon.SlashT != 0 {
+		t.Fatalf("after the wind-up it should be dashing: DashTime %v, SlashT %v", d.a.State.DashTime, d.a.Weapon.SlashT)
+	}
+}
+
 func TestGrappleIsOnlyForTheAssassinAndShowsAHookToOthers(t *testing.T) {
 	lv := FlatLevel()
 	lv.Collision.Boxes = append(lv.Collision.Boxes, Aabb{MinX: -20, MaxX: 20, MinY: 0, MaxY: 20, MinZ: -30, MaxZ: -20})
@@ -473,7 +501,7 @@ func TestGrappleIsOnlyForTheAssassinAndShowsAHookToOthers(t *testing.T) {
 
 func TestAirSlashHitsEveryoneInFrontWithinReachAndLunges(t *testing.T) {
 	d := airborneAssassin(t, Vec3{Y: 4, Z: -2}) // just ahead, about level
-	d.step(&Input{Dash: true}, nil)
+	d.cut()
 	full := float64(WeaponMaxHealth + WeaponMaxShield)
 	if lost := full - d.b.Health.Health - d.b.Health.Shield; lost != SkillSlashDamage {
 		t.Fatalf("the slash did %v damage, want %v", lost, float64(SkillSlashDamage))
@@ -493,22 +521,41 @@ func TestAirSlashHitsEveryoneInFrontWithinReachAndLunges(t *testing.T) {
 	}
 }
 
-func TestSpinningSlashHitsBehindAndOnTheGroundButNotOutOfReach(t *testing.T) {
-	behind := airborneAssassin(t, Vec3{Y: 4, Z: 2})
-	behind.step(&Input{Dash: true}, nil)
-	if behind.b.Health.Shield == WeaponMaxShield {
-		t.Fatal("it is a spin: someone just behind should be hit")
+func TestDashCutHitsAlongTheDashOnceAndNotBehindOrOutOfReach(t *testing.T) {
+	full := float64(WeaponMaxHealth + WeaponMaxShield)
+	lost := func(d *duel) float64 { return full - d.b.Health.Health - d.b.Health.Shield }
+	// through runs the whole dash and a little more.
+	through := func(d *duel) {
+		d.cut()
+		d.idle(slashCutTicks + 6)
 	}
-	far := airborneAssassin(t, Vec3{Y: 4, Z: -6})
-	far.step(&Input{Dash: true}, nil)
-	if far.b.Health.Shield != WeaponMaxShield {
-		t.Fatal("the slash hit someone out of reach")
+	behind := airborneAssassin(t, Vec3{Y: 4, Z: 2})
+	through(behind)
+	if lost(behind) != 0 {
+		t.Fatal("it is a cut ahead of the dash: someone just behind should not be hit")
+	}
+	// Someone the dash reaches is cut on the way, once, though out of reach when it starts.
+	ahead := airborneAssassin(t, Vec3{Y: 4, Z: -6})
+	ahead.step(&Input{Dash: true}, nil)
+	if lost(ahead) != 0 {
+		t.Fatal("6 m ahead is out of reach when the dash starts")
+	}
+	ahead.idle(slashWindupTicks + slashCutTicks + 6)
+	if lost(ahead) != SkillSlashDamage {
+		t.Fatalf("the dash passed them: lost %v, want one cut of %v", lost(ahead), float64(SkillSlashDamage))
+	}
+	far := airborneAssassin(t, Vec3{Y: 4, Z: -12})
+	through(far)
+	side := airborneAssassin(t, Vec3{X: 4, Y: 4, Z: -3})
+	through(side)
+	if lost(far) != 0 || lost(side) != 0 {
+		t.Fatalf("the cut hit someone the dash never reached: far lost %v, side lost %v", lost(far), lost(side))
 	}
 	// It works standing on the ground too.
 	d := newDuel(t, nil, Vec3{}, Vec3{Z: -2})
 	d.a.Health.Hero = protocol.HeroKindAssassin
 	d.idle(3) // standing on the ground
-	d.step(&Input{Dash: true}, nil)
+	d.cut()
 	if d.b.Health.Shield == WeaponMaxShield || d.a.Weapon.SkillQT == 0 {
 		t.Fatalf("on the ground the slash should hit and go on cooldown: shield %v, cooldown %v", d.b.Health.Shield, d.a.Weapon.SkillQT)
 	}
@@ -517,7 +564,7 @@ func TestSpinningSlashHitsBehindAndOnTheGroundButNotOutOfReach(t *testing.T) {
 func TestAKillWithTheSlashMakesItReadyAgain(t *testing.T) {
 	d := airborneAssassin(t, Vec3{Y: 4, Z: -2})
 	d.b.Health.Shield, d.b.Health.Health = 0, 10
-	d.step(&Input{Dash: true}, nil)
+	d.cut()
 	if d.b.Health.Alive || d.a.Weapon.SkillQT != 0 {
 		t.Fatalf("victim alive %v, slash cooldown %v: want a kill and the slash ready", d.b.Health.Alive, d.a.Weapon.SkillQT)
 	}
@@ -654,9 +701,99 @@ func TestThunderSpearSticksInABodyForImpactDamageThenExplodes(t *testing.T) {
 	if lost := full - d.b.Health.Health - d.b.Health.Shield; lost != SpearDamage {
 		t.Fatalf("on impact it did %v, want the launcher's %v", lost, float64(SpearDamage))
 	}
-	d.settle(int(SkillSpearFuse*TickRate) + 5)
-	if lost := full - d.b.Health.Health - d.b.Health.Shield; lost <= SpearDamage+SkillSpearDamage*0.8 {
-		t.Fatalf("after it went off the total is %v: the blast at the body should be near its full %v", lost, float64(SkillSpearDamage))
+	// The victim runs off with it stuck in them: it goes where they go, and the blast is theirs.
+	away := &Input{MoveX: 1}
+	for i := 0; i < 20; i++ {
+		d.step(nil, away)
+	}
+	if sp := spears(d.w); len(sp) != 1 || math.Abs(sp[0].X-d.b.State.X) > HalfWidth+0.1 || d.b.State.X < 1 {
+		t.Fatalf("the spear should be carried along: spears %+v, victim at x = %v", sp, d.b.State.X)
+	}
+	for i := 0; i < int(SkillSpearFuse*TickRate)+5; i++ {
+		d.step(nil, away)
+	}
+	if len(spears(d.w)) != 0 {
+		t.Fatal("the spear should have gone off")
+	}
+	blast := eventsOf(d.b, protocol.EventKindHurt)
+	if last := blast[len(blast)-1]; last.Amount != SkillSpearDamage || last.Flags&protocol.GameEventFlagBlast == 0 {
+		t.Fatalf("stuck in a body, the blast should do its full %v to them wherever they ran: %+v", float64(SkillSpearDamage), last)
+	}
+	if d.b.Health.Alive {
+		t.Fatal("impact and blast together are more than full health and shield: they should be dead")
+	}
+}
+
+func TestThunderSpearBlastIsFullNearbyThenFallsOff(t *testing.T) {
+	// The blast at the origin on the ground; a body standing so its near face is `gap` metres away.
+	w := NewWorld(FlatLevel())
+	at := func(gap float64) float64 {
+		return w.blastDamage(0, 0.05, 0, gap+HalfWidth, 0, 0, StandHeight, SkillSpearCore, SkillSpearRadius, SkillSpearDamage)
+	}
+	if at(0) != SkillSpearDamage || at(SkillSpearCore-0.01) != SkillSpearDamage {
+		t.Fatalf("within %v m the blast should do its full %v: %v at the body, %v just inside", float64(SkillSpearCore), float64(SkillSpearDamage), at(0), at(SkillSpearCore-0.01))
+	}
+	// (With the core as wide as the blast there is no falling off at all: full, then nothing.)
+	if mid := (SkillSpearCore + SkillSpearRadius) / 2.0; SkillSpearCore < SkillSpearRadius {
+		if got := at(mid); math.Abs(got-SkillSpearDamage/2) > 0.01 {
+			t.Fatalf("half way out from there it should do half: %v at %v m", got, mid)
+		}
+	}
+	if at(SkillSpearRadius) != 0 || at(SkillSpearRadius+1) != 0 {
+		t.Fatalf("nothing at %v m and beyond: %v, %v", float64(SkillSpearRadius), at(SkillSpearRadius), at(SkillSpearRadius+1))
+	}
+}
+
+func TestASpearThatWentOffIsRemovedFromEveryScreen(t *testing.T) {
+	// What a client would have on screen, rebuilt from the snapshots it is sent: a full one
+	// replaces everything, a delta adds or updates its entities and takes away its removals.
+	d := assassinWithSpears(t, nil, Vec3{X: 6, Z: -6})
+	screens := map[*Player]map[uint32]uint8{d.a: {}, d.b: {}}
+	sawSpear := map[*Player]bool{}
+	step := func(in *Input) {
+		if in != nil {
+			x := *in
+			d.seq[d.a.ID]++
+			x.Seq = d.seq[d.a.ID]
+			d.w.SubmitInput(d.a.ID, x)
+		}
+		d.w.Step()
+		for p, screen := range screens {
+			for len(p.Out) > 0 {
+				s := <-p.Out
+				if s.Full {
+					clear(screen)
+				}
+				for _, e := range s.Entities {
+					screen[e.ID] = e.Kind
+					sawSpear[p] = sawSpear[p] || e.Kind == protocol.EntityKindSpear
+				}
+				for _, id := range s.Removed {
+					delete(screen, id)
+				}
+				p.Free <- s
+			}
+		}
+	}
+	for i := 0; i < 10; i++ {
+		step(&Input{}) // both have their first, full snapshot
+	}
+	step(&Input{Fire: true, ADS: true, Pitch: -0.3}) // into the ground a few metres ahead
+	for i := 0; i < int(SkillSpearFuse*TickRate)+60; i++ {
+		step(&Input{})
+	}
+	if len(spears(d.w)) != 0 {
+		t.Fatal("the spear should have gone off")
+	}
+	for p, screen := range screens {
+		if !sawSpear[p] {
+			t.Fatalf("player %d was never shown the spear: the test proves nothing", p.ID)
+		}
+		for id, kind := range screen {
+			if kind == protocol.EntityKindSpear {
+				t.Fatalf("player %d still has spear %d on screen after it went off", p.ID, id)
+			}
+		}
 	}
 }
 
@@ -690,17 +827,51 @@ func TestOverdriveHoldsTheAssassinToTheBlades(t *testing.T) {
 	}
 }
 
+func TestOverdriveKeepsTheSpearsAndReloadsThemInHalfTheTime(t *testing.T) {
+	d := assassinWithSpears(t, nil, Vec3{X: 40})
+	d.a.Health.Ult = 1
+	d.step(&Input{Ult: true}, nil)
+	d.step(&Input{}, nil)
+	if d.a.Health.Overdrive <= 0 || d.a.Weapon.Slot != 1 || d.a.Weapon.Gun != 2 {
+		t.Fatalf("overdrive should leave the spears in hand: overdrive %v, weapon %+v", d.a.Health.Overdrive, d.a.Weapon)
+	}
+	d.step(&Input{Slot: 1}, nil)
+	if d.a.Weapon.Slot != 1 {
+		t.Fatal("the sniper's slot should do nothing during overdrive")
+	}
+	// Both spears, then the reload that follows by itself.
+	for i := 0; i < 400 && d.a.Weapon.ReloadT == 0; i++ {
+		d.step(&Input{Fire: true, Pitch: 0.5}, nil)
+	}
+	if n := len(spears(d.w)); n == 0 {
+		t.Fatal("the spears should fire during overdrive")
+	}
+	if want := SpearReloadTime * SkillOverdriveReload; math.Abs(d.a.Weapon.ReloadT-want) > 0.05 {
+		t.Fatalf("the reload in overdrive takes %v s, want %v", d.a.Weapon.ReloadT, want)
+	}
+	if SkillOverdriveSeconds != 10 {
+		t.Fatalf("overdrive lasts %v s, want 10", float64(SkillOverdriveSeconds))
+	}
+}
+
 func TestRollingDiveCutsWhoItPassesOnceAndSlamsOnLanding(t *testing.T) {
-	// In the air at 6 m, a victim on the ground 6 m ahead: dive at their feet.
-	d := newDuel(t, nil, Vec3{Y: 6}, Vec3{Z: -6})
+	// In the air at 7.5 m (about 6 m once the wind-up is over), a victim on the ground 6 m
+	// ahead: dive at their feet.
+	d := newDuel(t, nil, Vec3{Y: 7.5}, Vec3{Z: -6})
 	d.a.Health.Hero = protocol.HeroKindAssassin
-	d.a.State = SpawnState(0, 6, 0)
+	d.a.State = SpawnState(0, 7.5, 0)
 	pitch := -math.Atan2(6+StandEye-1, 6) // down at the victim's middle
 	d.step(&Input{SkillE: true, Pitch: pitch}, nil)
-	if d.a.State.RollT <= 0 || d.a.Entity.Flags&protocol.EntityFlagRolling == 0 {
-		t.Fatalf("E in the air should start the dive: %+v", d.a.State)
+	if d.a.Weapon.DiveT <= 0 || d.a.State.RollT > 0 || d.a.Entity.Flags&protocol.EntityFlagDivePrep == 0 {
+		t.Fatalf("on the press it should only wind up, and show it: DiveT %v, RollT %v, flags %b", d.a.Weapon.DiveT, d.a.State.RollT, d.a.Entity.Flags)
 	}
-	if d.a.Weapon.SkillET < SkillRollCooldown-0.1 {
+	for i := 0; i < int(math.Ceil(SkillRollWindup*TickRate))+1; i++ {
+		d.step(&Input{Pitch: pitch}, nil) // the wind-up
+	}
+	if d.a.State.RollT <= 0 || d.a.Entity.Flags&protocol.EntityFlagRolling == 0 {
+		t.Fatalf("after the wind-up E in the air should be diving: %+v", d.a.State)
+	}
+	if d.a.Weapon.SkillET < SkillRollCooldown-SkillRollWindup-0.1 {
 		t.Fatalf("the dive should be on cooldown, got %v", d.a.Weapon.SkillET)
 	}
 	for i := 0; i < 40 && (d.a.State.RollT > 0 || !d.a.State.OnGround); i++ {
@@ -729,6 +900,66 @@ func TestRollingDiveCutsWhoItPassesOnceAndSlamsOnLanding(t *testing.T) {
 	}
 }
 
+func TestTheDiveCutsHarderTheFurtherItHasDropped(t *testing.T) {
+	if diveDropMult(0) != 1 || diveDropMult(SkillRollDropMin) != 1 {
+		t.Fatalf("no bonus for a low dive: %v at 0 m, %v at %v m", diveDropMult(0), diveDropMult(SkillRollDropMin), float64(SkillRollDropMin))
+	}
+	mid := (SkillRollDropMin + SkillRollDropFull) / 2.0
+	if got, want := diveDropMult(mid), (1+SkillRollDropMult)/2; math.Abs(got-want) > 1e-9 {
+		t.Fatalf("half way up the bonus should be half: %v at %v m, want %v", got, mid, want)
+	}
+	if diveDropMult(SkillRollDropFull) != SkillRollDropMult || diveDropMult(100) != SkillRollDropMult {
+		t.Fatalf("the bonus tops out at %v: got %v at full height and %v far above it", float64(SkillRollDropMult), diveDropMult(SkillRollDropFull), diveDropMult(100))
+	}
+	if SkillRollDamage*SkillRollDropMult < WeaponMaxHealth+WeaponMaxShield {
+		t.Fatal("from full height the cut should kill a player on full health and shield")
+	}
+
+	// dive starts a dive from `height` metres straight above a victim standing on the ground,
+	// and returns the damage of the cut.
+	dive := func(height float64) float64 {
+		// (Started above that, so it is at `height` once the wind-up is over.)
+		from := height + 1.6
+		d := newDuel(t, nil, Vec3{Y: from}, Vec3{})
+		d.a.Health.Hero = protocol.HeroKindAssassin
+		d.a.State = SpawnState(0, from, 0)
+		down := &Input{Pitch: -math.Pi / 2}
+		d.step(&Input{SkillE: true, Pitch: -math.Pi / 2}, nil)
+		for i := 0; i < 200 && (d.a.Weapon.DiveT > 0 || d.a.State.RollT > 0); i++ {
+			d.step(down, nil)
+		}
+		for _, e := range eventsOf(d.a, protocol.EventKindHit) {
+			if e.Flags&protocol.GameEventFlagSlash != 0 {
+				return e.Amount
+			}
+		}
+		t.Fatalf("a dive from %v m straight down never cut the victim below", height)
+		return 0
+	}
+	if low := dive(4); low != SkillRollDamage {
+		t.Fatalf("a 4 m dive cut for %v, want the plain %v", low, float64(SkillRollDamage))
+	}
+	high := dive(40)
+	if high < WeaponMaxHealth+WeaponMaxShield {
+		t.Fatalf("a 40 m dive cut for %v, want a one-hit kill (%v or more)", high, float64(WeaponMaxHealth+WeaponMaxShield))
+	}
+}
+
+func TestLandingDuringTheDivesWindUpCallsItOff(t *testing.T) {
+	// Half a metre up: on the ground again before the wind-up is over.
+	d := newDuel(t, nil, Vec3{Y: 0.5}, Vec3{X: 40})
+	d.a.Health.Hero = protocol.HeroKindAssassin
+	d.a.State = SpawnState(0, 0.5, 0)
+	d.step(&Input{SkillE: true}, nil)
+	if d.a.Weapon.DiveT <= 0 {
+		t.Fatal("E in the air should start the wind-up")
+	}
+	d.idle(int(math.Ceil(SkillRollWindup*TickRate)) + 4)
+	if d.a.State.RollT > 0 || d.a.Weapon.DiveT != 0 || d.a.Weapon.SkillET != 0 {
+		t.Fatalf("landing first should call the dive off and leave it ready: RollT %v, DiveT %v, cooldown %v", d.a.State.RollT, d.a.Weapon.DiveT, d.a.Weapon.SkillET)
+	}
+}
+
 func TestTheAssassinsDashIsItsSlashAndItHasNoAirJump(t *testing.T) {
 	d := newDuel(t, nil, Vec3{}, Vec3{X: 40})
 	d.a.Health.Hero = protocol.HeroKindAssassin
@@ -737,7 +968,10 @@ func TestTheAssassinsDashIsItsSlashAndItHasNoAirJump(t *testing.T) {
 	// dashes straight ahead, where it is looking.
 	d.step(&Input{Dash: true, MoveX: 1}, nil)
 	if d.a.Weapon.SkillQT == 0 {
-		t.Fatal("the dash button should be the spinning slash")
+		t.Fatal("the dash button should be the dash cut")
+	}
+	for i := 0; i < slashWindupTicks; i++ {
+		d.step(&Input{MoveX: 1}, nil) // the wind-up
 	}
 	if d.a.State.DashTime <= 0 || d.a.State.DashDirZ > -0.99 || math.Abs(d.a.State.DashDirX) > 0.01 {
 		t.Fatalf("the slash should dash straight ahead: %+v", d.a.State)

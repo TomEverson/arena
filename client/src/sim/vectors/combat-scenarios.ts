@@ -66,6 +66,11 @@ function fuzzSteps(seed: number, ticks: number): WeaponVector["steps"] {
   return steps;
 }
 
+/** The same in overdrive, where the reload takes less time. */
+const OD_SPEAR_HOLD = Math.round((SPEAR.reloadTime * SKILL.overdriveReload + 4.67) / VECTOR_DT);
+/** Ticks of held fire with the spears: long enough to fire both, reload, and fire again. */
+const SPEAR_HOLD = Math.round((SPEAR.reloadTime + 4.67) / VECTOR_DT);
+
 export const weaponScenarios: WeaponScenario[] = [
   {
     name: "weapon-spray-hip",
@@ -173,7 +178,7 @@ export const weaponScenarios: WeaponScenario[] = [
     seed: 13,
     steps: [
       { ticks: 1, input: { ...IDLE, hero: 1, slot: 2 }, ctx: STILL },
-      { ticks: 520, input: { ...HOLD, hero: 1 }, ctx: STILL },
+      { ticks: SPEAR_HOLD, input: { ...HOLD, hero: 1 }, ctx: STILL },
       { ticks: 1, input: { ...IDLE, hero: 1, slot: 3 }, ctx: STILL },
       { ticks: 20, input: { ...HOLD, hero: 1 }, ctx: STILL },
       { ticks: 1, input: { ...IDLE, hero: 1, slot: 1 }, ctx: STILL },
@@ -183,14 +188,17 @@ export const weaponScenarios: WeaponScenario[] = [
       // (t[0] is the state before the first tick.)
       check(t[1]?.gun === 2 && t[1]?.ammo === SPEAR.magSize, "slot 2 is the spears, full");
       check(t[1]?.stash === SNIPER.magSize, "the sniper's rounds are put by");
-      const shots = ev.filter((e) => e.fired && e.tick <= 521).length;
+      const shots = ev.filter((e) => e.fired && e.tick <= SPEAR_HOLD + 1).length;
       check(shots >= SPEAR.magSize + 1, "fired the spears, reloaded, fired again");
       check(
-        ev.some((e) => e.reloadStarted && e.tick <= 521),
+        ev.some((e) => e.reloadStarted && e.tick <= SPEAR_HOLD + 1),
         "reloaded the spears",
       );
-      check(t[522]?.slot === 2, "slot 3 is the hands (the blades)");
-      check(!ev.some((e) => e.fired && e.tick > 522 && e.tick <= 542), "the blades do not fire");
+      check(t[SPEAR_HOLD + 2]?.slot === 2, "slot 3 is the hands (the blades)");
+      check(
+        !ev.some((e) => e.fired && e.tick > SPEAR_HOLD + 2 && e.tick <= SPEAR_HOLD + 22),
+        "the blades do not fire",
+      );
       const end = t[t.length - 1];
       check(end?.gun === 1 && end.slot === 0, "slot 1 is the sniper again");
       check((end?.ammo ?? 9) < SNIPER.magSize, "and it fires");
@@ -200,7 +208,7 @@ export const weaponScenarios: WeaponScenario[] = [
     name: "weapon-slash",
     hero: 1,
     description:
-      "The Assassin's two blade skills: the dash button is the spinning slash (ground or air), E is the rolling dive (air only); each has its own cooldown, and the Trooper's skills never fire.",
+      "The Assassin's two blade skills: the dash button is the dash cut (ground or air; a wind-up, then the dash), E is the rolling dive (air only); each has its own cooldown, and the Trooper's skills never fire.",
     seed: 11,
     steps: [
       { ticks: 10, input: { ...IDLE, hero: 1, dash: true, skillE: true }, ctx: STILL },
@@ -211,18 +219,27 @@ export const weaponScenarios: WeaponScenario[] = [
       },
     ],
     verify: (_t, ev) => {
+      const starts = ev.filter((e) => e.slashStarted).map((e) => e.tick);
       const slashes = ev.filter((e) => e.slash).map((e) => e.tick);
       const rolls = ev.filter((e) => e.roll).map((e) => e.tick);
-      check(slashes[0] === 1, "a slash on the first press, standing on the ground");
-      // (Give or take a tick: the cooldowns are counted down in sixtieths.)
+      const windup = Math.round(SKILL.slashWindup / VECTOR_DT);
+      check(starts[0] === 1, "the cut starts on the first press, standing on the ground");
+      // (Give or take a tick: the timers are counted down in sixtieths.)
+      check(Math.abs((slashes[0] ?? 0) - 1 - windup) <= 1, "its dash comes after the wind-up");
       check(
-        Math.abs((slashes[1] ?? 0) - 1 - Math.round(SKILL.slashCooldown / VECTOR_DT)) <= 1,
-        "the slash again one cooldown later",
+        Math.abs((starts[1] ?? 0) - 1 - Math.round(SKILL.slashCooldown / VECTOR_DT)) <= 1,
+        "the cut again one cooldown after the press",
       );
-      check(rolls[0] === 11, "no dive on the ground; one on the first tick in the air");
+      check(slashes.length === starts.length, "every wind-up ends in one dash");
+      const rollStarts = ev.filter((e) => e.rollStarted).map((e) => e.tick);
+      check(rollStarts[0] === 11, "no dive on the ground; one starts on the first tick in the air");
       check(
-        Math.abs((rolls[1] ?? 0) - 11 - Math.round(SKILL.rollCooldown / VECTOR_DT)) <= 1,
-        "the dive again one cooldown later",
+        Math.abs((rolls[0] ?? 0) - 11 - Math.round(SKILL.rollWindup / VECTOR_DT)) <= 1,
+        "it dives after the wind-up",
+      );
+      check(
+        Math.abs((rollStarts[1] ?? 0) - 11 - Math.round(SKILL.rollCooldown / VECTOR_DT)) <= 1,
+        "the dive again one cooldown after the press",
       );
       check(!ev.some((e) => e.grenade || e.barrier), "no Trooper skills for the Assassin");
     },
@@ -231,7 +248,7 @@ export const weaponScenarios: WeaponScenario[] = [
     name: "weapon-overdrive",
     hero: 1,
     description:
-      "Overdrive: held to the blades, one slash straight after another (the only wait is the spin itself), and holding fire does nothing; afterwards the gun comes out again on a slot press.",
+      "Overdrive: held to the blades, one dash cut straight after another (the only wait is the move itself), and holding fire does nothing; afterwards the gun comes out again on a slot press.",
     seed: 12,
     steps: [
       {
@@ -244,16 +261,41 @@ export const weaponScenarios: WeaponScenario[] = [
       { ticks: 60, input: { ...HOLD, hero: 1 }, ctx: { ...STILL, onGround: false } },
     ],
     verify: (_t, ev) => {
-      const at = ev.filter((e) => e.slash).map((e) => e.tick);
+      const at = ev.filter((e) => e.slashStarted).map((e) => e.tick);
       const spin = Math.round(SKILL.slashSpin / VECTOR_DT);
-      check(at.length === 2 && at[0] === 1, "E held for half a second: two slashes, not thirty");
-      check(Math.abs((at[1] ?? 0) - 1 - spin) <= 1, "the second as soon as the first spin is over");
+      check(at.length === 2 && at[0] === 1, "held for half a second: two cuts, not thirty");
+      check(Math.abs((at[1] ?? 0) - 1 - spin) <= 1, "the second as soon as the first is over");
+      check(ev.filter((e) => e.slash).length === 2, "and each one dashes, after its wind-up");
       check(ev[0]?.switched === true, "held to the blades");
       check(!ev.some((e) => e.fired && e.tick <= 30), "no shots during overdrive");
       check(
         ev.some((e) => e.fired && e.tick > 30),
         "the gun works again afterwards",
       );
+    },
+  },
+  {
+    name: "weapon-overdrive-spears",
+    hero: 1,
+    description:
+      "Overdrive with the spears in hand: they stay out and fire, their reload takes half as long, and the sniper's slot does nothing.",
+    seed: 14,
+    steps: [
+      { ticks: 1, input: { ...IDLE, hero: 1, slot: 2 }, ctx: STILL },
+      { ticks: 40, input: { ...IDLE, hero: 1 }, ctx: STILL }, // the draw
+      { ticks: OD_SPEAR_HOLD, input: { ...HOLD, hero: 1, overdrive: true }, ctx: STILL },
+      { ticks: 1, input: { ...IDLE, hero: 1, overdrive: true, slot: 1 }, ctx: STILL },
+    ],
+    verify: (t, ev) => {
+      check(!ev.some((e) => e.switched && e.tick > 1), "the spears stay in hand in overdrive");
+      const shots = ev.filter((e) => e.fired).map((e) => e.tick);
+      check(shots.length >= SPEAR.magSize + 1, "fired both spears, reloaded, fired again");
+      const started = ev.find((e) => e.reloadStarted)?.tick ?? 0;
+      const done = ev.find((e) => e.reloadFinished)?.tick ?? 0;
+      const want = Math.round((SPEAR.reloadTime * SKILL.overdriveReload) / VECTOR_DT);
+      check(started > 0 && Math.abs(done - started - want) <= 1, "the reload took half as long");
+      const end = t[t.length - 1];
+      check(end?.gun === 2 && end.slot === 1, "the sniper's slot did nothing");
     },
   },
   {

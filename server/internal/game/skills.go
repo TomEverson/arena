@@ -56,6 +56,10 @@ type spear struct {
 	flown      float64 // metres so far
 	stuck      bool
 	fuse       float64 // seconds until it goes off, once stuck
+	// stuckIn is the player or practice target it is stuck in (0: a wall or the ground), and
+	// (ox, oy, oz) is where on them, from their feet: it goes where they go until it goes off.
+	stuckIn    uint32
+	ox, oy, oz float64
 }
 
 type barrier struct {
@@ -223,12 +227,12 @@ func (w *World) flyGrenade(g *grenade) bool {
 
 // explode sets off a grenade: its blast radius and damage.
 func (w *World) explode(g *grenade) {
-	w.explodeAt(g.owner, g.X, g.Y, g.Z, SkillGrenadeRadius, SkillGrenadeDamage)
+	w.explodeAt(g.owner, g.X, g.Y, g.Z, 0, SkillGrenadeRadius, SkillGrenadeDamage)
 }
 
 // explodeAt hurts everyone within radius of (x, y, z) who has a clear line to it, the owner
 // included: full damage at the centre, falling to nothing at the edge.
-func (w *World) explodeAt(ownerID uint32, x, y, z, radius, damage float64) {
+func (w *World) explodeAt(ownerID uint32, x, y, z, core, radius, damage float64) {
 	owner := w.byID(ownerID)
 	if owner == nil {
 		return // the owner left: a dud
@@ -238,7 +242,7 @@ func (w *World) explodeAt(ownerID uint32, x, y, z, radius, damage float64) {
 			continue // in the range players cannot hurt each other
 		}
 		s := &q.State
-		if dmg := w.blastDamage(x, y, z, s.X, s.Y, s.Z, bodyHeight(s), radius, damage); dmg > 0 {
+		if dmg := w.blastDamage(x, y, z, s.X, s.Y, s.Z, bodyHeight(s), core, radius, damage); dmg > 0 {
 			w.dealDamage(owner, q.ID, dmg, false, protocol.GameEventFlagBlast)
 		}
 	}
@@ -248,15 +252,16 @@ func (w *World) explodeAt(ownerID uint32, x, y, z, radius, damage float64) {
 			continue
 		}
 		e := t.live(w.tick)
-		if dmg := w.blastDamage(x, y, z, e.x, e.y, e.z, e.height, radius, damage); dmg > 0 {
+		if dmg := w.blastDamage(x, y, z, e.x, e.y, e.z, e.height, core, radius, damage); dmg > 0 {
 			w.dealDamage(owner, t.ID, dmg, false, protocol.GameEventFlagBlast)
 		}
 	}
 }
 
 // blastDamage is the damage a blast at (gx, gy, gz) does to a body standing at (x, y, z): full
-// at the body's surface, falling to nothing at the radius, and nothing through a wall.
-func (w *World) blastDamage(gx, gy, gz, x, y, z, height, radius, damage float64) float64 {
+// within `core` metres of the body's surface (0 for a blast that is only full right at it),
+// falling to nothing at the radius, and nothing through a wall.
+func (w *World) blastDamage(gx, gy, gz, x, y, z, height, core, radius, damage float64) float64 {
 	// Distance to the nearest point of the body, so being beside a grenade counts as close.
 	cx := clamp(gx, x-HalfWidth, x+HalfWidth)
 	cy := clamp(gy, y, y+height)
@@ -272,7 +277,10 @@ func (w *World) blastDamage(gx, gy, gz, x, y, z, height, radius, damage float64)
 			return 0
 		}
 	}
-	return damage * (1 - d/radius)
+	if d <= core {
+		return damage
+	}
+	return damage * (1 - (d-core)/(radius-core))
 }
 
 // --- Thunder spear (the Assassin's second gun) -------------------------------
@@ -297,15 +305,38 @@ func (w *World) fireSpear(p *Player, in *Input, shot *ShotResult) {
 	}
 }
 
+// feetOf is where the living player or practice target with this id stands.
+func (w *World) feetOf(id uint32) (x, y, z float64, ok bool) {
+	if id >= CombatTargetIdBase {
+		if t := w.targetByID(id); t != nil && t.Health.Alive {
+			e := t.live(w.tick)
+			return e.x, e.y, e.z, true
+		}
+		return 0, 0, 0, false
+	}
+	if q := w.byID(id); q != nil && q.Health.Alive {
+		return q.State.X, q.State.Y, q.State.Z, true
+	}
+	return 0, 0, 0, false
+}
+
 // stepSpear flies a spear for a tick, or counts down its fuse once it has stuck. Flying, the
 // whole stretch it covers is cast against the level and against everyone but its owner, so it
-// cannot skip through a thin wall or a player. Whatever it hits, it sticks there; a body also
-// takes the launcher's impact damage.
+// cannot skip through a thin wall or a player. Whatever it hits, it sticks there. A body takes
+// the launcher's small impact damage and carries the spear with it: the blast, which is what
+// does the damage, goes off wherever they have got to.
 func (w *World) stepSpear(sp *spear) {
 	if sp.stuck {
+		if sp.stuckIn != 0 {
+			if x, y, z, ok := w.feetOf(sp.stuckIn); ok {
+				sp.X, sp.Y, sp.Z = x+sp.ox, y+sp.oy, z+sp.oz
+			} else {
+				sp.stuckIn = 0 // they died or left: it stays where it was
+			}
+		}
 		sp.fuse -= TickDT
 		if sp.fuse <= 0 {
-			w.explodeAt(sp.owner, sp.X, sp.Y, sp.Z, SkillSpearRadius, SkillSpearDamage)
+			w.explodeAt(sp.owner, sp.X, sp.Y, sp.Z, SkillSpearCore, SkillSpearRadius, SkillSpearDamage)
 			sp.active = false
 		}
 		return
@@ -321,10 +352,19 @@ func (w *World) stepSpear(sp *spear) {
 	sp.Pitch = math.Asin(clamp(my/l, -1, 1))
 	switch {
 	case hit.Kind == RayTarget:
+		id := uint32(hit.TargetID)
 		if owner != nil {
-			w.dealDamage(owner, uint32(hit.TargetID), SpearDamage, false, 0)
+			w.dealDamage(owner, id, SpearDamage, false, 0)
 		}
-		fallthrough
+		// Stuck a hair inside the body, so they take the whole blast, and carried along with it.
+		// (A barrier is a wall: nothing to follow.)
+		if x, y, z, ok := w.feetOf(id); ok && id < SkillBarrierIdBase {
+			sp.X += mx / l * 0.05
+			sp.Y += my / l * 0.05
+			sp.Z += mz / l * 0.05
+			sp.stuckIn, sp.ox, sp.oy, sp.oz = id, sp.X-x, sp.Y-y, sp.Z-z
+		}
+		sp.stuck, sp.fuse, sp.Flags = true, SkillSpearFuse, 1
 	case hit.Kind == RayWorld, sp.flown >= SpearRange:
 		// Stuck a hair short of the surface, so the blast is on this side of the wall it is in.
 		sp.X -= mx / l * 0.05
@@ -528,14 +568,22 @@ func (w *World) useSkills(p *Player, in *Input, shot *ShotResult) {
 	if shot.Barrier {
 		w.placeBarrier(p, in)
 	}
+	if shot.SlashStarted {
+		p.Health.ProtectedFor = 0
+		p.slashFor = slashShownTicks // others see the blades drawn and the X before the dash
+	}
 	if shot.Slash {
 		SlashLunge(&p.State, in.Yaw)
-		w.resolveSlash(p, in)
+		p.slashCut = slashCutTicks
+		p.slashHits = 0
+	}
+	if shot.RollStarted {
+		p.Health.ProtectedFor = 0
 	}
 	if shot.Roll {
 		StartRoll(&p.State, in.Yaw, in.Pitch)
 		p.rollHits = 0
-		p.Health.ProtectedFor = 0
+		p.rollFromY = p.State.Y
 	}
 	if in.Ult {
 		switch p.Health.Hero {
@@ -550,30 +598,47 @@ func (w *World) useSkills(p *Player, in *Input, shot *ShotResult) {
 	}
 }
 
-// --- Assassin: air slash and overdrive --------------------------------------
+// --- Assassin: dash cut and overdrive ---------------------------------------
 // (The grapple is movement: see updateGrapple in movement.go.)
 
-// slashShownTicks is how long others are told a player is mid-slash, for the animation.
-const slashShownTicks = 15
+// slashShownTicks is how long others are told a player is mid-slash, for the animation: the
+// wind-up and the dash.
+var slashShownTicks = int(math.Ceil((SkillSlashWindup + DashDuration) * TickRate))
 
-// resolveSlash is the Assassin's spinning slash landing: everyone within reach, all the way
-// round, as the attacker's screen showed them (rewound like a bullet), with nothing solid in
-// between, takes the slash damage. A kill makes the slash ready again at once.
-func (w *World) resolveSlash(p *Player, in *Input) {
-	p.Health.ProtectedFor = 0
-	p.slashFor = slashShownTicks
+// slashCutTicks is how many of the player's ticks the dash cut goes on cutting: the dash itself.
+var slashCutTicks = int(math.Ceil(DashDuration * TickRate))
+
+// stepSlash is the Assassin's dash cut doing its damage. The press draws the blades and cuts an X
+// (the wind-up, in the weapon sim); then comes a dash straight ahead. While the dash lasts, everyone it reaches in front of the attacker, as the attacker's
+// screen showed them (rewound like a bullet), with nothing solid in between, takes the slash
+// damage, once each. A kill makes the slash ready again at once.
+func (w *World) stepSlash(p *Player, in *Input) {
+	if p.slashCut <= 0 {
+		return
+	}
+	p.slashCut--
 	s := &p.State
 	ex, ey, ez := s.X, s.Y+eyeHeight(s), s.Z
 	n := w.fillBoxes(p, w.rewindView(in.ViewTick))
 	killed := false
+bodies:
 	for i := 0; i < n; i++ {
 		b := &w.boxes[i]
+		for k := 0; k < p.slashHits; k++ {
+			if p.slashHit[k] == b.ID {
+				continue bodies
+			}
+		}
 		// The nearest point of the body to the attacker's eye must be within reach...
 		cx, cy, cz := clamp(ex, b.MinX, b.MaxX), clamp(ey, b.MinY, b.MaxY), clamp(ez, b.MinZ, b.MaxZ)
 		if math.Sqrt((cx-ex)*(cx-ex)+(cy-ey)*(cy-ey)+(cz-ez)*(cz-ez)) > SkillSlashRange {
 			continue
 		}
-		// ...with no wall in the way. (It is a spin: all the way round, not only in front.)
+		// ...ahead of the dash, not behind it (a body the attacker is inside counts as ahead)...
+		if (cx-ex)*s.DashDirX+(cz-ez)*s.DashDirZ < 0 {
+			continue
+		}
+		// ...with no wall in the way.
 		mx, my, mz := (b.MinX+b.MaxX)/2-ex, (b.MinY+b.MaxY)/2-ey, (b.MinZ+b.MaxZ)/2-ez
 		if l := math.Sqrt(mx*mx + my*my + mz*mz); l > 1e-6 {
 			if hit := CastRay(&w.level.Collision, nil, ex, ey, ez, mx/l, my/l, mz/l, l); hit.Kind == RayWorld {
@@ -581,6 +646,10 @@ func (w *World) resolveSlash(p *Player, in *Input) {
 			}
 		}
 		id := b.ID
+		if p.slashHits < len(p.slashHit) {
+			p.slashHit[p.slashHits] = id
+			p.slashHits++
+		}
 		if w.dealDamage(p, id, SkillSlashDamage, false, protocol.GameEventFlagMelee|protocol.GameEventFlagSlash) && !w.aliveByID(id) {
 			killed = true
 		}
@@ -590,8 +659,16 @@ func (w *World) resolveSlash(p *Player, in *Input) {
 	}
 }
 
+// diveDropMult is how much harder the rolling dive's blades cut for having dropped `drop` metres
+// since the dive began: nothing extra up to SkillRollDropMin, rising evenly to SkillRollDropMult
+// times at SkillRollDropFull and above. From high enough the cut kills outright.
+func diveDropMult(drop float64) float64 {
+	t := clamp((drop-SkillRollDropMin)/(SkillRollDropFull-SkillRollDropMin), 0, 1)
+	return 1 + (SkillRollDropMult-1)*t
+}
+
 // stepRoll is the Assassin's rolling dive doing its damage. While it lasts, anyone the blades
-// pass within reach of is cut, once each. If it ends by hitting the ground, that is the slam:
+// pass within reach of is cut, once each, harder the further the dive has dropped (diveDropMult). If it ends by hitting the ground, that is the slam:
 // everyone near the landing with a clear line is hurt as well (not the diver).
 func (w *World) stepRoll(p *Player, in *Input, wasRolling bool) {
 	s := &p.State
@@ -614,7 +691,7 @@ func (w *World) stepRoll(p *Player, in *Input, wasRolling bool) {
 				p.rollHit[p.rollHits] = b.ID
 				p.rollHits++
 			}
-			w.dealDamage(p, b.ID, SkillRollDamage, false, protocol.GameEventFlagMelee|protocol.GameEventFlagSlash)
+			w.dealDamage(p, b.ID, SkillRollDamage*diveDropMult(p.rollFromY-s.Y), false, protocol.GameEventFlagMelee|protocol.GameEventFlagSlash)
 		}
 		return
 	}
@@ -626,7 +703,7 @@ func (w *World) stepRoll(p *Player, in *Input, wasRolling bool) {
 	for i := 0; i < n; i++ {
 		b := &w.boxes[i]
 		x, z := (b.MinX+b.MaxX)/2, (b.MinZ+b.MaxZ)/2
-		if dmg := w.blastDamage(s.X, s.Y+0.3, s.Z, x, b.MinY, z, b.MaxY-b.MinY, SkillSlamRadius, SkillSlamDamage); dmg > 0 {
+		if dmg := w.blastDamage(s.X, s.Y+0.3, s.Z, x, b.MinY, z, b.MaxY-b.MinY, 0, SkillSlamRadius, SkillSlamDamage); dmg > 0 {
 			w.dealDamage(p, b.ID, dmg, false, protocol.GameEventFlagBlast)
 		}
 	}

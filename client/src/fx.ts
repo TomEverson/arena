@@ -6,10 +6,10 @@ import { type ReloadPose, reloadPose } from "./reloadAnim";
 import { type Brick, BRICK_MAG_HOME, BRICK_MUZZLE, BRICK_SIGHT_Y, buildBrick } from "./rifle";
 import { type Bullet, spawnBullet, stepBullet } from "./sim/bullet";
 import type { Hitbox } from "./sim/hitscan";
-import { SKILL, WEAPON } from "./sim/params";
+import { PARAMS, SKILL, WEAPON } from "./sim/params";
 import type { CollisionWorld } from "./sim/types";
 import { buildSniper, SNIPER_MUZZLE, SNIPER_SIGHT_Y } from "./sniper";
-import { buildSpear, SPEAR_MUZZLE, SPEAR_PAIR_GAP, SPEAR_SIGHT_Y } from "./spear";
+import { buildSpear, SPEAR_MUZZLE, SPEAR_PAIR_GAP, SPEAR_SIGHT_Y, SPEAR_VIEW_SCALE } from "./spear";
 
 /** Visual and audio-free feedback for shooting: crosshair, hit markers, shake, viewmodel, tracers. */
 
@@ -18,11 +18,21 @@ const HIP = new THREE.Vector3(0.2, -0.2, -0.45);
 const ADS = new THREE.Vector3(0, -BRICK_SIGHT_Y, -0.36);
 /** The sniper's scope axis is lined up with the middle of the screen when aiming. */
 /** The spear launcher comes up so the spear points at the middle of the screen. */
-const ADS_SPEAR = new THREE.Vector3(SPEAR_PAIR_GAP / 2, -SPEAR_SIGHT_Y - 0.02, -0.3); // the pair either side of the middle
+const ADS_SPEAR = new THREE.Vector3(
+  SPEAR_PAIR_GAP / 2, // the pair either side of the middle
+  -SPEAR_SIGHT_Y * SPEAR_VIEW_SCALE - 0.02,
+  -0.3,
+);
+/** The launchers are drawn smaller in your own view: where a spear leaves, at that size. */
+const SPEAR_VIEW_MUZZLE = SPEAR_MUZZLE.clone().multiplyScalar(SPEAR_VIEW_SCALE);
 /** Each gun's aimed position and muzzle, by its index in WEAPON_DEFS. */
 const ADS_SNIPER = new THREE.Vector3(0, -SNIPER_SIGHT_Y, 0.1); // eye right up at the eyepiece, so the view through the scope is big
-/** A hitscan shot's tracer is drawn as a very fast bullet. */
-export const HITSCAN_TRACER_SPEED = 2000;
+/** What a drawn bullet needs to know about its gun (a WeaponDef has these). */
+export interface BulletKind {
+  bulletSpeed: number;
+  bulletGravity: number;
+  range: number;
+}
 /** How long the streak behind a flying bullet is, in seconds of flight. */
 const TRAIL_SECONDS = 0.025;
 const IMPACT_SECONDS = 0.12;
@@ -44,10 +54,30 @@ const mix = (
   a[1] + (b[1] - a[1]) * t,
   a[2] + (b[2] - a[2]) * t,
 ];
-/** How long the spinning slash takes to go right round. */
-const SLASH_SECONDS = SKILL.slashSpin;
-/** How long the rolling dive's forward tumble takes: one turn, as quick as the spin. */
-const ROLL_SECONDS = SKILL.slashSpin;
+/**
+ * How long the dash cut takes on screen, from the press: the blades come up from the hips and
+ * cut an X during the wind-up, are held crossed through the dash, then go back down. A new cut
+ * in overdrive starts it again.
+ */
+const SLASH_SECONDS = 1;
+/** When the dash starts and ends, in seconds from the press. */
+const SLASH_DASH_AT = SKILL.slashWindup;
+const SLASH_DASH_END = SKILL.slashWindup + PARAMS.dashDuration;
+/** How long the blades take to go back down after a rolling dive. */
+const DIVE_SHEATHE_SECONDS = 0.45;
+/** The right fist at the hip, below the view: where the blade is drawn from and put back. */
+const FIST_HIP: readonly [number, number, number] = [0.26, -0.62, -0.22];
+/** The right fist during the dash cut (the left mirrors it): raised to its own side, then down across. */
+const CROSS_WIND: readonly [number, number, number] = [0.36, 0.0, -0.36];
+const CROSS_END: readonly [number, number, number] = [-0.14, -0.38, -0.5];
+/** The rolling dive's one full turn: how long it takes when nothing says when the dive will land. */
+const DIVE_TURN_SECONDS = 0.6;
+/** The turn is over this share of the way to the landing, so the view is level in time. */
+const DIVE_TURN_BY = 0.85;
+/** A dive that ends before its turn is complete finishes the turn this fast (seconds a turn). */
+const DIVE_FINISH_SECONDS = 0.25;
+/** The cut with both blades happens between these shares of the turn. */
+const DIVE_CUT = [0.4, 0.7] as const;
 /** How long the melee swing animation lasts (matches the weapon's melee lock). */
 const MELEE_SECONDS = 0.35;
 /** Where the left hand grips the magazine during a reload (gun space). */
@@ -71,10 +101,16 @@ export class Fx {
   /** The left fist and its blade (the right is `fist`, which also throws the punch). */
   private readonly leftFist = new THREE.Group();
   private blades = false;
-  /** Seconds left of the spinning slash (0 = none). */
+  /** Seconds left of the dash cut (0 = none). */
   private slashLeft = 0;
-  /** Seconds left of the rolling dive's tumble (0 = none). */
-  private rollLeft = 0;
+  /** How far round the rolling dive's turn the view is (radians; 0 = not turning). */
+  private tumbleAt = 0;
+  /** About how long until the dive lands (seconds), if known. */
+  private diveLeft: number | undefined;
+  /** The dive around its tumble: seconds into the wind-up and into putting the blades away (-1 = not), and whether it is diving. */
+  private divePrepT = -1;
+  private diveSheatheT = -1;
+  private diving = false;
   /** Which gun's model is showing (0 rifle, 1 sniper), and whether any gun is in hand. */
   private gunIdx = 0;
   private held = true;
@@ -90,7 +126,14 @@ export class Fx {
     return this.models[this.gunIdx] as Brick;
   }
 
-  private readonly bullets: { b: Bullet; line: THREE.Line; active: boolean }[] = [];
+  private readonly bullets: {
+    b: Bullet;
+    line: THREE.Line;
+    active: boolean;
+    /** How far this bullet flies and how fast it falls (its gun's numbers). */
+    range: number;
+    gravity: number;
+  }[] = [];
   private readonly impacts: { mesh: THREE.Mesh; life: number }[] = [];
   private flashLife = 0;
   private kickBack = 0;
@@ -107,7 +150,7 @@ export class Fx {
     viewCamera: THREE.PerspectiveCamera,
   ) {
     // The guns (rifle.ts, sniper.ts), parented to the view camera.
-    this.models = [buildBrick(), buildSniper(), buildSpear()];
+    this.models = [buildBrick(), buildSniper(), buildSpear(-SPEAR_PAIR_GAP, SPEAR_VIEW_SCALE)];
     for (const m of this.models) this.gun.add(m.root);
     this.models[1].root.visible = false;
     this.models[2].root.visible = false;
@@ -176,7 +219,13 @@ export class Fx {
       line.visible = false;
       line.frustumCulled = false;
       scene.add(line);
-      this.bullets.push({ b: spawnBullet([0, 0, 0], [0, 0, -1], 0), line, active: false });
+      this.bullets.push({
+        b: spawnBullet([0, 0, 0], [0, 0, -1], 0),
+        line,
+        active: false,
+        range: 0,
+        gravity: 0,
+      });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, 0.12, 0.12),
         new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
@@ -189,7 +238,7 @@ export class Fx {
 
   /** Where the gun in hand fires from (gun space). */
   private muzzle(): THREE.Vector3 {
-    return this.gunIdx === 1 ? SNIPER_MUZZLE : this.gunIdx === 2 ? SPEAR_MUZZLE : BRICK_MUZZLE;
+    return this.gunIdx === 1 ? SNIPER_MUZZLE : this.gunIdx === 2 ? SPEAR_VIEW_MUZZLE : BRICK_MUZZLE;
   }
 
   /** Whose hands these are: the Assassin's empty hands hold a blade each. */
@@ -198,14 +247,33 @@ export class Fx {
     this.blade.visible = on;
   }
 
-  /** The spinning slash: the view turns right round once, flat like a fan, with both blades out. */
+  /** The dash cut, from the press: draw the blades, cut the X, hold through the dash, put them away. */
   slash(): void {
     this.slashLeft = SLASH_SECONDS;
   }
 
-  /** The rolling dive: the view tumbles forward right over once, like a ball, blades leading. */
+  /** The rolling dive begins: the view starts its one full turn forward. */
   roll(): void {
-    this.rollLeft = ROLL_SECONDS;
+    this.tumbleAt = 1e-6;
+  }
+
+  /** The dive's wind-up started: the blades come up from the hips and are held out ahead. */
+  rollPrep(): void {
+    this.divePrepT = 0;
+    this.diveSheatheT = -1;
+  }
+
+  /**
+   * Whether you are in a dive right now, and about how long until it lands (the turn is paced by
+   * it). When the dive ends the blades go back down.
+   */
+  setDiving(on: boolean, left?: number): void {
+    this.diveLeft = left;
+    if (this.diving && !on) {
+      this.diveSheatheT = 0;
+      this.divePrepT = -1;
+    }
+    this.diving = on;
   }
 
   /** You fired: muzzle flash, rifle kick and camera shake. (The bullet itself is `fireOwn`.) */
@@ -224,36 +292,38 @@ export class Fx {
   fireOwn(
     eye: readonly [number, number, number],
     dir: readonly [number, number, number],
-    speed?: number,
+    kind: BulletKind,
   ): void {
     this.camera.updateMatrixWorld();
     const muzzle = this.camera.localToWorld(this.muzzle().clone().add(this.gun.position));
     const aim = new THREE.Vector3(eye[0] + dir[0] * 40, eye[1] + dir[1] * 40, eye[2] + dir[2] * 40);
     const d = aim.sub(muzzle).normalize();
-    this.spawnVisual([muzzle.x, muzzle.y, muzzle.z], [d.x, d.y, d.z], speed);
+    this.spawnVisual([muzzle.x, muzzle.y, muzzle.z], [d.x, d.y, d.z], kind);
   }
 
   /** Someone else's bullet, from their eye (the picture only; the server decides hits). */
   fireRemote(
     eye: readonly [number, number, number],
     dir: readonly [number, number, number],
-    speed?: number,
+    kind: BulletKind,
   ): void {
     this.spawnVisual(
       [eye[0] + dir[0] * 0.6, eye[1] - 0.2 + dir[1] * 0.6, eye[2] + dir[2] * 0.6],
       [dir[0], dir[1], dir[2]],
-      speed,
+      kind,
     );
   }
 
   private spawnVisual(
     origin: readonly [number, number, number],
     dir: readonly [number, number, number],
-    speed?: number,
+    kind: BulletKind,
   ): void {
     const slot = this.bullets.find((x) => !x.active);
     if (!slot) return;
-    slot.b = spawnBullet(origin, dir, speed);
+    slot.b = spawnBullet(origin, dir, kind.bulletSpeed);
+    slot.range = kind.range;
+    slot.gravity = kind.bulletGravity;
     slot.active = true;
     slot.line.visible = true;
     this.moveLine(slot);
@@ -281,7 +351,7 @@ export class Fx {
   stepBullets(frameDt: number, world: CollisionWorld, targets: readonly Hitbox[]): void {
     for (const slot of this.bullets) {
       if (!slot.active) continue;
-      const hit = stepBullet(slot.b, frameDt, world, targets);
+      const hit = stepBullet(slot.b, frameDt, world, targets, slot.range, slot.gravity);
       this.moveLine(slot);
       if (hit.kind === "world" || hit.kind === "target") {
         const i = this.impacts.find((x) => x.life <= 0);
@@ -333,8 +403,7 @@ export class Fx {
 
   /**
    * Per-frame: animate viewmodel, effects and crosshair. Returns a camera offset (radians): the
-   * shake, plus the full turn of a spinning slash (in the yaw) or of a rolling dive (in the
-   * pitch). Your aim itself does not move.
+   * shake, plus the full turn of a rolling dive (in the pitch). Your aim itself does not move.
    * `reloadT` is the weapon's remaining reload time in seconds (0 when not reloading);
    * `ammoFraction` is the share of a full magazine left, for the rifle's ammo strip.
    */
@@ -398,9 +467,8 @@ export class Fx {
       this.fist.visible = true;
       cut = u;
     }
-    // Blades: the left hand mirrors the right at rest. During the spinning slash both come up
-    // and out to the sides, edges level, whatever was in hand (a gun dips out of the way).
-    let spin = 0;
+    // Blades: the left hand mirrors the right at rest. During the dash cut both come up and out,
+    // then cut down across each other, whatever was in hand (a gun dips out of the way).
     let tumble = 0;
     this.leftFist.visible = this.blades && !this.held;
     this.leftFist.position.set(-FIST_REST[0], FIST_REST[1], FIST_REST[2]);
@@ -408,45 +476,100 @@ export class Fx {
     this.fist.rotation.set(0.15, -0.12, 0);
     if (this.slashLeft > 0) {
       this.slashLeft = Math.max(0, this.slashLeft - frameDt);
-      const u = 1 - this.slashLeft / SLASH_SECONDS;
-      spin = Math.PI * 2 * smooth(u);
-      const out = smooth(u / 0.15) * (1 - smooth((u - 0.8) / 0.2));
-      this.gun.position.y -= 0.4 * out;
+      const t = SLASH_SECONDS - this.slashLeft; // seconds since the press
+      const w = SLASH_DASH_AT;
+      const away = smooth(t / 0.08) * (1 - smooth((t - 0.85) / 0.15)); // the gun, out of the way
+      this.gun.position.y -= 0.4 * away;
       this.fist.visible = this.leftFist.visible = true;
       this.blade.visible = true;
-      this.fist.position.set(
-        FIST_REST[0] + 0.22 * out,
-        FIST_REST[1] + 0.2 * out,
-        FIST_REST[2] - 0.15 * out,
-      );
-      this.leftFist.position.set(
-        -FIST_REST[0] - 0.22 * out,
-        FIST_REST[1] + 0.2 * out,
-        FIST_REST[2] - 0.15 * out,
-      );
-      this.fist.rotation.set(0.05, -0.12 - 1.1 * out, 0);
-      this.leftFist.rotation.set(0.05, 0.12 + 1.1 * out, 0);
-    } else if (this.rollLeft > 0) {
-      // The rolling dive: tumbling forward, both blades held out ahead, edges up.
-      this.rollLeft = Math.max(0, this.rollLeft - frameDt);
-      const u = 1 - this.rollLeft / ROLL_SECONDS;
-      tumble = -Math.PI * 2 * smooth(u);
-      const out = smooth(u / 0.15) * (1 - smooth((u - 0.8) / 0.2));
-      this.gun.position.y -= 0.4 * out;
+      // To the hip to draw, up and out, down across (the X) as the wind-up ends, held through
+      // the dash, back to the hip to sheathe, then to rest.
+      const f =
+        t < 0.4 * w
+          ? mix(FIST_REST, FIST_HIP, smooth(t / (0.4 * w)))
+          : t < 0.7 * w
+            ? mix(FIST_HIP, CROSS_WIND, smooth((t - 0.4 * w) / (0.3 * w)))
+            : t < w
+              ? mix(CROSS_WIND, CROSS_END, smooth((t - 0.7 * w) / (0.3 * w)))
+              : t < SLASH_DASH_END
+                ? CROSS_END
+                : t < SLASH_DASH_END + 0.25
+                  ? mix(CROSS_END, FIST_HIP, smooth((t - SLASH_DASH_END) / 0.25))
+                  : mix(
+                      FIST_HIP,
+                      FIST_REST,
+                      smooth((t - SLASH_DASH_END - 0.25) / (SLASH_SECONDS - SLASH_DASH_END - 0.25)),
+                    );
+      this.fist.position.set(f[0], f[1], f[2]);
+      this.leftFist.position.set(-f[0], f[1], f[2]);
+      // Each blade leans in toward the middle while it is up, and tips forward as it comes down.
+      const up = smooth((t - 0.4 * w) / (0.3 * w)) * (1 - smooth((t - SLASH_DASH_END) / 0.2));
+      const down = smooth((t - 0.7 * w) / (0.3 * w)) * (1 - smooth((t - SLASH_DASH_END) / 0.2));
+      this.fist.rotation.set(0.15 - 0.5 * up + 0.9 * down, -0.12, 0.7 * up);
+      this.leftFist.rotation.set(0.15 - 0.5 * up + 0.9 * down, 0.12, -0.7 * up);
+    } else if (this.tumbleAt > 0 || this.diving || this.divePrepT >= 0 || this.diveSheatheT >= 0) {
+      // The rolling dive: the blades come up from the hips and are raised during the wind-up;
+      // the dive is one full forward turn of the view, paced to be over just before the landing,
+      // with both blades cut down across each other part way round; then they go back down.
+      const TURN = Math.PI * 2;
+      if (this.diving) {
+        const rest = TURN - this.tumbleAt;
+        if (rest > 0) {
+          const rate =
+            this.diveLeft !== undefined
+              ? rest / Math.max(this.diveLeft * DIVE_TURN_BY, frameDt)
+              : TURN / DIVE_TURN_SECONDS;
+          this.tumbleAt = Math.min(TURN, this.tumbleAt + rate * frameDt);
+        }
+      } else if (this.tumbleAt > 0) {
+        // The dive ended before the turn was complete: finish it quickly.
+        this.tumbleAt += (TURN / DIVE_FINISH_SECONDS) * frameDt;
+        if (this.tumbleAt >= TURN) this.tumbleAt = 0;
+      }
+      tumble = -this.tumbleAt;
+      const w = SKILL.rollWindup;
+      let f: readonly [number, number, number];
+      let up: number; // the blades raised, leaning in
+      let down: number; // the blades cut down, tipped forward
+      let away = 1; // the gun, out of the way
+      if (this.diving || this.tumbleAt > 0) {
+        const u = this.tumbleAt > 0 ? this.tumbleAt / TURN : 1;
+        down = smooth((u - DIVE_CUT[0]) / (DIVE_CUT[1] - DIVE_CUT[0]));
+        up = 1 - down;
+        f = mix(CROSS_WIND, CROSS_END, down);
+      } else if (this.divePrepT >= 0) {
+        const t = this.divePrepT;
+        this.divePrepT += frameDt;
+        up = smooth((t - 0.4 * w) / (0.6 * w));
+        down = 0;
+        away = smooth(t / 0.08);
+        f =
+          t < 0.4 * w
+            ? mix(FIST_REST, FIST_HIP, smooth(t / (0.4 * w)))
+            : mix(FIST_HIP, CROSS_WIND, up);
+        // No dive came (it was called off by landing): put the blades away again.
+        if (t > w + 0.2) {
+          this.divePrepT = -1;
+          this.diveSheatheT = 0;
+        }
+      } else {
+        const t = this.diveSheatheT;
+        this.diveSheatheT = t + frameDt >= DIVE_SHEATHE_SECONDS ? -1 : t + frameDt;
+        up = 0;
+        down = 1 - smooth(t / 0.2);
+        away = 1 - smooth((t - 0.3) / 0.15);
+        f =
+          t < 0.25
+            ? mix(CROSS_END, FIST_HIP, smooth(t / 0.25))
+            : mix(FIST_HIP, FIST_REST, smooth((t - 0.25) / (DIVE_SHEATHE_SECONDS - 0.25)));
+      }
+      this.gun.position.y -= 0.4 * away;
       this.fist.visible = this.leftFist.visible = true;
       this.blade.visible = true;
-      this.fist.position.set(
-        FIST_REST[0] - 0.08 * out,
-        FIST_REST[1] + 0.16 * out,
-        FIST_REST[2] - 0.25 * out,
-      );
-      this.leftFist.position.set(
-        -FIST_REST[0] + 0.08 * out,
-        FIST_REST[1] + 0.16 * out,
-        FIST_REST[2] - 0.25 * out,
-      );
-      this.fist.rotation.set(0.15 + 0.6 * out, -0.12, 0);
-      this.leftFist.rotation.set(0.15 + 0.6 * out, 0.12, 0);
+      this.fist.position.set(f[0], f[1], f[2]);
+      this.leftFist.position.set(-f[0], f[1], f[2]);
+      this.fist.rotation.set(0.15 - 0.5 * up + 0.9 * down, -0.12, 0.7 * up);
+      this.leftFist.rotation.set(0.15 - 0.5 * up + 0.9 * down, 0.12, -0.7 * up);
     } else {
       this.blade.visible = this.blades;
       if (this.blades && cut >= 0) {
@@ -502,6 +625,6 @@ export class Fx {
 
     this.shake = Math.max(0, this.shake - frameDt * 6);
     const a = this.shake * this.shake * 0.012;
-    return { yaw: (Math.random() - 0.5) * a + spin, pitch: (Math.random() - 0.5) * a + tumble };
+    return { yaw: (Math.random() - 0.5) * a, pitch: (Math.random() - 0.5) * a + tumble };
   }
 }

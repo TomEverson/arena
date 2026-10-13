@@ -4,6 +4,7 @@ import { type BodyState, CharacterBody, type CharacterLook, HERO_LOOKS } from ".
 import type { Pose } from "./net/interpolation";
 import { EntityFlags, EntityKinds } from "./net/protocol.gen";
 import { castRay } from "./sim/hitscan";
+import { SKILL } from "./sim/params";
 import type { CollisionWorld } from "./sim/types";
 
 interface View {
@@ -72,6 +73,8 @@ export class RemoteViews {
       s.meleeing = (pose.flags & EntityFlags.meleeing) !== 0;
       s.slashing = (pose.flags & EntityFlags.slashing) !== 0;
       s.rolling = (pose.flags & EntityFlags.rolling) !== 0;
+      s.divePrep = (pose.flags & EntityFlags.divePrep) !== 0;
+      s.diveLeft = s.rolling ? this.diveLeft(pose, v, frameDt) : undefined;
       s.armed = !target && (pose.flags & EntityFlags.emptyHanded) === 0; // a target holds nothing
       s.weapon =
         (pose.flags & EntityFlags.holdingSpear) !== 0
@@ -99,6 +102,27 @@ export class RemoteViews {
         this.views.delete(id);
       }
     }
+  }
+
+  /**
+   * About how long until a diving body lands (seconds): a ray from its feet along the way it is
+   * moving, to the first wall or floor. Undefined when it is not moving or nothing is ahead.
+   */
+  private diveLeft(pose: Pose, v: View, frameDt: number): number | undefined {
+    const dx = pose.x - v.lastX;
+    const dy = pose.y - v.lastY;
+    const dz = pose.z - v.lastZ;
+    const step = Math.hypot(dx, dy, dz);
+    if (step < 1e-4 || frameDt <= 0) return undefined;
+    const reach = SKILL.rollSpeed * SKILL.rollTime;
+    const hit = castRay(
+      this.world(),
+      [],
+      [pose.x, pose.y + 0.05, pose.z],
+      [dx / step, dy / step, dz / step],
+      reach,
+    );
+    return hit.kind === "world" ? hit.t / (step / frameDt) : undefined;
   }
 
   /**

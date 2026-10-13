@@ -35,13 +35,16 @@ const (
 	SlideDecel          = 6
 	SlideEndSpeed       = 4
 	SlideMaxTime        = 1.6
-	SlideCooldown       = 0.4
+	SlideCooldown       = 2
+	SlideJumpKeep       = 0.75
 	CrouchSpeed         = 3.5
 	DashCharges         = 2
 	DashSpeed           = 26
 	DashDuration        = 0.22
 	DashExitSpeed       = 13
-	DashRegenTime       = 1.2
+	DashRegenTime       = 6
+	HitSlowMult         = 0.6
+	HitSlowTime         = 0.3
 	MantleReach         = 2.3
 	MantleDuration      = 0.25
 	MantleInset         = 0.15
@@ -73,7 +76,7 @@ const (
 	WeaponMagSize         = 30
 	WeaponReloadTime      = 1.8
 	WeaponRange           = 250
-	WeaponBulletSpeed     = 300
+	WeaponBulletSpeed     = 500
 	WeaponBulletGravity   = 8
 	WeaponMeleeDamage     = 20
 	WeaponMeleeKnockback  = 9
@@ -113,6 +116,8 @@ const (
 	SniperMagSize         = 10
 	SniperReloadTime      = 2.6
 	SniperRange           = 500
+	SniperBulletSpeed     = 800
+	SniperBulletGravity   = 8
 	SniperHipSpread       = 4
 	SniperAdsSpread       = 0
 	SniperMoveBloom       = 2.5
@@ -158,11 +163,11 @@ const (
 
 // Thunder spear launcher tuning (shared/params.json "spear"), prefixed with Spear.
 const (
-	SpearDamage          = 25
+	SpearDamage          = 10
 	SpearHeadshotMult    = 1
 	SpearRpm             = 50
 	SpearMagSize         = 2
-	SpearReloadTime      = 4
+	SpearReloadTime      = 6
 	SpearRange           = 150
 	SpearHipSpread       = 1
 	SpearAdsSpread       = 0.2
@@ -217,7 +222,7 @@ const (
 	SkillPickupReach         = 1.2
 	SkillPickupRespawn       = 3
 	SkillGrappleCharges      = 2
-	SkillGrappleRegen        = 3
+	SkillGrappleRegen        = 6
 	SkillGrappleRange        = 50
 	SkillGrappleSpeed        = 30
 	SkillGrapplePull         = 50
@@ -233,25 +238,32 @@ const (
 	SkillGrappleHop          = 6
 	SkillGrappleBloom        = 4
 	SkillSlashCooldown       = 5
+	SkillSlashWindup         = 0.3
 	SkillSlashSpin           = 0.45
-	SkillSlashRange          = 3
+	SkillSlashRange          = 2.5
 	SkillSlashDamage         = 70
 	SkillRollMinDive         = 0.7
 	SkillRollCooldown        = 6
 	SkillRollSpeed           = 26
-	SkillRollTime            = 0.9
+	SkillRollTime            = 2
+	SkillRollWindup          = 0.3
 	SkillRollExitScale       = 0.5
 	SkillRollRange           = 2.5
-	SkillRollDamage          = 60
+	SkillRollDamage          = 40
+	SkillRollDropMin         = 5
+	SkillRollDropFull        = 30
+	SkillRollDropMult        = 3.75
 	SkillSlamRadius          = 4
 	SkillSlamDamage          = 40
-	SkillOverdriveSeconds    = 8
+	SkillOverdriveSeconds    = 10
+	SkillOverdriveReload     = 0.5
 	SkillHookIdBase          = 6000
 	SkillSpearIdBase         = 7000
 	SkillSpearSpeed          = 70
 	SkillSpearGravity        = 6
 	SkillSpearFuse           = 1
-	SkillSpearRadius         = 4.5
-	SkillSpearDamage         = 90
+	SkillSpearRadius         = 4
+	SkillSpearCore           = 4
+	SkillSpearDamage         = 150
 	SkillBladeDamage         = 40
 )

@@ -148,6 +148,29 @@ export const scenarios: Scenario[] = [
   (() => {
     const p = phases([
       [3, {}],
+      [30, F],
+    ]);
+    const slowTicks = Math.round(P.hitSlowTime * 60);
+    return scenario(
+      "hit-slow",
+      "Slowed by a bullet hit: running drops to the slowed speed, then comes back.",
+      inline(),
+      [0, 0, 0],
+      p,
+      (t) => {
+        const slowed = P.runSpeed * P.hitSlowMult;
+        check(speed(t[3 + slowTicks] as PlayerState) < slowed + 0.05, "slowed while it lasts");
+        check(speed(t[3 + slowTicks] as PlayerState) > slowed - 0.5, "but still running");
+        check(last(t).slowT === 0, "the slow runs out");
+        check(Math.abs(speed(last(t)) - P.runSpeed) < 0.05, "back to run speed");
+      },
+      { vx: 0, vz: -P.runSpeed, slowT: P.hitSlowTime + 3 / 60 },
+    );
+  })(),
+
+  (() => {
+    const p = phases([
+      [3, {}],
       [80, { moveX: 1, moveZ: 1, yaw: 0.7 }],
     ]);
     return scenario(
@@ -309,7 +332,7 @@ export const scenarios: Scenario[] = [
     ]);
     return scenario(
       "slide-jump",
-      "Jumping out of a slide keeps momentum.",
+      "Jumping out of a slide keeps most of its momentum, not all.",
       inline(),
       [0, 0, 0],
       p,
@@ -317,6 +340,32 @@ export const scenarios: Scenario[] = [
         const j = t[75] as PlayerState;
         check(!j.sliding && j.vy > 0, "jumped out of the slide");
         check(speed(j) > 10, "kept speed");
+        const before = speed(t[73] as PlayerState);
+        check(Math.abs(speed(j) - before * P.slideJumpKeep) < 0.3, "but paid for the jump");
+      },
+    );
+  })(),
+
+  (() => {
+    // Hold the slide key and jump the moment each slide starts: the old endless slide-jump.
+    const input = (): InputFn => (t, s) =>
+      t < 63 ? (t < 3 ? {} : F) : { ...SLIDE_F, jump: s.onGround && s.sliding };
+    return scenario(
+      "slide-jump-chain",
+      "Chained slide-jumps wind down: each jump costs speed and the boost is on a cooldown.",
+      inline(),
+      [0, 0, 0],
+      { total: 63 + 600, input },
+      (t) => {
+        const chain = t.slice(63);
+        const dist = Math.abs(last(t).z - (t[63] as PlayerState).z);
+        check(maxOf(chain, speed) > 14, "the first slide still boosts");
+        check(dist / 10 > P.runSpeed - 0.2, "never slower than running");
+        check(dist / 10 < 10, "but far from holding slide speed");
+        check(
+          Math.min(...chain.slice(120).map(speed)) > P.runSpeed - 0.5,
+          "no dip below run speed",
+        );
       },
     );
   })(),
@@ -415,6 +464,7 @@ export const scenarios: Scenario[] = [
 
   (() => {
     const D: Input = { ...F, dash: true };
+    const REGEN = Math.ceil(P.dashRegenTime * 60) + 20; // long enough for one charge to come back
     const p = phases([
       [3, {}],
       [1, D],
@@ -422,7 +472,7 @@ export const scenarios: Scenario[] = [
       [1, D],
       [19, F],
       [1, D],
-      [99, F],
+      [REGEN, F],
       [1, D],
       [40, F],
     ]);
@@ -436,7 +486,7 @@ export const scenarios: Scenario[] = [
         check((t[4] as PlayerState).dashTime > 0, "first dash");
         check((t[24] as PlayerState).dashTime > 0, "second dash");
         check((t[44] as PlayerState).dashTime === 0, "no charge for the third");
-        check((t[144] as PlayerState).dashTime > 0, "regenerated charge");
+        check((t[45 + REGEN] as PlayerState).dashTime > 0, "regenerated charge");
       },
     );
   })(),
@@ -974,20 +1024,35 @@ export const scenarios: Scenario[] = [
 
   (() => {
     const w = inline([box(0, 10, -25, 40, 20, 10)]);
-    const input = (): InputFn => (t) => ({ hero: 1, moveZ: 1, pitch: 0.4, skillQ: t === 5 });
+    const input = (): InputFn => (t) => ({
+      hero: 1,
+      moveZ: t < 60 ? 1 : 0,
+      pitch: 0.4,
+      skillQ: t === 5,
+      jump: t === 75,
+    });
     return scenario(
       "grapple-landing",
-      "A tap from the ground without reeling: the hook kicks you forward, and landing lets the line go.",
+      "A tap from the ground without reeling: the hook kicks you forward, and landing keeps the line (you walk as usual on it); only the jump lets it go.",
       w,
       [0, 0, 0],
-      { total: 90, input },
+      { total: 100, input },
       (t) => {
         check(t[6]?.grappling === true, "hooked");
-        check(!last(t).grappling && last(t).onGround, "landed and let go");
         check(
-          t.filter((s) => s.grappling && s.onGround).length <= 2,
-          "not dragged along the ground on the line",
+          t.slice(6, 75).every((s) => s.grappling),
+          "the line is kept with the button up, in the air and on the ground",
         );
+        check(
+          t.filter((s) => s.grappling && s.onGround).length > 30,
+          "also standing on the ground",
+        );
+        check(
+          Math.abs(speed(t[58] as PlayerState) - P.runSpeed) < 0.5,
+          "walking as usual on the line",
+        );
+        check(speed(t[74] as PlayerState) < 0.5, "and standing still on it");
+        check(t[77]?.grappling === false, "the jump lets go");
       },
     );
   })(),
@@ -1140,14 +1205,14 @@ export const scenarios: Scenario[] = [
 
   (() => {
     // Already diving (the dive is started by the weapon step, outside the movement function):
-    // forward and down from 30 m up, high enough not to reach the ground.
+    // forward and down from 60 m up, high enough not to reach the ground.
     const dir = { rollDirX: 0, rollDirY: -Math.SQRT1_2, rollDirZ: -Math.SQRT1_2 };
     return scenario(
       "roll-dive",
       "The rolling dive: straight along its aim at dive speed with no gravity, ending when its time is up, with part of the speed kept.",
       inline([]),
-      [0, 30, 0],
-      phases([[70, { hero: 1 }]]),
+      [0, 60, 0],
+      phases([[Math.round(SKILL.rollTime * 60) + 12, { hero: 1 }]]),
       (t) => {
         // (t[0] is the state before the first tick: diving, but not yet moving.)
         const diving = t.slice(1).filter((s) => s.rollT > 0);

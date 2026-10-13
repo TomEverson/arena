@@ -6,8 +6,9 @@ import { PALETTE } from "./palette";
 import { type ReloadPose, reloadPose } from "./reloadAnim";
 import { FX_MODES, type FxMode, RetroRenderer } from "./render";
 import { BRICK_MAG_HOME, BRICK_MUZZLE, buildBrick } from "./rifle";
-import { COMBAT, PARAMS as P, WEAPON } from "./sim/params";
+import { COMBAT, PARAMS as P, SKILL, SNIPER, SPEAR, WEAPON } from "./sim/params";
 import { buildSniper, SNIPER_MUZZLE } from "./sniper";
+import { buildSpear, SPEAR_MUZZLE, SPEAR_PAIR_GAP } from "./spear";
 
 // Blockbench character models: loaded before any character is made (see characterModels.ts).
 await loadCharacterModels();
@@ -42,6 +43,7 @@ const MODELS = [
   { id: "dummy", name: "Dummy (base model)", kind: "character" },
   { id: "brick", name: "Brick (rifle)", kind: "weapon" },
   { id: "needle", name: "Needle (sniper)", kind: "weapon" },
+  { id: "spears", name: "Spears (launchers)", kind: "weapon" },
 ] as const;
 
 const scene = new THREE.Scene();
@@ -87,12 +89,15 @@ bodies.dummy.root.visible = false;
 // The weapon preview: the rifle floating at about chest height, muzzle to the right.
 const brick = buildBrick();
 const needle = buildSniper();
-/** The weapon preview models, each with a muzzle flash. */
+const spears = buildSpear();
+/** The weapon preview models, each with a muzzle flash and its own gun's numbers. */
 const previews = [
-  { id: "brick", model: brick, muzzle: BRICK_MUZZLE },
-  { id: "needle", model: needle, muzzle: SNIPER_MUZZLE },
-].map(({ id, model: m, muzzle }) => {
-  m.root.position.set(0, 1.0, 0);
+  { id: "brick", model: brick, muzzle: BRICK_MUZZLE, def: WEAPON, x: 0 },
+  { id: "needle", model: needle, muzzle: SNIPER_MUZZLE, def: SNIPER, x: 0 },
+  // (The pair is shown centred: the right launcher is at the model's origin, the left beside it.)
+  { id: "spears", model: spears, muzzle: SPEAR_MUZZLE, def: SPEAR, x: SPEAR_PAIR_GAP / 2 },
+].map(({ id, model: m, muzzle, def, x }) => {
+  m.root.position.set(0, 1.0, x);
   m.root.rotation.y = -Math.PI / 2;
   m.root.visible = false;
   const flash = new THREE.Mesh(
@@ -103,7 +108,7 @@ const previews = [
   flash.visible = false;
   m.root.add(flash);
   scene.add(m.root);
-  return { id, model: m, flash };
+  return { id, model: m, flash, muzzle, def };
 });
 /** The preview for the model chosen in the panel (the rifle if a character is chosen). */
 const shownPreview = () => previews.find((p) => p.id === model.id) ?? previews[0];
@@ -152,6 +157,11 @@ const ANIMATIONS = [
   ["hit", "Hit (flinch)"],
   ["die", "Die"],
 ] as const;
+/** The Assassin's two blade skills (only listed for the Assassin). */
+const ASSASSIN_ANIMATIONS = [
+  ["slash", "Dash cut (Shift)"],
+  ["dive", "Rolling dive (E)"],
+] as const;
 const WEAPON_ANIMATIONS = [
   ["w-idle", "Idle (full)"],
   ["w-fire", "Fire (loop)"],
@@ -160,9 +170,21 @@ const WEAPON_ANIMATIONS = [
   ["w-low", "Low ammo (blink)"],
 ] as const;
 type WeaponAnimId = (typeof WEAPON_ANIMATIONS)[number][0];
-type AnimId = (typeof ANIMATIONS)[number][0] | (typeof WEAPON_ANIMATIONS)[number][0];
+type AnimId =
+  | (typeof ANIMATIONS)[number][0]
+  | (typeof ASSASSIN_ANIMATIONS)[number][0]
+  | (typeof WEAPON_ANIMATIONS)[number][0];
 /** One-shot animations repeat on their own while selected, so there is always something to see. */
-const REPEATING = new Set<AnimId>(["jump", "doublejump", "dash", "hit", "equip", "melee"]);
+const REPEATING = new Set<AnimId>([
+  "jump",
+  "doublejump",
+  "dash",
+  "hit",
+  "equip",
+  "melee",
+  "slash",
+  "dive",
+]);
 const REPEAT_SECONDS = 1.8;
 const FIRE_SECONDS = 60 / 600; // the rifle's 600 rpm
 
@@ -172,14 +194,17 @@ function fillAnimations(): void {
   animSelect.length = 0;
   const list = model.kind === "weapon" ? WEAPON_ANIMATIONS : ANIMATIONS;
   for (const [id, name] of list) animSelect.add(new Option(name, id));
+  if (model.id === "assassin")
+    for (const [id, name] of ASSASSIN_ANIMATIONS) animSelect.add(new Option(name, id));
   animSelect.value = model.kind === "weapon" ? "w-fire" : "walk";
 }
 fillAnimations();
 /** What the character can carry. The Brick comes with arms that hold it in every animation. */
 const WEAPONS = [
-  ["none", "None (hands free)"],
+  ["none", "None (Assassin: blades)"],
   ["brick", "Brick (rifle)"],
   ["needle", "Needle (sniper)"],
+  ["spears", "Spears (launchers, one on each arm)"],
 ] as const;
 for (const [id, name] of WEAPONS) weaponSelect.add(new Option(name, id));
 weaponSelect.value = "brick";
@@ -222,13 +247,18 @@ let dashT = 0;
 let airJumpAt = -1; // seconds until the double jump's second kick (-1 = none planned)
 let repeatT = 0;
 let meleeOff = 0; // seconds until the melee flag clears (the swing itself plays on the rising edge)
+let slashOff = 0; // seconds until the slash flag clears (the cut plays on the rising edge)
+let slashDashIn = 0; // seconds until the dash cut's dash starts (its wind-up)
+let diveIn = 0; // seconds until the rolling dive dives (its wind-up)
+/** Where the rolling dive starts from, and how steeply it goes down (the game's shallowest dive). */
+const DIVE_HEIGHT = 10;
+const DIVE_DOWN = Math.sin(SKILL.rollMinDive); // rollMinDive is an angle below level, in radians
 let equipAt = 0; // seconds until the gun is drawn (the equip animation holsters it first)
 let weaponT = 0;
 let flashLeft = 0;
 let ammo = 1;
 let weaponAnim: WeaponAnimId = "w-fire";
 const weaponPose: ReloadPose = { roll: 0, pitch: 0, drop: 0, mag: 0, hand: 0 };
-const RELOAD_LOOP = WEAPON.reloadTime + 0.8;
 let fireT = 0;
 
 // Camera: drag to turn it around the character, scroll or arrows to zoom.
@@ -244,6 +274,10 @@ function resetStance(): void {
   state.sliding = false;
   state.crouching = false;
   state.dashing = false;
+  state.rolling = false;
+  slashDashIn = 0;
+  diveIn = 0;
+  state.divePrep = false;
   state.alive = true;
   state.onGround = true;
   state.y = 0;
@@ -305,9 +339,25 @@ function play(id: AnimId): void {
     state.wallRunning = true;
     state.onGround = false;
     state.y = 1.6; // held in the air beside the wall
+  } else if (id === "slash") {
+    // The dash cut: the blades are drawn and cut an X, then comes the dash straight ahead.
+    gait = "idle";
+    state.slashing = true;
+    slashOff = 0.25;
+    slashDashIn = SKILL.slashWindup;
+  } else if (id === "dive") {
+    // The rolling dive: up in the air the blades are drawn (the wind-up), then it tumbles forward
+    // and down until it lands, and the blades go back.
+    gait = "idle";
+    state.onGround = false;
+    state.y = DIVE_HEIGHT;
+    vy = 4; // a little rise, so the wind-up is not spent falling
+    state.divePrep = true;
+    diveIn = SKILL.rollWindup;
   } else if (id === "melee") {
     gait = "idle";
-    if (!weaponOn()) weaponSelect.value = "brick";
+    // (The Assassin with no gun has its blades out: the swing is a cut with both.)
+    if (!weaponOn() && model.id !== "assassin") weaponSelect.value = "brick";
     state.meleeing = true;
     meleeOff = 0.4;
   } else if (id === "equip") {
@@ -380,7 +430,10 @@ function characterKeys(e: KeyboardEvent): void {
   if (e.code === "KeyF") play("dash");
   if (e.code === "KeyW") play("wallrun");
   if (e.code === "KeyA") play("aim");
-  if (e.code === "KeyE") play("shoot");
+  // The Assassin's own keys, as in the game: Shift is the dash cut, E the rolling dive.
+  const assassin = model.id === "assassin";
+  if (assassin && (e.code === "ShiftLeft" || e.code === "ShiftRight")) play("slash");
+  if (e.code === "KeyE") play(assassin ? "dive" : "shoot");
   if (e.code === "KeyG") play("equip");
   if (e.code === "KeyV") play("melee");
   if (e.code === "KeyH") play("hit");
@@ -430,27 +483,41 @@ function stepWeapon(dt: number): void {
   const brickFlash = pv.flash;
   brickFlash.visible = false;
   brick.mag.position.y = BRICK_MAG_HOME.y;
+  // Each gun fires and reloads at its own pace (the spears: two shots, then a long reload).
+  const def = pv.def;
+  const fireSeconds = 60 / def.rpm;
+  let reloading = -1; // how far through a reload of its own the gun is (the spear launchers)
   if (weaponAnim === "w-fire") {
     ammo = Math.max(0, ammo);
-    if (weaponT >= FIRE_SECONDS) {
-      weaponT -= FIRE_SECONDS;
+    if (weaponT >= fireSeconds) {
+      weaponT -= fireSeconds;
       brick.shoot();
-      ammo -= 1 / WEAPON.magSize;
+      // (With the spears the left one goes first: the flash is at that muzzle.)
+      const leftFirst = pv.id === "spears" && ammo > 0.75;
+      brickFlash.position.copy(pv.muzzle);
+      if (leftFirst) brickFlash.position.x -= SPEAR_PAIR_GAP;
+      ammo -= 1 / def.magSize;
       if (ammo <= 0.001) ammo = 1; // refill, so it keeps firing
       flashLeft = 0.04;
     }
   } else if (weaponAnim === "w-reload") {
-    const t = weaponT % RELOAD_LOOP;
-    const progress = Math.min(1, t / WEAPON.reloadTime);
-    const r = reloadPose(progress, weaponPose);
-    brick.mag.position.y = BRICK_MAG_HOME.y + r.mag;
-    ammo = progress < 0.74 ? 0 : 1; // the strip refills when the new magazine seats
+    const t = weaponT % (def.reloadTime + 0.8);
+    const progress = Math.min(1, t / def.reloadTime);
+    if (brick.reload) {
+      reloading = progress;
+      ammo = progress < 0.3 ? 0 : progress < 0.55 ? 0.5 : 1; // as each spear goes on
+    } else {
+      const r = reloadPose(progress, weaponPose);
+      brick.mag.position.y = BRICK_MAG_HOME.y + r.mag;
+      ammo = progress < 0.74 ? 0 : 1; // the strip refills when the new magazine seats
+    }
   } else if (weaponAnim === "w-drain") {
     ammo = 1 - (weaponT % 4) / 4;
   }
   flashLeft = Math.max(0, flashLeft - dt);
   brickFlash.visible = flashLeft > 0;
   brick.update(dt, ammo, performance.now() / 1000);
+  brick.reload?.(reloading);
 }
 
 function stepFakePlayer(dt: number): void {
@@ -463,7 +530,19 @@ function stepFakePlayer(dt: number): void {
     repeatT += dt;
     if (repeatT > REPEAT_SECONDS) play(animSelect.value as AnimId);
   }
-  if (dashT > 0) {
+  state.diveLeft = state.rolling ? state.y / (SKILL.rollSpeed * DIVE_DOWN) : undefined;
+  if (state.rolling) {
+    // Straight along the dive at its fixed speed: no gravity until it lands.
+    speed = SKILL.rollSpeed * Math.sqrt(1 - DIVE_DOWN * DIVE_DOWN);
+    state.y -= SKILL.rollSpeed * DIVE_DOWN * dt;
+    if (state.y <= 0) {
+      state.y = 0;
+      vy = 0;
+      state.onGround = true;
+      state.rolling = false;
+      speed *= SKILL.rollExitScale;
+    }
+  } else if (dashT > 0) {
     dashT -= dt;
     speed = P.dashSpeed;
     if (dashT <= 0) {
@@ -491,7 +570,7 @@ function stepFakePlayer(dt: number): void {
     }
   }
   if (dashT > 0 && !state.onGround) vy = 0; // a dash holds its height
-  if (!state.onGround && !state.wallRunning && dashT <= 0) {
+  if (!state.onGround && !state.wallRunning && !state.rolling && dashT <= 0) {
     vy -= P.gravity * dt;
     state.y += vy * dt;
     if (state.y <= 0) {
@@ -499,6 +578,24 @@ function stepFakePlayer(dt: number): void {
       vy = 0;
       state.onGround = true;
     }
+  }
+  if (diveIn > 0) {
+    diveIn -= dt;
+    if (diveIn <= 0) {
+      state.divePrep = false;
+      state.rolling = !state.onGround; // landing first calls it off
+    }
+  }
+  if (slashDashIn > 0) {
+    slashDashIn -= dt;
+    if (slashDashIn <= 0) {
+      dashT = P.dashDuration;
+      speed = P.dashSpeed;
+    }
+  }
+  if (slashOff > 0) {
+    slashOff -= dt;
+    if (slashOff <= 0) state.slashing = false;
   }
   if (meleeOff > 0) {
     meleeOff -= dt;
@@ -510,7 +607,7 @@ function stepFakePlayer(dt: number): void {
   } else {
     state.armed = weaponOn();
   }
-  state.weapon = weaponSelect.value === "needle" ? 1 : 0;
+  state.weapon = weaponSelect.value === "needle" ? 1 : weaponSelect.value === "spears" ? 2 : 0;
   state.aiming = aimCheck.checked;
   if (fireCheck.checked) {
     fireT -= dt;
@@ -554,22 +651,27 @@ function frame(now: number): void {
 
   const doing = !state.alive
     ? "dead"
-    : state.wallRunning
-      ? "wall run"
-      : state.dashing
-        ? "dash"
-        : state.sliding
-          ? "slide"
-          : !state.onGround
-            ? vy > 0
-              ? "jump (rising)"
-              : "jump (falling)"
-            : state.crouching
-              ? "crouch"
-              : gait;
+    : state.rolling || state.divePrep
+      ? "rolling dive"
+      : state.slashing
+        ? "dash cut"
+        : state.wallRunning
+          ? "wall run"
+          : state.dashing
+            ? "dash"
+            : state.sliding
+              ? "slide"
+              : !state.onGround
+                ? vy > 0
+                  ? "jump (rising)"
+                  : "jump (falling)"
+                : state.crouching
+                  ? "crouch"
+                  : gait;
+  const skillKeys = model.id === "assassin" ? "Shift slash · E dive" : "E shoot";
   if (model.kind === "weapon") {
     help.textContent =
-      `${model.name}: ammo ${Math.round(ammo * WEAPON.magSize)} / ${WEAPON.magSize}\n` +
+      `${model.name}: ammo ${Math.round(ammo * (shownPreview()?.def.magSize ?? 0))} / ${shownPreview()?.def.magSize ?? 0}\n` +
       "pick Fire, Reload or the ammo strip in the panel\n" +
       "drag turn camera · scroll/arrows zoom · ?res=240 retro look";
     requestAnimationFrame(frame);
@@ -577,7 +679,7 @@ function frame(now: number): void {
   }
   help.textContent =
     `${model.name}: ${doing}${aimCheck.checked ? " + aim" : ""}${fireCheck.checked ? " + fire" : ""}  ${speed.toFixed(1)} m/s\n` +
-    "1 idle · 2 walk · 3 run · Space jump · D double jump · C crouch · S slide · F dash · W wall run · A aim · E shoot · G draw gun · V melee · H hit · K kill\n" +
+    `1 idle · 2 walk · 3 run · Space jump · D double jump · C crouch · S slide · F dash · W wall run · A aim · ${skillKeys} · G draw gun · V melee · H hit · K kill\n` +
     "B hitbox · drag turn camera · scroll/arrows zoom · ?res=240 retro look";
   requestAnimationFrame(frame);
 }

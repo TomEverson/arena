@@ -124,8 +124,15 @@ type Player struct {
 	// rollHit is who this rolling dive has already cut (each body is cut once per dive).
 	rollHit  [8]uint32
 	rollHits int
+	// rollFromY is the height the rolling dive started at: the further it has dropped, the harder it cuts.
+	rollFromY float64
 	// slashFor is how many more ticks others are told the player is mid-slash (for the animation).
 	slashFor int
+	// slashCut is how many more of the player's ticks the dash cut goes on cutting, and slashHit is
+	// who it has already cut (each body is cut once per dash).
+	slashCut  int
+	slashHit  [8]uint32
+	slashHits int
 }
 
 // NewPlayer allocates a player and its snapshot buffer pool.
@@ -209,8 +216,12 @@ type World struct {
 
 	bullets [maxBullets]liveBullet // projectiles in flight (see bullets.go)
 	skills  skills                 // grenades, barriers and bombardments (see skills.go)
-	pickups [maxPickups]pickup     // the practice range's recharge pickups (see skills.go)
-	shots   shotLog                // recent shots, for clients to draw tracers
+	// existing is every entity in the world this tick (kept in existingBuf), for telling a
+	// client that something it was shown is gone: see sendSnapshots and deltaEntities.
+	existing    []Entity
+	existingBuf [maxReplicatedEntities]Entity
+	pickups     [maxPickups]pickup // the practice range's recharge pickups (see skills.go)
+	shots       shotLog            // recent shots, for clients to draw tracers
 
 	cfg   MatchConfig
 	match matchState
@@ -375,19 +386,17 @@ func (w *World) stepPlayer(p *Player) {
 		ctx := WeaponContext{HSpeed: hSpeed(&p.State), OnGround: p.State.OnGround, Crouching: p.State.Crouching, Sliding: p.State.Sliding, Grappling: p.State.Grappling}
 		shot := StepWeapon(&p.Weapon, &in, &ctx, TickDT)
 		if shot.Fired {
-			switch d := activeDef(&p.Weapon); {
-			case d.hitscan:
-				w.resolveShot(p, &in, &shot, d)
-			case d.spear:
+			if d := activeDef(&p.Weapon); d.spear {
 				w.fireSpear(p, &in, &shot)
-			default:
-				w.fireBullet(p, &in, &shot)
+			} else {
+				w.fireBullet(p, &in, &shot, d)
 			}
 		}
 		if shot.MeleeStrike {
 			w.resolveMelee(p, &in)
 		}
 		w.useSkills(p, &in, &shot)
+		w.stepSlash(p, &in)
 		w.stepRoll(p, &in, wasRolling)
 		p.Entity.Yaw = in.Yaw
 		p.Entity.Pitch = in.Pitch
@@ -427,6 +436,9 @@ func (p *Player) syncEntity() {
 	}
 	if s.RollT > 0 {
 		f |= protocol.EntityFlagRolling
+	}
+	if p.Weapon.DiveT > 0 {
+		f |= protocol.EntityFlagDivePrep // winding up the dive: others see the blades come out
 	}
 	if p.Weapon.MeleeCooldown > WeaponMeleeCooldown-WeaponMeleeLock {
 		f |= protocol.EntityFlagMeleeing
@@ -541,6 +553,9 @@ func (w *World) apply(c command) {
 }
 
 func (w *World) sendSnapshots() {
+	// Everything that exists this tick, whoever can see it: what a client's baseline is checked
+	// against, so a thing that is gone (not merely skipped this time) is taken off every screen.
+	w.existing = w.entitiesFor(nil, w.existingBuf[:0])
 	for _, p := range w.players {
 		var s *Snapshot
 		select {
@@ -578,6 +593,10 @@ func (w *World) sendSnapshots() {
 
 // deltaEntities replaces the current relevance set with changed entities and explicit removals.
 // Unchanged entities stay in the per-client baseline, so the client can keep interpolating them.
+// An entity missing from this snapshot stays in the baseline only while it still exists and is
+// within interest (it was just not sent this time: far things are sent less often). One that no
+// longer exists (a spear or grenade that went off, a hook let go, a pickup taken, a player who
+// left) is removed at once.
 func (w *World) deltaEntities(viewer *Player, s *Snapshot) {
 	var current [maxReplicatedEntities]bool
 	for i := 0; i < viewer.replicationLen; i++ {
@@ -589,7 +608,7 @@ func (w *World) deltaEntities(viewer *Player, s *Snapshot) {
 				break
 			}
 		}
-		if found || w.inInterest(viewer, old.X, old.Y, old.Z) {
+		if found || (w.exists(old.ID) && w.inInterest(viewer, old.X, old.Y, old.Z)) {
 			current[i] = true
 			continue
 		}
@@ -626,6 +645,16 @@ func (w *World) deltaEntities(viewer *Player, s *Snapshot) {
 		}
 	}
 	s.Entities = s.Entities[:write]
+}
+
+// exists reports whether an entity with this id is in the world this tick (see sendSnapshots).
+func (w *World) exists(id uint32) bool {
+	for i := range w.existing {
+		if w.existing[i].ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // entitiesFor is the single choke point for what a player may see.

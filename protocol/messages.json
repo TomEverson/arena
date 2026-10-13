@@ -198,6 +198,10 @@
         "grappleCharges": {
           "type": "f64",
           "doc": "Grapples ready (fractional while one recharges)."
+        },
+        "slowT": {
+          "type": "f64",
+          "doc": "Seconds of slow left after a bullet hit (run speed is cut while above 0)."
         }
       }
     },
@@ -276,6 +280,14 @@
         "skillET": {
           "type": "f64",
           "doc": "Seconds until the second skill is ready again; 0 when ready."
+        },
+        "diveT": {
+          "type": "f64",
+          "doc": "Seconds until the Assassin's rolling dive dives (its wind-up: draw the blades); 0 when not winding up."
+        },
+        "slashT": {
+          "type": "f64",
+          "doc": "Seconds until the Assassin's dash cut dashes (its wind-up: draw the blades and cut the X); 0 when not winding up."
         },
         "rng": {
           "type": "u32",
@@ -364,7 +376,7 @@
         },
         "gun": {
           "type": "u8",
-          "doc": "Which gun: 0 rifle (a bullet to fly), 1 sniper (hitscan: draw a near-instant tracer)."
+          "doc": "Which gun fired the bullet to draw: 0 rifle, 1 sniper (a faster bullet)."
         },
         "x": "f64",
         "y": "f64",
@@ -430,6 +442,7 @@
       "grappling": 4,
       "holdingSpear": 8192,
       "rolling": 16384,
+      "divePrep": 32768,
       "slashing": 4096,
       "holdingSniper": 1024,
       "emptyHanded": 2048

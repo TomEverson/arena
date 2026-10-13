@@ -146,9 +146,12 @@ func TestShotsOnlyHurtDuringALiveMatch(t *testing.T) {
 	a.State = SpawnState(0, 0, 0)
 	b.State = SpawnState(0, 0, -10)
 	a.Health.ProtectedFor, b.Health.ProtectedFor = 0, 0
-	shoot := func() { // the shot itself, as the world resolves it
-		in := Input{Pitch: -0.05, ADS: true}
-		r.w.resolveShot(a, &in, &ShotResult{}, &weaponDefs[0])
+	for i := 0; i < 4; i++ {
+		r.w.Step() // so the position history has them where they now stand
+	}
+	shoot := func() { // the shot itself, as the world resolves it: seen three ticks ago, so the bullet lands at once
+		in := Input{Pitch: -0.05, ADS: true, ViewTick: float64(r.w.tick) - 3}
+		r.w.fireBullet(a, &in, &ShotResult{}, &weaponDefs[0])
 	}
 	for _, phase := range []uint8{protocol.MatchPhaseWaiting, protocol.MatchPhaseCountdown, protocol.MatchPhaseEnded} {
 		r.w.match.phase = phase

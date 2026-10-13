@@ -25,6 +25,7 @@ type bulletVector struct {
 	Dir     [3]float64      `json:"dir"`
 	Speed   float64         `json:"speed"`
 	Range   float64         `json:"range"`
+	Gravity float64         `json:"gravity"`
 	Targets [][]game.Hitbox `json:"targets"`
 	Steps   []struct {
 		X         float64     `json:"x"`
@@ -60,7 +61,7 @@ func TestBulletVectors(t *testing.T) {
 					break
 				}
 				targets := v.Targets[min(i, len(v.Targets)-1)]
-				hit := game.StepBullet(&b, v.Dt, w, targets, v.Range)
+				hit := game.StepBullet(&b, v.Dt, w, targets, v.Range, v.Gravity)
 				got := map[string]any{"x": b.X, "y": b.Y, "z": b.Z, "vx": b.VX, "vy": b.VY, "vz": b.VZ, "travelled": b.Travelled, "done": b.Done}
 				wantFlat := map[string]any{"x": want.X, "y": want.Y, "z": want.Z, "vx": want.VX, "vy": want.VY, "vz": want.VZ, "travelled": want.Travelled, "done": want.Done}
 				problems = append(problems, diff(t, fmt.Sprintf("step %d", i), wantFlat, got)...)

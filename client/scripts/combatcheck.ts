@@ -116,9 +116,12 @@ try {
     problems.push(`${deaths} deaths but only ${respawns} respawns`);
   if (withComp.a.killFeed < kills || withComp.b.killFeed < kills)
     problems.push("a player missed kill-feed events");
-  if (withComp.corrections > 6 * (deaths + respawns) + 6)
+  // A bullet hit slows its victim, which the victim's client only learns from a snapshot: one
+  // correction per hit taken is expected, on top of the ones around a death.
+  const hurts = withComp.a.hurt + withComp.b.hurt;
+  if (withComp.corrections > 6 * (deaths + respawns) + 6 + hurts)
     problems.push(
-      `${withComp.corrections} prediction corrections is too many for ${deaths} deaths`,
+      `${withComp.corrections} prediction corrections is too many for ${deaths} deaths and ${hurts} hits taken`,
     );
   if (withComp.rtt < 100 || withComp.rtt > 320)
     problems.push(

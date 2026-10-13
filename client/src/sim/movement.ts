@@ -65,6 +65,7 @@ export function spawnState(x: number, y: number, z: number): PlayerState {
     grappleT: 0,
     grappleStall: 0,
     grappleCharges: SKILL.grappleCharges,
+    slowT: 0,
   };
 }
 
@@ -131,6 +132,9 @@ export function stepPlayer(
   s.wallCooldown = Math.max(0, s.wallCooldown - dt);
   s.coyote = s.onGround ? P.coyoteTime : Math.max(0, s.coyote - dt);
   s.jumpBuffer = input.jump ? P.jumpBufferTime : Math.max(0, s.jumpBuffer - dt);
+  // Slowed by a bullet hit (the server sets slowT): running is slower until it runs out.
+  const slow = s.slowT > 0 ? P.hitSlowMult : 1;
+  s.slowT = Math.max(0, s.slowT - dt);
 
   if (s.mantling) {
     stepMantle(s, dt);
@@ -183,10 +187,11 @@ export function stepPlayer(
     s.vz = s.rollDirZ * SKILL.rollSpeed;
     s.rollT = Math.max(0, s.rollT - dt);
     s.jumpBuffer = 0;
-  } else if (s.grappling) {
+  } else if (s.grappling && (!s.onGround || input.reel)) {
     // Grapple: on a line. Gravity acts and you can steer, and the line holds you (holdLine), so
     // you swing. While the button is held the line also reels you in: a pull toward the hook,
-    // or up the middle of two.
+    // or up the middle of two. (Standing on the ground without reeling, you keep the line but
+    // move as usual: see below.)
     endWallRun(s);
     s.sliding = false;
     s.crouching = false;
@@ -217,10 +222,16 @@ export function stepPlayer(
     } else {
       updateSlide(s, input, world, dt);
       updateCrouch(s, input, world);
-      updateHorizontalVelocity(s, wish, dt);
+      updateHorizontalVelocity(s, wish, slow, dt);
       if (!tryWallJump(s, input, world)) tryJump(s, input, world);
       if (!s.onGround) s.vy = Math.max(-P.terminalVelocity, s.vy - P.gravity * dt);
       else if (s.vy < 0) s.vy = 0;
+    }
+    if (s.grappling) {
+      // On the ground with a line out and the button up: the line is kept (it only lets go on a
+      // jump or a crouch), and still will not let you get further from the hook than it is long.
+      holdLine(s, s.grappleX, s.grappleY, s.grappleZ, s.grappleLen, dt);
+      if (s.grapple2) holdLine(s, s.grapple2X, s.grapple2Y, s.grapple2Z, s.grapple2Len, dt);
     }
   }
 
@@ -240,15 +251,14 @@ export function stepPlayer(
     }
     // Let go: on reaching a hook; reeling, once between two hooks (the lines pull against each
     // other) or stalled; on crouch; or when it has gone on too long. The speed is kept: the fling.
+    // (Letting go of the button does not let go of the line, in the air or on the ground: a jump
+    // does, see updateGrapple.)
     const reeledOut =
       input.reel &&
       (pullDirection(s)[3] < SKILL.grappleSplit || s.grappleStall >= SKILL.grappleStallTime);
-    // (Landing lets go too, unless you are reeling: a line is for the air.)
-    const landed = s.onGround && !input.reel && s.grappleT > dt;
     if (
       nearestHook(s) <= SKILL.grappleArrive ||
       reeledOut ||
-      landed ||
       input.slide ||
       s.grappleT >= SKILL.grappleMaxTime
     )
@@ -353,7 +363,7 @@ function reduceSpeed(s: PlayerState, drop: number, floor: number): void {
   s.vz *= k;
 }
 
-function updateHorizontalVelocity(s: PlayerState, wish: Wish, dt: number): void {
+function updateHorizontalVelocity(s: PlayerState, wish: Wish, slow: number, dt: number): void {
   if (s.sliding && s.onGround && hSpeed(s) >= P.slideEndSpeed) {
     // Momentum slide: fixed direction, linear decay.
     reduceSpeed(s, P.slideDecel * dt, 0);
@@ -362,7 +372,7 @@ function updateHorizontalVelocity(s: PlayerState, wish: Wish, dt: number): void 
   if (s.onGround) {
     // Crouch-walk (also when stuck low under a ceiling after a slide).
     const wishSpeed =
-      (s.sliding || s.crouching ? P.crouchSpeed : P.runSpeed) * wish.mag * wish.speed;
+      (s.sliding || s.crouching ? P.crouchSpeed : P.runSpeed) * wish.mag * wish.speed * slow;
     if (wish.mag === 0) {
       reduceSpeed(s, Math.max(hSpeed(s), P.stopSpeed) * P.groundFriction * dt, 0);
     } else {
@@ -377,7 +387,7 @@ function updateHorizontalVelocity(s: PlayerState, wish: Wish, dt: number): void 
   }
   // Air: steer freely but never gain speed beyond what we had (or run speed).
   const before = hSpeed(s);
-  if (wish.mag > 0) accelerate(s, wish, P.runSpeed * wish.run * wish.mag, P.airAccel, dt);
+  if (wish.mag > 0) accelerate(s, wish, P.runSpeed * wish.run * wish.mag * slow, P.airAccel, dt);
   const cap = Math.max(before, P.runSpeed * wish.run);
   const after = hSpeed(s);
   if (after > cap) {
@@ -394,6 +404,9 @@ function tryJump(s: PlayerState, input: PlayerInput, world: CollisionWorld): voi
     if (s.sliding) {
       if (!fitsStanding(s, world)) return;
       endSlide(s);
+      // A jump out of a slide costs part of its speed (never below run speed), so chained
+      // slide-jumps wind down.
+      reduceSpeed(s, hSpeed(s) * (1 - P.slideJumpKeep), P.runSpeed);
     }
     if (s.crouching) {
       if (!fitsStanding(s, world)) return;

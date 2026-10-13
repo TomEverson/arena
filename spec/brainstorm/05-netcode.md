@@ -47,6 +47,7 @@ Transport split:
 
 - Binary MessagePack payloads: production traffic avoids JSON parsing and numeric text overhead.
 - Delta snapshots: the first relevance snapshot is full; later snapshots carry changed entities and removals.
+  - A removal is sent when an entity leaves interest, **or no longer exists**. Until 2026-10-13 only the first case was handled: anything that ceased to exist within interest range (a spear or grenade that went off, a grapple hook let go, a pickup taken) stayed on the client's screen for ever. The server now lists everything that exists each snapshot tick (`World.existing`) and `deltaEntities` checks the client's baseline against it. Test: `TestASpearThatWentOffIsRemovedFromEveryScreen`.
 - Unreliable datagrams: frequent player inputs and movement snapshots once WebTransport is active.
 - Reliable streams: welcome, match state, important events and resynchronization/keyframes.
 - Every datagram carries a sequence number; stale snapshots are discarded and keyframes repair loss.

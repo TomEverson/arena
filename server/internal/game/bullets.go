@@ -1,12 +1,13 @@
 package game
 
-// Projectile weapons on the server. A shot spawns a Bullet (bullet.go) at the shooter's eye. The
+// Bullets on the server: every gun's shot (the rifle's and the sniper's; the spears are in
+// skills.go). A shot spawns a Bullet (bullet.go) at the shooter's eye. The
 // bullet is then flown tick by tick against everyone else, and a hit is applied the tick it lands.
 //
 // Lag compensation: the shooter's screen was showing the world `lag` ticks in the past when they
 // fired, and that is the world their bullet flew through. So at spawn the bullet is flown `lag`
 // steps at once, each against the targets as they were at that moment of the shooter's view
-// (positions come from the same history the hitscan rewind uses). After that it has caught up
+// (positions come from the history kept in combat.go). After that it has caught up
 // with real time and flies against the live positions. Walls never move, so only targets need
 // the rewind. Runs on the world goroutine inside Step, so it must never allocate.
 
@@ -27,6 +28,7 @@ const (
 // liveBullet is a bullet in the world.
 type liveBullet struct {
 	Bullet
+	def       *weaponDef // the gun it came from: its damage, range and drop
 	owner     uint32
 	spawnTick uint64
 	active    bool
@@ -97,7 +99,7 @@ func (w *World) fillBoxes(shooter *Player, view float64) int {
 }
 
 // fireBullet spawns the bullet for a shot and catches it up with real time (see the top of this file).
-func (w *World) fireBullet(shooter *Player, in *Input, shot *ShotResult) {
+func (w *World) fireBullet(shooter *Player, in *Input, shot *ShotResult, d *weaponDef) {
 	shooter.Health.ProtectedFor = 0 // firing ends spawn protection
 
 	s := &shooter.State
@@ -105,14 +107,14 @@ func (w *World) fireBullet(shooter *Player, in *Input, shot *ShotResult) {
 	dx, dy, dz := ViewDirection(in.Yaw+shot.SpreadYaw, in.Pitch+shot.SpreadPitch)
 	w.shots.push(protocol.Shot{Tick: uint32(w.tick), Actor: shooter.ID, Gun: shooter.Weapon.Gun, X: ox, Y: oy, Z: oz, Dx: dx, Dy: dy, Dz: dz})
 
-	b := SpawnBullet(ox, oy, oz, dx, dy, dz, WeaponBulletSpeed)
+	b := SpawnBullet(ox, oy, oz, dx, dy, dz, d.bulletSpeed)
 	view := w.rewindView(in.ViewTick)
 	catchUp := int(math.Floor(float64(w.tick) - view))
 	for k := 1; k <= catchUp; k++ {
 		n := w.fillBoxes(shooter, view+float64(k))
-		hit := StepBullet(&b, TickDT, &w.level.Collision, w.boxes[:n], WeaponRange)
+		hit := StepBullet(&b, TickDT, &w.level.Collision, w.boxes[:n], d.rng, d.bulletGravity)
 		if hit.Kind == RayTarget {
-			w.applyHit(shooter, hit, &weaponDefs[0])
+			w.bulletHit(shooter, hit, d)
 		}
 		if b.Done {
 			return
@@ -120,7 +122,7 @@ func (w *World) fireBullet(shooter *Player, in *Input, shot *ShotResult) {
 	}
 	for i := range w.bullets {
 		if !w.bullets[i].active {
-			w.bullets[i] = liveBullet{Bullet: b, owner: shooter.ID, spawnTick: w.tick, active: true}
+			w.bullets[i] = liveBullet{Bullet: b, def: d, owner: shooter.ID, spawnTick: w.tick, active: true}
 			return
 		}
 	}
@@ -136,9 +138,9 @@ func (w *World) stepBullets() {
 		}
 		owner := w.byID(lb.owner)
 		n := w.fillBoxes(owner, float64(w.tick))
-		hit := StepBullet(&lb.Bullet, TickDT, &w.level.Collision, w.boxes[:n], WeaponRange)
+		hit := StepBullet(&lb.Bullet, TickDT, &w.level.Collision, w.boxes[:n], lb.def.rng, lb.def.bulletGravity)
 		if hit.Kind == RayTarget && owner != nil {
-			w.applyHit(owner, hit, &weaponDefs[0])
+			w.bulletHit(owner, hit, lb.def)
 		}
 		if lb.Done {
 			lb.active = false
@@ -146,9 +148,17 @@ func (w *World) stepBullets() {
 	}
 }
 
-// applyHit applies a bullet that struck a player or a practice target.
-func (w *World) applyHit(shooter *Player, hit RayHit, d *weaponDef) {
-	w.dealDamage(shooter, uint32(hit.TargetID), d.damageOf(hit.Headshot), hit.Headshot, 0)
+// bulletHit applies a bullet of gun d that struck something. A player it hurts is also slowed
+// for a moment (SlowT, see movement.go), so being hit costs speed. (Server-side only: the
+// victim's client picks it up from the next snapshot, like a knock.)
+func (w *World) bulletHit(shooter *Player, hit RayHit, d *weaponDef) {
+	id := uint32(hit.TargetID)
+	if !w.dealDamage(shooter, id, d.damageOf(hit.Headshot), hit.Headshot, 0) || id >= CombatTargetIdBase {
+		return
+	}
+	if victim := w.byID(id); victim != nil && victim.Health.Alive {
+		victim.State.SlowT = HitSlowTime
+	}
 }
 
 // dealDamage hurts the player or practice target with this id (extra adds event flags, e.g. melee).

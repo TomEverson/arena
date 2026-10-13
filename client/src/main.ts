@@ -4,7 +4,7 @@ import greybox from "../../levels/greybox.json";
 import { AudioEngine, type MoveSound, MoveSoundTracker, StepCounter } from "./audio";
 import { type BodyState, CharacterBody, HERO_LOOKS, HERO_NAMES } from "./character";
 import { loadCharacterModels } from "./characterModels";
-import { Fx, HITSCAN_TRACER_SPEED } from "./fx";
+import { Fx } from "./fx";
 import { HitFeedback } from "./hitFeedback";
 import { CombatHud } from "./hud";
 import { buildLevelMeshes } from "./levelRender";
@@ -42,7 +42,7 @@ import { PALETTE } from "./palette";
 import { PracticeStats } from "./practiceStats";
 import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
-import type { Hitbox } from "./sim/hitscan";
+import { castRay, type Hitbox } from "./sim/hitscan";
 import { buildCollisionWorld, type Level, parseLevel } from "./sim/level";
 import { bodyHeight, eyeHeight, hSpeed, spawnState } from "./sim/movement";
 import { COMBAT, PARAMS, SKILL } from "./sim/params";
@@ -155,11 +155,14 @@ const remoteSteps = new Map<number, StepCounter>();
 // Browsers allow sound only after the player interacts with the page.
 for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, () => audio.unlock());
 
+/** How long the reload in progress takes in all (seconds), for its animation; 0 before the first. */
+let reloadTotal = 0;
+
 /** The sounds for one weapon step: shot, dry click, reload start and finish. */
 function shotSounds(shot: ShotResult): void {
   if (shot.fired) {
     const d = currentDef();
-    if (d?.hitscan) audio.shotSniper();
+    if (d === WEAPON_DEFS[1]) audio.shotSniper();
     else if (d?.spear) audio.skill();
     else audio.shot();
   }
@@ -170,21 +173,43 @@ function shotSounds(shot: ShotResult): void {
     syncedGun = w.gun * 10 + (w.slot !== EMPTY_HANDS ? 1 : 0);
   }
   if (shot.dryFire) audio.dryFire();
-  if (shot.reloadStarted) audio.reloadStart();
+  if (shot.reloadStarted) {
+    audio.reloadStart();
+    reloadTotal = currentWeapon().reloadT; // how long this reload takes (shorter in overdrive)
+  }
   if (shot.reloadFinished) audio.reloadDone();
   if (shot.meleeStarted) {
     audio.swing();
     fx.melee();
   }
   if (shot.grenade || shot.barrier) audio.skill();
-  if (shot.slash) {
+  // The dash cut: the press starts the draw and the X; the dash comes when the wind-up is over.
+  if (shot.slashStarted) {
     audio.swing();
     fx.slash();
+  }
+  if (shot.slash) audio.swing();
+  // The rolling dive: the press starts the draw; the dive comes when the wind-up is over.
+  if (shot.rollStarted) {
+    audio.swing();
+    fx.rollPrep();
   }
   if (shot.roll) {
     audio.swing();
     fx.roll();
   }
+}
+
+/** About how long until your own dive ends (seconds): when it reaches a wall or the floor, or its time runs out. */
+function diveLeft(): number {
+  const hit = castRay(
+    world,
+    [],
+    [player.x, player.y + 0.05, player.z],
+    [player.rollDirX, player.rollDirY, player.rollDirZ],
+    SKILL.rollSpeed * player.rollT,
+  );
+  return hit.t / SKILL.rollSpeed;
 }
 
 /** The weapon state the player is using right now (predicted; a fresh one until the server has answered). */
@@ -327,7 +352,11 @@ const smoother = new CorrectionSmoother();
 const clock = new ServerClock();
 const remotes = new RemoteTracks();
 const remoteViews = new RemoteViews(scene, () => world);
-const skillViews = new SkillViews(scene);
+// (A stuck spear's danger zone is drawn on the floor under it: a ray straight down finds it.)
+const skillViews = new SkillViews(scene, (x, y, z) => {
+  const hit = castRay(world, [], [x, y + 0.2, z], [0, -1, 0], 60);
+  return hit.kind === "world" ? y + 0.2 - hit.t : y;
+});
 /** Bombardments already on screen (a new one sounds its warning once). */
 const knownStrikes = new Set<number>();
 let shellSoundIn = 0;
@@ -623,10 +652,10 @@ function fireShotOnline(shot: ShotResult, ads: boolean): void {
   const origin: [number, number, number] = [player.x, player.y + eyeHeight(player), player.z];
   const dir = viewDirection(look.yaw + shot.spreadYaw, look.pitch + shot.spreadPitch);
   fx.shot(ads);
-  // The picture of the shot (the server decides hits): a bullet to fly, or for the sniper a
-  // near-instant streak. A thunder spear is its own object, sent by the server.
-  if (!currentDef()?.spear)
-    fx.fireOwn(origin, dir, currentDef()?.hitscan ? HITSCAN_TRACER_SPEED : undefined);
+  // The picture of the shot (the server decides hits): a bullet to fly, at its gun's speed.
+  // A thunder spear is its own object, sent by the server.
+  const def = currentDef();
+  if (def && !def.spear) fx.fireOwn(origin, dir, def);
   look.yaw += shot.kickYaw;
   look.pitch = clampPitch(look.pitch + shot.kickPitch);
 }
@@ -854,11 +883,7 @@ function frame(nowMs: number): void {
   while (clock.ready && pendingShots[0] && pendingShots[0].tick <= renderTick) {
     const sh = pendingShots.shift() as Shot;
     const sniper = sh.gun === 1;
-    fx.fireRemote(
-      [sh.x, sh.y, sh.z],
-      [sh.dx, sh.dy, sh.dz],
-      sniper ? HITSCAN_TRACER_SPEED : undefined,
-    );
+    fx.fireRemote([sh.x, sh.y, sh.z], [sh.dx, sh.dy, sh.dz], WEAPON_DEFS[sniper ? 1 : 0]);
     audio.shotAt({ x: sh.x, y: sh.y, z: sh.z }, sniper);
   }
   if (pendingShots.length > 64) pendingShots.splice(0, pendingShots.length - 64);
@@ -887,6 +912,7 @@ function frame(nowMs: number): void {
     },
     def ?? WEAPON_DEFS[0],
   );
+  fx.setDiving(player.rollT > 0, player.rollT > 0 ? diveLeft() : undefined);
   const shake = fx.update(
     frameDt,
     adsT,
@@ -894,7 +920,7 @@ function frame(nowMs: number): void {
     fov,
     activeWeapon.reloadT,
     def ? activeWeapon.ammo / def.magSize : 1,
-    def?.reloadTime,
+    reloadTotal > 0 && activeWeapon.reloadT <= reloadTotal ? reloadTotal : def?.reloadTime,
   );
   // Wall run: bank the camera away from the wall (positive roll tilts the head left).
   const wallOnRight =
@@ -962,7 +988,7 @@ function frame(nowMs: number): void {
         skill("Q", "Grenade", activeWeapon.skillQT) +
         skill("E", "Barrier", activeWeapon.skillET) +
         ultimate("Bombardment")
-      : // The Assassin: grapple charges as dots, the spinning slash (its dash button), the
+      : // The Assassin: grapple charges as dots, the dash cut (its dash button), the
         // rolling dive (in the air only), and overdrive.
         `<span${hooks > 0 ? ' class="on"' : ""}>Q Grapple ${"●".repeat(hooks)}${"○".repeat(SKILL.grappleCharges - hooks)}</span>` +
         skill("Shift", "Slash", activeWeapon.skillQT) +
@@ -988,7 +1014,7 @@ function frame(nowMs: number): void {
     `speed ${hSpeed(player).toFixed(1)} m/s | ${state} | height ${bodyHeight(player).toFixed(1)}\n` +
     `jumps ${"●".repeat(player.airJumps)}${"○".repeat(PARAMS.maxAirJumps - player.airJumps)}  dash ${"●".repeat(Math.floor(player.dashCharges))}${"○".repeat(PARAMS.dashCharges - Math.floor(player.dashCharges))}  ` +
     `(${(player.dashCharges % 1).toFixed(2)})\n` +
-    `WASD move · Space jump (beside a wall at speed you run along it, jump again to kick off) · Q, E, F skills (Trooper: grenade, barrier, bombardment · Assassin: grapple (hold Q to reel in, let go to swing, Space or C to drop), dive in the air, overdrive; its Shift is a spinning slash, and it has no dash or double jump) · V melee (or left click with empty hands) · 1 2 3 weapons · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
+    `WASD move · Space jump (beside a wall at speed you run along it, jump again to kick off) · Q, E, F skills (Trooper: grenade, barrier, bombardment · Assassin: grapple (hold Q to reel in, let go to swing, Space or C to drop), dive in the air, overdrive (10 s: blade skills back to back, grapples always ready, spears reload twice as fast, no sniper); its Shift is a dash cut (a dash ahead with both blades crossing), and it has no other dash or double jump) · V melee (or left click with empty hands) · 1 2 3 weapons · Shift dash · C crouch/slide · LMB fire · RMB aim · R reload · Tab scoreboard · Enter rematch · L copy link · P respawn (dev)\n` +
     `${fps.toFixed(0)} fps (${fps > 0 ? (1000 / fps).toFixed(1) : "-"} ms) | render ${RENDER_WIDTH}x${RENDER_HEIGHT} (?res=240..720) | sim ticks ${simTicks}\n` +
     netHud();
   requestAnimationFrame(frame);

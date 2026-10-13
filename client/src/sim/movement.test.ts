@@ -181,13 +181,22 @@ describe("slide", () => {
     expect(s.sliding).toBe(false);
   });
 
-  it("keeps its momentum through a slide jump", () => {
+  it("keeps most of its momentum through a slide jump, not all", () => {
     let s = run(running(), world, 10, { ...FORWARD, slide: true });
     const before = hSpeed(s);
     s = run(s, world, 1, { ...FORWARD, slide: true, jump: true });
     expect(s.sliding).toBe(false);
     expect(s.vy).toBeGreaterThan(0);
-    expect(hSpeed(s)).toBeGreaterThan(before * 0.95);
+    expect(hSpeed(s)).toBeGreaterThan(P.runSpeed);
+    expect(hSpeed(s)).toBeCloseTo(before * P.slideJumpKeep, 0);
+  });
+
+  it("never drops below run speed by jumping out of a slow slide", () => {
+    let s = run(running(), world, 1, { ...FORWARD, slide: true });
+    s = { ...s, vz: -P.runSpeed, slideCooldown: P.slideCooldown };
+    s = run(s, world, 1, { ...FORWARD, slide: true, jump: true });
+    expect(s.vy).toBeGreaterThan(0);
+    expect(hSpeed(s)).toBeGreaterThan(P.runSpeed - 0.2);
   });
 
   it("cannot re-boost during the cooldown", () => {

@@ -30,6 +30,7 @@ const (
 	EntityFlagGrappling     uint16 = 4
 	EntityFlagHoldingSpear  uint16 = 8192
 	EntityFlagRolling       uint16 = 16384
+	EntityFlagDivePrep      uint16 = 32768
 	EntityFlagSlashing      uint16 = 4096
 	EntityFlagHoldingSniper uint16 = 1024
 	EntityFlagEmptyHanded   uint16 = 2048
@@ -194,6 +195,8 @@ type PlayerState struct {
 	GrappleStall float64 `json:"grappleStall"`
 	// Grapples ready (fractional while one recharges).
 	GrappleCharges float64 `json:"grappleCharges"`
+	// Seconds of slow left after a bullet hit (run speed is cut while above 0).
+	SlowT float64 `json:"slowT"`
 }
 
 // Entity: What other players need to draw and interpolate someone. Every entity carries a teamId.
@@ -240,6 +243,10 @@ type WeaponState struct {
 	SkillQT float64 `json:"skillQT"`
 	// Seconds until the second skill is ready again; 0 when ready.
 	SkillET float64 `json:"skillET"`
+	// Seconds until the Assassin's rolling dive dives (its wind-up: draw the blades); 0 when not winding up.
+	DiveT float64 `json:"diveT"`
+	// Seconds until the Assassin's dash cut dashes (its wind-up: draw the blades and cut the X); 0 when not winding up.
+	SlashT float64 `json:"slashT"`
 	// Seeded random generator state (bullet spread).
 	Rng uint32 `json:"rng"`
 }
@@ -290,7 +297,7 @@ type Shot struct {
 	Tick uint32 `json:"tick"`
 	// Who fired it.
 	Actor uint32 `json:"actor"`
-	// Which gun: 0 rifle (a bullet to fly), 1 sniper (hitscan: draw a near-instant tracer).
+	// Which gun fired the bullet to draw: 0 rifle, 1 sniper (a faster bullet).
 	Gun uint8   `json:"gun"`
 	X   float64 `json:"x"`
 	Y   float64 `json:"y"`

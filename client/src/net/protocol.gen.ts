@@ -15,6 +15,7 @@ export const EntityFlags = {
   grappling: 4,
   holdingSpear: 8192,
   rolling: 16384,
+  divePrep: 32768,
   slashing: 4096,
   holdingSniper: 1024,
   emptyHanded: 2048,
@@ -179,6 +180,8 @@ export interface PlayerState {
   grappleStall: number;
   /** Grapples ready (fractional while one recharges). */
   grappleCharges: number;
+  /** Seconds of slow left after a bullet hit (run speed is cut while above 0). */
+  slowT: number;
 }
 
 /** What other players need to draw and interpolate someone. Every entity carries a teamId. */
@@ -225,6 +228,10 @@ export interface WeaponState {
   skillQT: number;
   /** Seconds until the second skill is ready again; 0 when ready. */
   skillET: number;
+  /** Seconds until the Assassin's rolling dive dives (its wind-up: draw the blades); 0 when not winding up. */
+  diveT: number;
+  /** Seconds until the Assassin's dash cut dashes (its wind-up: draw the blades and cut the X); 0 when not winding up. */
+  slashT: number;
   /** Seeded random generator state (bullet spread). */
   rng: number;
 }
@@ -275,7 +282,7 @@ export interface Shot {
   tick: number;
   /** Who fired it. */
   actor: number;
-  /** Which gun: 0 rifle (a bullet to fly), 1 sniper (hitscan: draw a near-instant tracer). */
+  /** Which gun fired the bullet to draw: 0 rifle, 1 sniper (a faster bullet). */
   gun: number;
   x: number;
   y: number;

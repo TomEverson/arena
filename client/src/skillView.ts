@@ -15,7 +15,8 @@ import { buildSpearShaft } from "./spear";
  *   barrier      a SIGNAL pane (technology) with a brighter frame.
  *   bombardment  a HAZARD ring on the ground the size of the danger zone: it blinks during the
  *                warning, then streaks fall inside it while the shells land.
- *   spear        a thunder spear in flight, then stuck and blinking; a blast when it goes off.
+ *   spear        a thunder spear in flight, then stuck and blinking, with a HAZARD ring on the
+ *                ground showing how far its blast will reach; a blast when it goes off.
  *   grapple      a SIGNAL line from a grappling player to the point they are hooked to.
  *   pickup       the practice range's recharge: a SIGNAL box turning over a pad, bobbing. It is
  *                only sent while it can be taken, so it vanishes when someone takes it.
@@ -35,6 +36,8 @@ interface View {
   streaks?: THREE.Mesh[];
   /** Seconds a spear has been stuck (it blinks until it goes off). */
   stuckFor?: number;
+  /** A stuck spear's danger zone on the ground (its own object in the scene: it does not blink or tilt with the spear). */
+  zone?: THREE.Group;
   age: number;
 }
 
@@ -82,7 +85,54 @@ export class SkillViews {
   private readonly a = new THREE.Vector3();
   private readonly b = new THREE.Vector3();
 
-  constructor(private readonly scene: THREE.Scene) {}
+  private readonly zoneGeo = new THREE.RingGeometry(0.96, 1, 48);
+  private readonly zoneFillGeo = new THREE.CircleGeometry(0.96, 48);
+  private readonly zoneFill = new THREE.MeshBasicMaterial({
+    color: PALETTE.HAZARD,
+    transparent: true,
+    opacity: 0.16,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  private readonly zoneEdge = new THREE.MeshBasicMaterial({
+    color: PALETTE.HAZARD,
+    side: THREE.DoubleSide,
+  });
+
+  /**
+   * `groundBelow` gives the height of the floor under a point (for a stuck spear's danger zone);
+   * without it the zone is drawn at the spear's own height.
+   */
+  constructor(
+    private readonly scene: THREE.Scene,
+    private readonly groundBelow?: (x: number, y: number, z: number) => number,
+  ) {}
+
+  /**
+   * A stuck spear's danger zone: a ring on the ground below it, as wide as the blast reaches
+   * there. The blast is a ball round the spear, so a spear high on a wall marks a smaller circle,
+   * and none at all from higher than the blast reaches.
+   */
+  private placeZone(v: View, x: number, y: number, z: number): void {
+    if (!v.zone) {
+      v.zone = new THREE.Group();
+      for (const m of [
+        new THREE.Mesh(this.zoneGeo, this.zoneEdge),
+        new THREE.Mesh(this.zoneFillGeo, this.zoneFill),
+      ]) {
+        m.rotation.x = -Math.PI / 2;
+        v.zone.add(m);
+      }
+      this.scene.add(v.zone);
+    }
+    const floor = this.groundBelow ? this.groundBelow(x, y, z) : y;
+    const up = Math.max(0, y - floor);
+    const reach = SKILL.spearRadius * SKILL.spearRadius - up * up;
+    v.zone.visible = reach > 0;
+    if (reach <= 0) return;
+    v.zone.position.set(x, floor + 0.04, z);
+    v.zone.scale.setScalar(Math.sqrt(reach));
+  }
 
   private build(kind: number): View {
     const root = new THREE.Group();
@@ -198,6 +248,7 @@ export class SkillViews {
         if ((pose.flags & 1) !== 0) {
           v.stuckFor = (v.stuckFor ?? 0) + frameDt;
           v.root.visible = Math.floor(v.stuckFor * (6 + v.stuckFor * 14)) % 2 === 0;
+          this.placeZone(v, pose.x, pose.y, pose.z);
         }
       } else if (v.kind === EntityKinds.barrier) {
         v.root.rotation.y = pose.yaw;
@@ -227,6 +278,7 @@ export class SkillViews {
       if (seen.has(id)) continue;
       if (v.kind === EntityKinds.grenade || v.kind === EntityKinds.spear) this.blastAt(v.last);
       if (v.kind === EntityKinds.pickup) this.sounds.taken.push(v.last.clone());
+      if (v.zone) this.scene.remove(v.zone);
       this.scene.remove(v.root);
       this.views.delete(id);
     }

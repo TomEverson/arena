@@ -3,7 +3,7 @@ package game
 // Bullet physics (projectile weapons): a line-for-line port of client/src/sim/bullet.ts,
 // locked to it by /testvectors/bullet. Never allocates.
 //
-// A bullet leaves the muzzle at WeaponBulletSpeed and falls under WeaponBulletGravity. Each
+// A bullet leaves the muzzle at its gun's speed and falls under its gun's gravity. Each
 // step moves it along its path and casts the whole segment it travelled (so a fast bullet cannot
 // skip through a thin wall or a player) against the level and the target boxes the caller
 // supplies. Which boxes, and where they are, is the caller's job: the world passes the targets
@@ -28,8 +28,8 @@ func SpawnBullet(ox, oy, oz, dx, dy, dz, speed float64) Bullet {
 
 // StepBullet flies b for dt seconds. Gravity acts first, then it moves; it returns what the path
 // hit (RayNone while it is still flying) and sets Done on a hit or at `maxRange` metres.
-func StepBullet(b *Bullet, dt float64, w *CollisionWorld, targets []Hitbox, maxRange float64) RayHit {
-	b.VY -= WeaponBulletGravity * dt
+func StepBullet(b *Bullet, dt float64, w *CollisionWorld, targets []Hitbox, maxRange, gravity float64) RayHit {
+	b.VY -= gravity * dt
 	mx := b.VX * dt
 	my := b.VY * dt
 	mz := b.VZ * dt

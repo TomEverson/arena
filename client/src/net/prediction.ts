@@ -131,7 +131,9 @@ export class Predictor {
         s.grenade ||
         s.barrier ||
         s.slash ||
-        s.roll
+        s.slashStarted ||
+        s.roll ||
+        s.rollStarted
       )
         this.lastShot = s;
     }

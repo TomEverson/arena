@@ -20,6 +20,7 @@ Changing any movement number changes movement: re-record the vectors (`pnpm vect
 | `stepHeight`, `rampStep`, `snapDown`, `groundEps`, `maxSubstep` | Collision: step-up, ramp step, ground snap, sub-step size (anti-tunnelling) |
 | `slide*`, `crouchSpeed` | Slide boost/decay/limits, crouch-walk speed |
 | `dash*` | Dash charges, speed, duration, exit speed, seconds per charge |
+| `hitSlow*` | Slow after a bullet hit (rifle or sniper): run speed multiplier and how long it lasts |
 | `mantle*` | Mantle reach, duration, inset, exit speed |
 | `wallRun*`, `wallJump*` | Wall run speed, time, gravity, grab rules; wall jump kick, height, limit |
 
@@ -29,7 +30,7 @@ tables, ADS zoom and sensitivity, and the bullet (`bulletSpeed` m/s, `bulletGrav
 port in M5.
 
 ## Sniper parameters (`sniper`)
-The second gun (weapon slot 2, hitscan): the same keys as the rifle where they apply (damage, `headshotMult`, `rpm`, `magSize`, `reloadTime`, `range`, the spread cone values, recoil, ADS zoom and sensitivity). Go constants are prefixed `Sniper`. The draw times between weapons are `switchTime` and `switchQuickTime` in the `weapon` section.
+The second gun (weapon slot 2): the same keys as the rifle where they apply (damage, `headshotMult`, `rpm`, `magSize`, `reloadTime`, `range`, its own bullet `bulletSpeed` and `bulletGravity`, the spread cone values, recoil, ADS zoom and sensitivity). Go constants are prefixed `Sniper`. The draw times between weapons are `switchTime` and `switchQuickTime` in the `weapon` section.
 
 ## Combat parameters (`combat`)
 Server-authoritative numbers: `headSize` (the top 0.3 m of a target is its head), shield recharge delay and rate,

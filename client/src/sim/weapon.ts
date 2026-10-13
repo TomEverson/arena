@@ -15,11 +15,9 @@ export type { WeaponState };
 
 const DEG = Math.PI / 180;
 
-/** What differs between guns. Slot 0 is the rifle (a projectile weapon), slot 1 the sniper (hitscan). */
+/** What differs between guns. Slot 0 is the rifle, slot 1 the sniper: both fire bullets that fly. */
 export interface WeaponDef {
   name: string;
-  /** Hits instantly along the aim line instead of firing a bullet. */
-  hitscan: boolean;
   /** Fires a thunder spear: it flies, sticks, and explodes (the server flies it, see skills.go). */
   spear: boolean;
   rpm: number;
@@ -28,6 +26,9 @@ export interface WeaponDef {
   damage: number;
   headshotMult: number;
   range: number;
+  /** The bullet: muzzle speed (m/s) and how fast it falls (m/s²). Unused by the spears. */
+  bulletSpeed: number;
+  bulletGravity: number;
   hipSpread: number;
   adsSpread: number;
   moveBloom: number;
@@ -48,9 +49,9 @@ export interface WeaponDef {
 }
 
 export const WEAPON_DEFS: readonly [WeaponDef, WeaponDef, WeaponDef] = [
-  { name: "Brick", hitscan: false, spear: false, ...W },
-  { name: "Needle", hitscan: true, spear: false, ...SNIPER },
-  { name: "Spears", hitscan: false, spear: true, ...SPEAR },
+  { name: "Brick", spear: false, ...W },
+  { name: "Needle", spear: false, ...SNIPER },
+  { name: "Spears", spear: true, bulletSpeed: 0, bulletGravity: 0, ...SPEAR },
 ];
 
 /**
@@ -102,11 +103,11 @@ export interface WeaponInput {
   /** Skills pressed this tick (see SKILL in params.ts). Left out means not pressed. */
   skillQ?: boolean;
   skillE?: boolean;
-  /** Dash pressed this tick: for the Assassin that is the spinning slash (the Trooper's dash is movement). */
+  /** Dash pressed this tick: for the Assassin that is the dash cut (the Trooper's dash is movement). */
   dash?: boolean;
   /** One of HeroKinds (left out means the Trooper): decides what the skill buttons do. */
   hero?: number;
-  /** The Assassin's overdrive is running: slashes back to back, and the gun is put away. */
+  /** The Assassin's overdrive is running: blade skills back to back, the sniper put away, and the spears reloading faster. */
   overdrive?: boolean;
   ads: boolean;
 }
@@ -142,10 +143,14 @@ export interface ShotResult {
   /** A skill was used this tick (it was off cooldown): the server throws the grenade or places the barrier. */
   grenade: boolean;
   barrier: boolean;
-  /** The Assassin's spinning slash happened this tick: the server finds who it hit, and the caller applies the lunge. */
+  /** The Assassin's dash cut dashes this tick, its wind-up over: the server finds who it cuts, and the caller applies the dash. */
   slash: boolean;
+  /** The dash cut's wind-up started this tick (the blades are drawn and cut the X; the dash follows). */
+  slashStarted: boolean;
   /** The Assassin's rolling dive began this tick: the caller starts it (movement), the server finds who it hits. */
   roll: boolean;
+  /** The rolling dive's wind-up started this tick (the blades are drawn; the dive follows). */
+  rollStarted: boolean;
 }
 
 /** HeroKinds (protocol). */
@@ -168,6 +173,8 @@ export function spawnWeapon(seed = 1, hero = HERO_TROOPER): WeaponState {
     meleeCooldown: 0,
     skillQT: 0,
     skillET: 0,
+    slashT: 0,
+    diveT: 0,
     rng: seed >>> 0 || 1,
   };
 }
@@ -218,7 +225,9 @@ const NO_SHOT: ShotResult = {
   grenade: false,
   barrier: false,
   slash: false,
+  slashStarted: false,
   roll: false,
+  rollStarted: false,
 };
 
 export function stepWeapon(
@@ -250,27 +259,53 @@ export function stepWeapon(
       shot.barrier = true;
     }
   } else if (hero === HERO_ASSASSIN) {
-    // The dash button is the spinning slash, on the ground or in the air; E is the rolling dive,
+    // The dash button is the dash cut, on the ground or in the air; E is the rolling dive,
     // in the air only. (Q is the grapple, which is movement: see movement.ts.) Their cooldowns
     // are skillQT and skillET. In overdrive the only wait is for the move itself to finish.
     if (input.overdrive) {
       w.skillQT = Math.min(w.skillQT, SKILL.slashSpin);
       w.skillET = Math.min(w.skillET, SKILL.rollTime);
     }
-    if (input.dash && w.skillQT <= 0) {
+    // The dash cut has a wind-up: the press draws the blades and cuts the X, then it dashes.
+    if (w.slashT > 0) {
+      w.slashT -= dt;
+      if (w.slashT <= 0) {
+        w.slashT = 0;
+        shot.slash = true;
+      }
+    } else if (input.dash && w.skillQT <= 0) {
       w.skillQT = input.overdrive ? SKILL.slashSpin : SKILL.slashCooldown;
-      shot.slash = true;
+      w.slashT = SKILL.slashWindup;
+      shot.slashStarted = true;
     }
-    if (input.skillE && w.skillET <= 0 && !ctx.onGround) {
+    // The rolling dive has a wind-up too: the press (in the air) draws the blades, then it dives.
+    // Landing before the wind-up is over calls it off, and the skill is ready again.
+    if (w.diveT > 0) {
+      w.diveT -= dt;
+      if (ctx.onGround) {
+        w.diveT = 0;
+        w.skillET = 0;
+      } else if (w.diveT <= 0) {
+        w.diveT = 0;
+        shot.roll = true;
+      }
+    } else if (input.skillE && w.skillET <= 0 && !ctx.onGround) {
       w.skillET = input.overdrive ? SKILL.rollTime : SKILL.rollCooldown;
-      shot.roll = true;
+      w.diveT = SKILL.rollWindup;
+      shot.rollStarted = true;
     }
   }
 
   // Switch weapon: 1 and 2 are the hero's two guns, 3 the hands. The old gun is put away (a
   // reload is lost) and the new one is ready after the draw. Each gun keeps its own rounds.
-  // In overdrive the Assassin is held to the blades.
-  const want = hero === HERO_ASSASSIN && input.overdrive ? EMPTY_HANDS : input.slot - 1;
+  // In overdrive the Assassin has the blades and the spears, not the sniper: a sniper in hand is
+  // put away for the blades, and its slot does nothing.
+  const od = hero === HERO_ASSASSIN && input.overdrive === true;
+  const barred = (slot: number) =>
+    od && slot !== EMPTY_HANDS && WEAPON_DEFS[loadout(hero)[slot] ?? 0]?.spear !== true;
+  let want = input.slot - 1;
+  if (barred(w.slot)) want = EMPTY_HANDS;
+  else if (want >= 0 && want < EMPTY_HANDS && barred(want)) want = -1;
   if (want >= 0 && want <= EMPTY_HANDS && want !== w.slot) {
     const gun = want === EMPTY_HANDS ? w.gun : (loadout(hero)[want] ?? w.gun);
     if (gun !== w.gun) {
@@ -301,8 +336,9 @@ export function stepWeapon(
     shot.meleeStarted = true;
   }
   const swinging = w.meleeCooldown > W.meleeCooldown - W.meleeLock;
-  // In overdrive the Assassin's gun is put away: blades only.
-  const ready = def !== null && w.switchT <= 0 && !(hero === HERO_ASSASSIN && input.overdrive);
+  // (In overdrive only the spears fire, and they reload faster.)
+  const ready = def !== null && w.switchT <= 0 && !(od && !def.spear);
+  const reloadTime = (def?.reloadTime ?? 0) * (od ? SKILL.overdriveReload : 1);
 
   // Reload
   if (w.reloadT > 0) {
@@ -313,7 +349,7 @@ export function stepWeapon(
       shot.reloadFinished = true;
     }
   } else if (input.reload && ready && w.ammo < def.magSize) {
-    w.reloadT = def.reloadTime;
+    w.reloadT = reloadTime;
     shot.reloadStarted = true;
   }
 
@@ -338,7 +374,7 @@ export function stepWeapon(
     } else if (w.reloadT <= 0) {
       // Empty: start reloading automatically.
       shot.dryFire = true;
-      w.reloadT = def.reloadTime;
+      w.reloadT = reloadTime;
       shot.reloadStarted = true;
     }
   }

@@ -2,7 +2,8 @@
  * Bullet physics (projectile weapons). Pure and deterministic, locked to the Go twin
  * (server/internal/game/bullet.go) by the vectors in /testvectors/bullet.
  *
- * A bullet leaves the muzzle at `bulletSpeed` and falls under `bulletGravity`. Each step moves
+ * A bullet leaves the muzzle at its gun's `bulletSpeed` and falls under its `bulletGravity` (the
+ * rifle's unless the caller says otherwise). Each step moves
  * it along its path and casts the whole segment it travelled (so a fast bullet cannot skip
  * through a thin wall or a player) against the level and the target boxes the caller supplies.
  * Which boxes, and where they are, is the caller's job: the server passes the targets where the
@@ -53,8 +54,9 @@ export function stepBullet(
   world: CollisionWorld,
   targets: readonly Hitbox[],
   range: number = W.range,
+  gravity: number = W.bulletGravity,
 ): RayHit {
-  b.vy -= W.bulletGravity * dt;
+  b.vy -= gravity * dt;
   const mx = b.vx * dt;
   const my = b.vy * dt;
   const mz = b.vz * dt;

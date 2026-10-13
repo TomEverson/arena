@@ -3,8 +3,9 @@ import * as THREE from "three";
 import { type CharacterModel, characterModel, type ModelBone } from "./characterModels";
 import { PALETTE } from "./palette";
 import { type Brick, buildBrick } from "./rifle";
-import { SKILL } from "./sim/params";
+import { PARAMS, SKILL } from "./sim/params";
 import { buildSniper } from "./sniper";
+import { buildSpear, SPEAR_PAIR_GAP } from "./spear";
 
 /**
  * Third-person character body: chunky armored humanoid built from boxes and low-poly
@@ -53,21 +54,52 @@ export interface BodyState {
   aiming?: boolean;
   /** Carrying the Brick: arms hold it, in every animation. Turning this on plays the draw. */
   armed?: boolean;
-  /** Which gun it carries when armed: 0 the rifle, 1 the sniper. */
+  /** Which gun it carries when armed: 0 the rifle, 1 the sniper, 2 the spear launchers (one on each arm). */
   weapon?: number;
   /** In the middle of a melee swing (rising edge starts the animation). */
   meleeing?: boolean;
-  /** In the middle of the Assassin's spinning slash (rising edge starts the spin). */
+  /** In the middle of the Assassin's dash cut (rising edge starts the X cut with both blades). */
   slashing?: boolean;
   /** In the Assassin's rolling dive: the body tumbles forward for as long as this is set. */
   rolling?: boolean;
+  /** Winding up the rolling dive: the blades are drawn from the hips and raised. */
+  divePrep?: boolean;
+  /**
+   * While `rolling`: about how many seconds until the dive lands, if known. The one full turn
+   * is paced by it, so the body comes down feet first.
+   */
+  diveLeft?: number;
   /** Which way the body faces (radians, the figure's own yaw), instead of toward its movement. */
   yaw?: number;
 }
 
 const FLASH_SECONDS = 0.09;
 const MELEE_SECONDS = 0.35; // the rifle thrust of a melee swing
-const SPIN_SECONDS = SKILL.slashSpin; // the spinning slash: once right round
+// The dash cut, from the press (Tom: "pull the sword out, do the X, dash, unequip", and "at least
+// 1 second"): the blades are drawn from the hips and cut an X during the wind-up, are held crossed
+// through the dash, then go back on the hips. A new cut in overdrive starts it again.
+const CUT_SECONDS = 1;
+// The rolling dive, from the press (Tom: "dive, make a slash, land back on feet, full 360"): the
+// blades are drawn from the hips and raised during the wind-up; the dive is one full forward
+// turn, with both blades cut down across each other part way round; it lands on its feet and
+// the blades go back on the hips.
+/** How long the full turn takes when nothing says when the dive will land. */
+const DIVE_TURN_SECONDS = 0.6;
+/** The turn is over this share of the way to the landing, so the feet are under it in time. */
+const DIVE_TURN_BY = 0.85;
+/** A dive that ends before its turn is complete finishes the turn this fast (seconds a turn). */
+const DIVE_FINISH_SECONDS = 0.25;
+/** The cut happens between these shares of the turn. */
+const DIVE_CUT = [0.4, 0.7] as const;
+/** How long the blades take to go back on the hips after a dive, and when they are off the hands. */
+const DIVE_SHEATHE_SECONDS = 0.45;
+const DIVE_SHEATHED_AT = 0.2;
+/** When the dash starts and ends, in seconds from the press. */
+const CUT_DASH_AT = SKILL.slashWindup;
+const CUT_DASH_END = SKILL.slashWindup + PARAMS.dashDuration;
+/** The blades are in the hands (not on the hips) between these two moments. */
+const CUT_DRAWN_AT = 0.3 * CUT_DASH_AT;
+const CUT_SHEATHED_AT = CUT_DASH_END + 0.2;
 const EQUIP_SECONDS = 0.5; // drawing the rifle: arms come up onto it with a little overshoot
 const AIR_JUMP_SECONDS = 0.4; // the second jump in the air: knees up, then push off
 const SHOT_SECONDS = 0.09; // recoil and muzzle flash after a shot
@@ -121,6 +153,9 @@ const RIG_LOOKS: readonly CharacterLook[] = ["assassin"];
 const SLASH_DRAW = [0.25, -0.02, 0.05] as const;
 const SLASH_WIND = [0.3, 0.55, -0.04] as const;
 const SLASH_END = [-0.14, 0.12, 0.42] as const;
+/** The right hand during the dash cut: up and out to its own side, then down across the body (the left mirrors it: an X). */
+const CROSS_WIND = [0.4, 0.36, 0.34] as const;
+const CROSS_END = [-0.15, 0.02, 0.46] as const;
 /** The blade is in the hand (not on the hip) for this part of the swing. */
 const SLASH_DRAWN = [0.13, 0.88] as const;
 /** The cable: from the hip tank to a point on the wall up ahead (the figure's own space, metres). */
@@ -156,9 +191,49 @@ function slashHand(u: number): [number, number, number] {
   return mix3(SLASH_END, SLASH_DRAW, smooth((u - 0.5) / 0.38));
 }
 
+/**
+ * The right hand during the dash cut, `t` seconds after the press: to the hip to draw, up and
+ * out, down across the body (the X) as the wind-up ends, held there through the dash, back to
+ * the hip to sheathe, then to rest.
+ */
+function crossHand(t: number): [number, number, number] {
+  const w = CUT_DASH_AT;
+  if (t < 0.4 * w) return mix3(FIST_REST, SLASH_DRAW, smooth(t / (0.4 * w)));
+  if (t < 0.7 * w) return mix3(SLASH_DRAW, CROSS_WIND, smooth((t - 0.4 * w) / (0.3 * w)));
+  if (t < w) return mix3(CROSS_WIND, CROSS_END, smooth((t - 0.7 * w) / (0.3 * w)));
+  if (t < CUT_DASH_END) return [CROSS_END[0], CROSS_END[1], CROSS_END[2]];
+  if (t < CUT_SHEATHED_AT + 0.05)
+    return mix3(CROSS_END, SLASH_DRAW, smooth((t - CUT_DASH_END) / 0.25));
+  return mix3(
+    SLASH_DRAW,
+    FIST_REST,
+    smooth((t - CUT_SHEATHED_AT - 0.05) / (CUT_SECONDS - CUT_SHEATHED_AT - 0.05)),
+  );
+}
+
+/** The right hand during the dive, `u` = 0..1 through its turn: raised, then cut down and across. */
+function diveHand(u: number): [number, number, number] {
+  return mix3(CROSS_WIND, CROSS_END, smooth((u - DIVE_CUT[0]) / (DIVE_CUT[1] - DIVE_CUT[0])));
+}
+
+/** The right hand during the dive's wind-up, `t` seconds after the press: to the hip, then raised. */
+function divePrepHand(t: number): [number, number, number] {
+  const w = SKILL.rollWindup;
+  if (t < 0.4 * w) return mix3(FIST_REST, SLASH_DRAW, smooth(t / (0.4 * w)));
+  return mix3(SLASH_DRAW, CROSS_WIND, smooth((t - 0.4 * w) / (0.6 * w)));
+}
+
+/** The right hand after a dive, `t` seconds after it ended: back to the hip, then to rest. */
+function diveSheatheHand(t: number): [number, number, number] {
+  if (t < 0.25) return mix3(CROSS_END, SLASH_DRAW, smooth(t / 0.25));
+  return mix3(SLASH_DRAW, FIST_REST, smooth((t - 0.25) / (DIVE_SHEATHE_SECONDS - 0.25)));
+}
+
 /** Where each hand grips, in the rifle's own space: the grip, and under the front of the receiver. */
 const GRIP_RIGHT = [0, -0.075, 0] as const;
 const GRIP_LEFT = [0, -0.07, 0.3] as const;
+/** With the spear launchers the left hand holds the left one's grip: the right hand's place, a pair's width over. */
+const SPEAR_GRIP_LEFT = [-SPEAR_PAIR_GAP, -0.075, 0] as const;
 
 /** Joint pose that puts a hand at a point. */
 export interface ArmSolution {
@@ -381,12 +456,20 @@ export class CharacterBody {
   private meleeT = 0;
   private wasMeleeing = false;
   private wasSlashing = false;
+  private wasRolling = false;
+  /** Where the rolling dive's animation is: 0 none, 1 wind-up, 2 diving, 3 putting the blades away. */
+  private divePhase = 0;
+  /** Seconds spent in that phase, and (in the wind-up) seconds since the wind-up was last shown. */
+  private diveClock = 0;
+  private diveGap = 0;
   /** How far round the rolling dive's tumble has got (radians). */
   private tumble = 0;
-  /** Seconds left of the spinning slash's turn. */
-  private spinT = 0;
+  /** How far through the dash cut it is, 0..1 (0 = not cutting). */
+  private cutT = 0;
   /** The Assassin's two blades, one in each hand (other looks have none). */
   private readonly blades: THREE.Mesh[] = [];
+  /** A Blockbench model's blades sheathed on the hips: put away while the blades are in the hands. */
+  private readonly hipBlades: THREE.Object3D[] = [];
   private wasArmed = false;
   private armInit = false;
   private firstPerson = false;
@@ -406,6 +489,8 @@ export class CharacterBody {
   private readonly muzzleFlash: THREE.Mesh;
   private readonly brick: Brick;
   private readonly sniper: Brick;
+  /** The spear launchers: a pair, the right arm's at the grip and the left arm's beside it. */
+  private readonly spear: Brick;
   private lastWeapon = 0;
   /** Helmet, face, ears, neck and collar: hidden in first person, where the camera sits inside the head. */
   private readonly headParts: THREE.Mesh[] = [];
@@ -462,11 +547,11 @@ export class CharacterBody {
     const mats = { armor, suit, ink, face, metal, light };
     const limbs = this.model
       ? this.buildFromModel(this.model)
-        : look === "assassin"
-          ? this.buildAssassin(mats)
-          : look === "dummy"
-            ? this.buildDummy(mats)
-            : this.buildTrooper(mats);
+      : look === "assassin"
+        ? this.buildAssassin(mats)
+        : look === "dummy"
+          ? this.buildDummy(mats)
+          : this.buildTrooper(mats);
     this.legs = limbs.legs;
     this.upper = limbs.upper;
     this.arms = limbs.arms;
@@ -486,6 +571,12 @@ export class CharacterBody {
     this.sniper.root.position.z = -0.1;
     this.sniper.root.visible = false;
     gun.add(this.sniper.root);
+    // (Turned round like the others, so its left launcher is built on the other side.)
+    this.spear = buildSpear(SPEAR_PAIR_GAP);
+    this.spear.root.rotation.y = Math.PI;
+    this.spear.root.position.z = -0.1;
+    this.spear.root.visible = false;
+    gun.add(this.spear.root);
     this.muzzleFlash = part(
       gun,
       new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
@@ -504,6 +595,15 @@ export class CharacterBody {
     part(blade, metal, box(0.07, 0.015, 0.05), [0, -0.05, 0]); // guard
     part(blade, material(PALETTE.HAZE), box(0.02, 0.3, 0.045), [0, -0.21, 0]); // blade
     blade.visible = false;
+    if (this.rig) {
+      // A blade in each hand, edge forward (hidden until the blades are what is held). Built here,
+      // not with the body, so a Blockbench model gets them too.
+      for (const elbow of this.elbows) {
+        const held = part(elbow, face, box(0.012, 0.06, 0.75), [0, -ARM_FORE, 0.42]);
+        held.visible = false;
+        this.blades.push(held);
+      }
+    }
     this.cable = part(this.root, metal, box(1, 1, 1), [0, 0, 0]);
     this.cable.visible = false;
 
@@ -521,6 +621,7 @@ export class CharacterBody {
         const m = mesh.clone(); // shares the geometry and material
         parent.add(m);
         if (m.name === "blade_r") this.hipBlade = m; // drawn into the hand for a slash
+        if (m.name === "blade_l" || m.name === "blade_r") this.hipBlades.push(m);
         this.modelMeshes.push(m);
         if (bone === "head") this.headParts.push(m);
       }
@@ -684,10 +785,6 @@ export class CharacterBody {
       part(elbow, plate, tube(0.047, 0.058, 0.2), [0, -0.12, 0]); // gauntlet
       part(elbow, armor, tube(0.06, 0.06, 0.03), [0, -0.235, 0]); // wrist band
       part(elbow, ink, box(0.095, 0.1, 0.11), [0, -ARM_FORE, 0.01]); // glove
-      // A blade in each hand, edge forward (hidden until the blades are what is held).
-      const blade = part(elbow, plate, box(0.012, 0.06, 0.75), [0, -ARM_FORE, 0.42]);
-      blade.visible = false;
-      this.blades.push(blade);
       elbows.push(elbow);
       return shoulder;
     }) as [THREE.Group, THREE.Group];
@@ -767,6 +864,7 @@ export class CharacterBody {
     this.shootT = 1;
     this.brick.shoot();
     this.sniper.shoot();
+    this.spear.shoot();
   }
 
   /** Got shot: flash BONE and flinch. */
@@ -815,14 +913,31 @@ export class CharacterBody {
     if (s.alive && s.yaw !== undefined) this.yaw = s.yaw;
     else if (s.alive) this.yaw += angleDelta(this.yaw, targetYaw) * follow(10, dt);
     this.root.position.set(s.x, s.y, s.z);
-    // The spinning slash: the whole body turns right round once, blades out.
-    if (s.slashing && !this.wasSlashing) this.spinT = SPIN_SECONDS;
+    // The dash cut: the blades are drawn, cut an X, are held through the dash and put away.
+    if (s.slashing && !this.wasSlashing) this.cutT = 1e-6;
     this.wasSlashing = !!s.slashing;
-    this.spinT = Math.max(0, this.spinT - dt);
-    const spun = this.spinT > 0 ? Math.PI * 2 * smooth(1 - this.spinT / SPIN_SECONDS) : 0;
-    this.root.rotation.y = this.yaw + spun;
-    // The rolling dive: the body tumbles forward about its middle, a turn every spin's length, for as long as it dives.
-    this.tumble = s.rolling ? this.tumble + (dt / SKILL.slashSpin) * Math.PI * 2 : 0;
+    if (this.cutT > 0)
+      this.cutT = this.cutT + dt / CUT_SECONDS >= 1 ? 0 : this.cutT + dt / CUT_SECONDS;
+    this.root.rotation.y = this.yaw;
+    // The rolling dive: one full turn forward about the middle of the body, paced so that it is
+    // complete just before the landing (feet first). A dive that ends sooner finishes the turn
+    // quickly instead of snapping upright.
+    const TURN = Math.PI * 2;
+    if (s.rolling) {
+      if (!this.wasRolling) this.tumble = 0;
+      const rest = TURN - this.tumble;
+      if (rest > 0) {
+        const rate =
+          s.diveLeft !== undefined
+            ? rest / Math.max(s.diveLeft * DIVE_TURN_BY, dt)
+            : TURN / DIVE_TURN_SECONDS;
+        this.tumble = Math.min(TURN, this.tumble + rate * dt);
+      }
+    } else if (this.tumble > 0) {
+      this.tumble += (TURN / DIVE_FINISH_SECONDS) * dt;
+      if (this.tumble >= TURN) this.tumble = 0;
+    }
+    this.wasRolling = !!s.rolling;
     this.root.rotation.x = this.tumble;
     if (this.tumble !== 0) {
       // Turn about the hips, not the feet: move the root so the hips stay where they are.
@@ -832,8 +947,36 @@ export class CharacterBody {
       this.root.position.x += Math.sin(this.yaw) * back;
       this.root.position.z += Math.cos(this.yaw) * back;
     }
-    // The blades show in the hands when they are what is held, and during a spin.
-    const bladesOut = this.spinT > 0 || !!s.rolling || (s.alive && s.armed === false);
+    // The blades show in the hands when they are what is held, and during a dash cut or a dive.
+    // The dive's wind-up, the dive, then the blades going away. (Between the wind-up and the dive
+    // a frame may show neither: wait a moment before taking the wind-up as called off.)
+    this.diveClock += dt;
+    if (s.rolling) {
+      if (this.divePhase !== 2) this.diveClock = 0;
+      this.divePhase = 2;
+    } else if (this.divePhase === 2) {
+      this.divePhase = 3;
+      this.diveClock = 0;
+    } else if (s.divePrep) {
+      if (this.divePhase !== 1) this.diveClock = 0;
+      this.divePhase = 1;
+      this.diveGap = 0;
+    } else if (this.divePhase === 1) {
+      this.diveGap += dt;
+      if (this.diveGap > 0.12) {
+        this.divePhase = 3;
+        this.diveClock = 0;
+      }
+    } else if (this.divePhase === 3 && this.diveClock >= DIVE_SHEATHE_SECONDS) {
+      this.divePhase = 0;
+    }
+    const diveDrawn =
+      (this.divePhase === 1 && this.diveClock > 0.3 * SKILL.rollWindup) ||
+      this.divePhase === 2 ||
+      (this.divePhase === 3 && this.diveClock < DIVE_SHEATHED_AT);
+    const cutAt = this.cutT * CUT_SECONDS;
+    const cutDrawn = this.cutT > 0 && cutAt > CUT_DRAWN_AT && cutAt < CUT_SHEATHED_AT;
+    const bladesOut = cutDrawn || diveDrawn || (s.alive && s.armed === false);
     for (const b of this.blades) b.visible = bladesOut && !this.firstPerson;
 
     // Pose weights fade toward the current state.
@@ -874,15 +1017,15 @@ export class CharacterBody {
       this.holdW = 0;
     }
     // Taking out a different gun while armed draws it again.
-    const weapon = s.weapon === 1 ? 1 : 0;
+    const weapon = s.weapon === 1 || s.weapon === 2 ? s.weapon : 0;
     if (armed && this.wasArmed && weapon !== this.lastWeapon) {
       this.equipT = 1e-6;
       this.holdW = 0;
     }
     this.lastWeapon = weapon;
-    // (The spear launcher, weapon 2, has no body model yet: it shows as the sniper.)
     this.brick.root.visible = weapon === 0;
-    this.sniper.root.visible = weapon !== 0;
+    this.sniper.root.visible = weapon === 1;
+    this.spear.root.visible = weapon === 2;
     this.wasArmed = armed;
     if (this.equipT > 0) {
       this.equipT += dt / EQUIP_SECONDS;
@@ -945,7 +1088,12 @@ export class CharacterBody {
     // kick on each shot), and BOTH HANDS ARE SOLVED TO IT, so the arms follow the rifle in every
     // animation instead of swinging on their own.
     const g = this.gun;
-    g.visible = !this.firstPerson && (this.holdW > 0.02 || this.equipT > 0);
+    // (During a dash cut the hands are on the blades: the gun is out of sight until it is over.)
+    g.visible =
+      !this.firstPerson &&
+      this.cutT === 0 &&
+      this.divePhase === 0 &&
+      (this.holdW > 0.02 || this.equipT > 0);
     const hw = this.holdW;
     const aw = this.aimW;
     const kick = this.shootT;
@@ -955,7 +1103,12 @@ export class CharacterBody {
     const mm = mu <= 0 ? 0 : smooth(mu / 0.2) * (1 - smooth((mu - 0.8) / 0.2)); // 0..1 how much of the carry
     const punch = mu <= 0 ? 0 : Math.sin(Math.PI * clamp01((mu - 0.2) / 0.5)); // the strike itself
     if (mu > 0) p.upperPitch += 0.22 * punch;
-    const gx = lerp(lerp(lerp(GUN_HOLSTER.x, GUN_LOW.x, hw), GUN_AIM.x, aw), GUN_MELEE.x, mm);
+    // (The spear launchers are a pair, one in each hand: held out to the right far enough that
+    // the two sit either side of the body.)
+    const pair = this.lastWeapon === 2;
+    const gx =
+      lerp(lerp(lerp(GUN_HOLSTER.x, GUN_LOW.x, hw), GUN_AIM.x, aw), GUN_MELEE.x, mm) +
+      (pair ? (SPEAR_PAIR_GAP / 2 - GUN_LOW.x) * hw * (1 - mm) : 0);
     const gy = lerp(lerp(lerp(GUN_HOLSTER.y, GUN_LOW.y, hw), GUN_AIM.y, aw), GUN_MELEE.y, mm);
     const gz =
       lerp(lerp(lerp(GUN_HOLSTER.z, GUN_LOW.z, hw), GUN_AIM.z, aw), GUN_MELEE.z, mm) - 0.04 * kick;
@@ -986,7 +1139,8 @@ export class CharacterBody {
       if (hw > 0.001) {
         this.handMixL = holdMix;
         this.handMixR = holdMix;
-        grip(GRIP_LEFT, -SHOULDER_X, true);
+        // The left hand is under the front of the gun, or on the left launcher's own grip.
+        grip(pair ? SPEAR_GRIP_LEFT : GRIP_LEFT, -SHOULDER_X, true);
         grip(GRIP_RIGHT, SHOULDER_X, false);
       }
       if (mm > 0) {
@@ -1006,13 +1160,47 @@ export class CharacterBody {
         }
       }
     }
+    if (this.cutT > 0 || this.divePhase !== 0) {
+      // The dash cut and the dive take both arms: the right hand's path, and the left's mirrored.
+      const cu = this.cutT;
+      const dc = this.diveClock;
+      const diving = this.divePhase !== 0;
+      const cw = !diving
+        ? smooth(cu / 0.15) * (1 - smooth((cu - 0.85) / 0.15))
+        : this.divePhase === 1
+          ? smooth(dc / 0.08)
+          : this.divePhase === 3
+            ? 1 - smooth((dc - (DIVE_SHEATHE_SECONDS - 0.12)) / 0.12)
+            : 1;
+      const f = !diving
+        ? crossHand(cu * CUT_SECONDS)
+        : this.divePhase === 1
+          ? divePrepHand(dc)
+          : this.divePhase === 3
+            ? diveSheatheHand(dc)
+            : diveHand(this.tumble > 0 ? this.tumble / (Math.PI * 2) : 1);
+      const r = solveArm(SHOULDER_X, f[0], f[1], f[2], this.ik);
+      if (this.handMixR > 0) this.handQ[1].slerp(r.q, cw);
+      else this.handQ[1].copy(r.q);
+      p.elbowR = lerp(p.elbowR, r.elbow, cw);
+      this.handMixR = Math.max(this.handMixR, cw);
+      const l = solveArm(-SHOULDER_X, -f[0], f[1], f[2], this.ik);
+      if (this.handMixL > 0) this.handQ[0].slerp(l.q, cw);
+      else this.handQ[0].copy(l.q);
+      p.elbowL = lerp(p.elbowL, l.elbow, cw);
+      this.handMixL = Math.max(this.handMixL, cw);
+    }
     this.muzzleFlash.visible = this.shootT > 0.55;
-    const drawn = this.rig && mu > SLASH_DRAWN[0] && mu < SLASH_DRAWN[1];
+    // With a gun, a slash draws the hip blade into the right hand; with the blades already in
+    // the hands there is nothing to draw, and neither hip has one sheathed.
+    const drawn = this.rig && !bladesOut && mu > SLASH_DRAWN[0] && mu < SLASH_DRAWN[1];
     this.handBlade.visible = drawn;
-    if (this.hipBlade) this.hipBlade.visible = !drawn;
+    for (const b of this.hipBlades) b.visible = !bladesOut;
+    if (this.hipBlade) this.hipBlade.visible = !drawn && !bladesOut;
     this.updateCable(this.rig && wallRun ? (s.wallSide ?? 0) : 0, dt);
     this.brick.update(dt, 1, this.time);
     this.sniper.update(dt, 1, this.time);
+    this.spear.update(dt, 1, this.time);
 
     // Landing squash: dip and lean forward for a moment.
     p.upperY -= 0.08 * this.land;
