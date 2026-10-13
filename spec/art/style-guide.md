@@ -39,12 +39,18 @@ Defined in `client/src/palette.ts`. **Every color in the game comes from this li
 | HAZARD | `#ff4b1f` | **Danger** | Gunfire, tracers, hit sparks, low health, enemy markers |
 | SIGNAL | `#2de2e6` | **Technology** | Light strips, screens, HUD |
 
+### Team colors: characters only, never on world geometry
+
+| Name | Hex | Meaning | Examples |
+|---|---|---|---|
+| COBALT | `#3170d8` | **The blue team** | The trooper's helmet stripe, shoulder edges, forearm and knee stripes |
+
 ## Rules
 
 1. **Calm world, loud accents.** Accents stay small. If an accent covers a large area, it stops meaning anything.
 2. **One meaning per accent.** Never use ACID for decoration or HAZARD for a friendly thing. Players learn the color language without a tutorial.
 3. **Readability beats beauty.** Players and enemies must be identifiable instantly by silhouette and contrast.
-4. **Team colors (later phases):** Phase 1 is free-for-all, so HAZARD marks enemies. When teams arrive, add team colors to the palette and keep them off world geometry.
+4. **Team colors:** COBALT (blue) is the first, added 2026-10-13 with the white trooper. Keep team colors off world geometry. Phase 1 is free-for-all, where HAZARD marks enemies: the trooper carries no HAZARD, so how an enemy reads in free-for-all (an outline, a HAZARD marker, a second team color) is still open.
 5. **Target cheap laptops.** Few draw calls, little overdraw, no heavy real-time lighting.
 
 ## Screen effect
@@ -93,13 +99,47 @@ Next for step 3: symbols (arrows, sector glyphs), INK/BONE stripes on ledges and
 
 **Style: chunky armored heroes** (Luke's choice, 2026-10-12), in the spirit of classic action-game heroes like Mega Man: oversized round helmet, big boots and fists over a slim suit, flat two-tone colors, a visible face with big simple eyes. Take the *style*, never copy a specific character's design (copyrighted). The world stays Marathon "graphic realism"; the contrast between toy-like characters and a calm, grounded world helps characters read.
 
-Built from boxes and low-poly (8-sided) cylinders and spheres, animated in code (`client/src/dummyView.ts`).
+Modeled in **Blockbench** (see "Blockbench models" below) or built in code from boxes and low-poly cylinders, and animated in code (`client/src/character.ts`). The trooper is a Blockbench model; the assassin is still code-built.
 
-- **Colors:** HAZARD armor (helmet, chest, forearms, fists, boots) with a small glow, since in free-for-all every other character is an enemy. GRAPHITE suit, INK shorts and eyes, BONE face, CONCRETE ear discs with SIGNAL lights. Flashes BONE when hit. Team colors (e.g. a blue team) come with teams and go in the palette first.
+- **Colors (trooper):** BONE armor with COBALT stripes (the team color), GRAPHITE suit and boots, a black INK visor, HAZE ear discs with SIGNAL lights. Flashes BONE when hit. (The first chunky trooper was HAZARD armor, the enemy color; Luke replaced it with this design.)
 - **Fits the hitbox:** every part stays inside the 0.6 × 1.8 m box, and the whole head inside the head zone (1.5 to 1.8 m), so what you see is what you hit. The head can only be 0.3 m tall, so it looks big by being **wide** (0.38 m) instead. Never change the hitbox for looks; it's game logic in `sim/`.
 - **Animations:** idle breathing and arm sway; walk cycle tied to distance moved (faces the walking direction); standing characters turn to face the player; hit flinch; fall backward on death; grow up from the floor on respawn.
 - **Looks:** a character is a set of parts on shared joints (`CharacterLook` in `client/src/character.ts`), so every look has the same hitbox and animations. There are two. The **trooper** is the chunky one described above. The **assassin** is the fast one, built like a runner: clean BONE plates over a GRAPHITE suit, a wide chest tapering to a narrow waist, strong thighs and light greaves, a low helmet with swept-back fins and a slanted two-slit HAZARD visor, and a HAZARD scarf with a tail down the back. The scarf is its silhouette; with the visor and the wrist and ankle bands it is also what marks it as an enemy. (A first version, slim and all dark with a hood, read as a stick figure and was replaced.) The game uses the trooper everywhere for now: there is no character select yet.
 - **Character viewer:** with the dev server running, open `http://localhost:5173/figure.html` (add `?res=240` for the retro look). 1 idle, 2 walk, 3 run, Space jump, C slide, H hit, K kill, B show hitbox (switches to the 1.0 m slide box while sliding), O orbit, arrows rotate and zoom. Dev only, not part of the game build.
+
+## Blockbench models
+
+Decided 2026-10-13 (Luke): characters are modeled in [Blockbench](https://www.blockbench.net/) as pixel-textured cubes; the **code keeps animating them** (walk/run blend, rifle IK, slide, death...). Blockbench animations are for later, for things code does badly (emotes, victory poses, special deaths).
+
+**Files**
+- Source: `art/blockbench/<look>.bbmodel` (open this in Blockbench to edit).
+- Export: `client/src/models/<look>.glb` (what the game loads, via `client/src/characterModels.ts`).
+- Check: `client/src/characterModels.test.ts` (bones on the joints, parts inside the hitbox).
+
+**Rules for a character model**
+1. Format **Generic Model**. **32 units = 1 metre** (so one Blockbench block, 16 units, is 0.5 m). The character faces **+Z** (south).
+2. **One texture, 1 pixel per unit**, painted with **palette colors only** (exact hex values from the Palette table). HAZARD and COBALT pixels glow a little and SIGNAL pixels glow fully in game (worked out automatically from the texture), so use them only where the accent meanings allow.
+3. **Whole-number cube sizes**, so pixels stay square.
+4. **Bones (groups) named after the code joints**, pivots exactly here (units; `l` is the −X side, like `character.ts`):
+
+   | Bone | Parent | Pivot |
+   |---|---|---|
+   | `body` | root | 0, 0, 0 |
+   | `hip_l` / `hip_r` | body | ∓3.2, 29.44, 0 |
+   | `upper` | body | 0, 29.44, 0 |
+   | `head` | upper | 0, 45.44, 0 (parts hidden in first person) |
+   | `shoulder_l` / `shoulder_r` | upper | ∓6.4, 44.16, 0 |
+   | `elbow_l` / `elbow_r` | shoulder | ∓6.4, 35.2, 0 (the fist's middle must be 10.24 below, for the rifle grip) |
+
+   Don't rotate bones in the rest pose; arms hang straight down.
+5. **Inside the hitbox:** x and z within ±9.6, y from 0 to 57.6, the helmet between 48 and 57.6 (the head zone).
+
+**Editing workflow**
+1. Open `art/blockbench/trooper.bbmodel`, edit, paint in the Paint tab, **File > Save**.
+2. **File > Export > Export glTF Model**, with encoding **Binary**, **Scale 32**, textures embedded, armature off. Save over `client/src/models/trooper.glb`.
+3. Run `pnpm --filter @arena/client test` (checks the rules above), then look at it in `/figure.html` (add `?res=240&fx=on` for the retro look).
+
+**Trooper (Blockbench version):** follows Luke's second turnaround sheet (a white armored trooper, 2026-10-13), 37 cubes on a 128×128 texture. Round shapes are two crossed boxes (a wide-flat one and a narrow-tall one) plus a flat cap, so the corners read as cut off. A BONE dome helmet with a COBALT stripe from the front over the top to the back, a full-width INK visor slit with a CONCRETE glint, HAZE ear discs (INK ring, CONCRETE, SIGNAL light), one antenna on the left; a BONE chest with a CONCRETE centre seam and a small SIGNAL status light; BONE shoulder pads with COBALT outer edges; GRAPHITE suit, pants, gloves and boots; a CONCRETE belt with a HAZE buckle; BONE forearm plates and knee plates with COBALT stripes. BONE parts shade to HAZE at their lower edges. Limits from the hitbox: the head can't be as big as on the sheet (it must fit the 0.3 m head zone), so it is as wide as allowed instead. The first texture was generated by a script (exact palette colors, one UV net per cube); from now on, paint it in Blockbench.
 
 ## The rifle: Brick
 

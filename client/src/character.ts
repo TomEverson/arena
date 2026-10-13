@@ -1,5 +1,6 @@
 import * as THREE from "three";
 
+import { type CharacterModel, characterModel, type ModelBone } from "./characterModels";
 import { PALETTE } from "./palette";
 import { type Brick, buildBrick } from "./rifle";
 import { buildSniper } from "./sniper";
@@ -62,8 +63,11 @@ const SHOT_SECONDS = 0.09; // recoil and muzzle flash after a shot
 const FLINCH_DECAY = 10; // per second
 const DEATH_SECONDS = 0.6;
 const SPAWN_SECONDS = 0.25;
-const HIP_Y = 0.92;
-const SHOULDER_Y = 0.46; // above the hips
+/** The joints (metres). A Blockbench model's bone pivots must sit exactly here (characterModels.ts). */
+export const HIP_X = 0.1; // each side of the middle
+export const HIP_Y = 0.92;
+export const SHOULDER_Y = 0.46; // above the hips
+export const HEAD_Y = 0.5; // the neck, above the hips: the head bone of a Blockbench model
 
 /** Speeds (m/s) that shape the ground animation. Movement tops out at runSpeed = 11. */
 const WALK_FULL = 3.5; // walk swing reaches full size
@@ -76,9 +80,9 @@ const RUN_STRIDE = 2.6; // ... and when running
 const BLEND_RATE = 12;
 
 /** The arms are two bones: shoulder to elbow, elbow to the middle of the fist. */
-const ARM_UPPER = 0.28;
+export const ARM_UPPER = 0.28;
 const ARM_FORE = 0.32;
-const SHOULDER_X = 0.2;
+export const SHOULDER_X = 0.2;
 
 /** Where the rifle sits (in the upper body's space) for each way of carrying it. */
 interface GunSpot {
@@ -343,6 +347,10 @@ export class CharacterBody {
   private lastWeapon = 0;
   /** Helmet, face, ears, neck and collar: hidden in first person, where the camera sits inside the head. */
   private readonly headParts: THREE.Mesh[] = [];
+  /** The Blockbench model this look is built from, if any, and its meshes (for the hit flash). */
+  private readonly model: CharacterModel | undefined;
+  private readonly modelMeshes: THREE.Mesh[] = [];
+  private flashing = false;
   private airTime = 0;
   private land = 0;
   private readonly ground = zeroPose();
@@ -378,8 +386,11 @@ export class CharacterBody {
     // The figure faces +Z in its own space; `root.rotation.y` turns it.
     this.root.add(this.body);
 
-    const limbs =
-      look === "assassin"
+    // A Blockbench model when one is loaded for this look (characterModels.ts), else the code-built parts.
+    this.model = characterModel(look);
+    const limbs = this.model
+      ? this.buildFromModel(this.model)
+      : look === "assassin"
         ? this.buildAssassin({ armor, suit, ink, face, metal, light })
         : this.buildTrooper({ armor, suit, ink, face, metal, light });
     this.legs = limbs.legs;
@@ -410,6 +421,40 @@ export class CharacterBody {
     this.muzzleFlash.visible = false;
 
     scene.add(this.root);
+  }
+
+  /**
+   * A Blockbench model: each bone's parts go onto the matching code joint (the bones' pivots are
+   * the joints, so the parts keep their positions). The `head` bone's parts hang from the upper
+   * body and are hidden in first person.
+   */
+  private buildFromModel(model: CharacterModel): Limbs {
+    const attach = (parent: THREE.Object3D, bone: ModelBone) => {
+      for (const mesh of model.parts[bone]) {
+        const m = mesh.clone(); // shares the geometry and material
+        parent.add(m);
+        this.modelMeshes.push(m);
+        if (bone === "head") this.headParts.push(m);
+      }
+    };
+    const legs = (["l", "r"] as const).map((side, i) => {
+      const hip = pivot(this.body, (i === 0 ? -1 : 1) * HIP_X, HIP_Y);
+      attach(hip, `hip_${side}`);
+      return hip;
+    }) as [THREE.Group, THREE.Group];
+    const upper = pivot(this.body, 0, HIP_Y);
+    attach(upper, "upper");
+    attach(pivot(upper, 0, HEAD_Y), "head");
+    const elbows: THREE.Group[] = [];
+    const arms = (["l", "r"] as const).map((side, i) => {
+      const shoulder = pivot(upper, (i === 0 ? -1 : 1) * SHOULDER_X, SHOULDER_Y);
+      attach(shoulder, `shoulder_${side}`);
+      const elbow = pivot(shoulder, 0, -ARM_UPPER);
+      attach(elbow, `elbow_${side}`);
+      elbows.push(elbow);
+      return shoulder;
+    }) as [THREE.Group, THREE.Group];
+    return { legs, upper, arms, elbows: elbows as [THREE.Group, THREE.Group] };
   }
 
   /**
@@ -827,6 +872,12 @@ export class CharacterBody {
     for (const m of this.materials) {
       m.mat.color.copy(this.flashT > 0 ? PALETTE.BONE : m.color);
       m.mat.emissive.copy(this.flashT > 0 ? FLASH_GLOW : m.glow);
+    }
+    // A Blockbench model shares its material with every character, so it swaps materials instead.
+    if (this.model && this.flashT > 0 !== this.flashing) {
+      this.flashing = this.flashT > 0;
+      const mat = this.flashing ? this.model.flash : this.model.material;
+      for (const m of this.modelMeshes) m.material = mat;
     }
   }
 

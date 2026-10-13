@@ -3,6 +3,7 @@ import * as THREE from "three";
 import greybox from "../../levels/greybox.json";
 import { AudioEngine, type MoveSound, MoveSoundTracker, StepCounter } from "./audio";
 import { type BodyState, CharacterBody } from "./character";
+import { loadCharacterModels } from "./characterModels";
 import {
   aliveHitboxes,
   type Dummy,
@@ -71,6 +72,9 @@ import {
   WEAPON_DEFS,
   type WeaponState,
 } from "./sim/weapon";
+
+// Blockbench character models: loaded before any character is made (see characterModels.ts).
+await loadCharacterModels();
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const hud = document.getElementById("hud") as HTMLDivElement;
