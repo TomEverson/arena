@@ -1,29 +1,41 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
+import { paletteMaterial } from "./characterModels";
+import rifleUrl from "./models/rifle.glb?url";
 import { PALETTE } from "./palette";
 
 /**
- * "Brick": the rifle. A compact, chunky SMG-style body (short and fat, with the magazine just
- * ahead of the grip, a big angular shroud over the barrel and a small optic on a top rail),
- * built from boxes so it survives the low-resolution look: a strong silhouette, three colour
- * blocks (GRAPHITE body, CONCRETE shroud, INK details) and one SIGNAL accent.
+ * "Brick": the rifle. An assault rifle in the Apex R-301 / Flatline family: a skeleton stock, a
+ * two-tone receiver with a raked BONE armour plate, a forward-raked magazine, an angular BONE
+ * handguard with slanted vents, a short barrel with a chunky muzzle brake and a wedge-shaped
+ * holo sight on a toothed top rail. Its sides are painted as pixel art (panel lines, vents,
+ * edge highlights), in palette colours only.
  *
- * The one signature feature is the ammo strip: a SIGNAL light on each side of the receiver that
- * shrinks as the magazine empties and turns HAZARD and blinks when it is nearly out, so the
- * ammo can be read off the gun itself.
+ * The model is made in Blockbench (`art/blockbench/rifle.bbmodel`, exported as
+ * `models/rifle.glb`) and loaded once at startup with `loadBrickModel()`. Without it (as in the
+ * unit tests, which have no browser to load images) the rifle falls back to an older look built
+ * from boxes. Rules for the model: 32 units per metre, facing north (-Z), a locator named
+ * `muzzle` at the muzzle (the whole model is placed by it, so it may sit anywhere in Blockbench),
+ * and the moving parts in bones named `mag`, `slide`, `strip_l` and `strip_r`.
  *
- * Moving parts: the top slide kicks back on every shot, and the magazine is its own group so a
- * reload can pull it out and slot it back in.
+ * The one signature feature is the ammo strip: a SIGNAL light on each side of the receiver, in a
+ * black channel under the armour plate, that shrinks as the magazine empties and turns HAZARD
+ * and blinks when it is nearly out, so the ammo can be read off the gun itself.
+ *
+ * Moving parts: the charging handle kicks back on every shot (the "slide"), and the magazine is
+ * its own group so a reload can pull it out and slot it back in.
  *
  * Gun space (the first-person convention): +X right, +Y up, -Z toward the muzzle. The bore is
- * the Z axis; the grip is at z = -0.1 and the shroud's underside is at about z = -0.5.
+ * the Z axis; the grip is at z = -0.1 and the handguard starts at about z = -0.4.
  * For the third-person body, rotate `root` half a turn about Y so the muzzle points +Z.
  */
 
 export const BRICK_NAME = "Brick";
 
 /** Where bullets leave and the muzzle flash sits. */
-export const BRICK_MUZZLE = new THREE.Vector3(0, 0.012, -0.78);
+export const BRICK_MUZZLE = new THREE.Vector3(0, 0.012, -0.85);
 /** Height of the optic's reticle above the bore (gun space): ADS lines this up with screen centre. */
 export const BRICK_SIGHT_Y = 0.107;
 /** Where the magazine sits when seated (its group origin). */
@@ -37,6 +49,7 @@ const SLIDE_RECOVER = 14; // per second
 
 const STRIP_LENGTH = 0.2;
 const STRIP_REAR_Z = -0.14; // the strip shrinks toward the rear
+const SLIDE_HOME = new THREE.Vector3(0, 0.075, -0.36);
 
 export interface Brick {
   /** The whole rifle. */
@@ -98,18 +111,152 @@ function box(
   return mesh;
 }
 
-export function buildBrick(): Brick {
+/** A gun's parts before it is given its behaviour. */
+export interface GunParts {
+  root: THREE.Group;
+  mag: THREE.Group;
+  slide: THREE.Group;
+  strips: THREE.Mesh[];
+  /** The ammo strips' own material: it changes colour and blinks. */
+  strip: THREE.MeshLambertMaterial;
+}
+
+function stripMaterial(): THREE.MeshLambertMaterial {
+  return new THREE.MeshLambertMaterial({
+    color: PALETTE.SIGNAL,
+    emissive: PALETTE.SIGNAL,
+    flatShading: true,
+  });
+}
+
+/** A Blockbench gun model, baked into gun space: one geometry per moving part. */
+export interface GunModel {
+  fixed: THREE.BufferGeometry;
+  /** Relative to BRICK_MAG_HOME. */
+  mag: THREE.BufferGeometry;
+  /** Relative to the slide's home. */
+  slide: THREE.BufferGeometry;
+  /** Left and right, each relative to its rear end (z = stripZ). */
+  strips: THREE.BufferGeometry[];
+  /** Where the strips' rear end is: the pivot of the model's strip bones. */
+  stripZ: number;
+  material: THREE.MeshLambertMaterial;
+}
+
+const MODEL_BONES = ["mag", "slide", "strip_l", "strip_r"] as const;
+type ModelPart = (typeof MODEL_BONES)[number] | "fixed";
+
+let model: GunModel | undefined;
+
+/** Load the Blockbench rifle. Call once at startup, before building any rifle. */
+export async function loadBrickModel(): Promise<void> {
+  model = await loadGunModel(rifleUrl, BRICK_MUZZLE, SLIDE_HOME);
+}
+
+/**
+ * Load a Blockbench gun (the rules are at the top of this file) and bake it into gun space:
+ * its `muzzle` locator goes to `muzzleAt`, and the `slide` bone's parts are stored relative to
+ * `slideHome`. Shared with the sniper (sniper.ts).
+ */
+export async function loadGunModel(
+  url: string,
+  muzzleAt: THREE.Vector3,
+  slideHome: THREE.Vector3,
+): Promise<GunModel> {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  return toGunModel(gltf.scene, muzzleAt, slideHome);
+}
+
+function toGunModel(
+  scene: THREE.Object3D,
+  muzzleAt: THREE.Vector3,
+  slideHome: THREE.Vector3,
+): GunModel {
+  scene.updateMatrixWorld(true);
+  const muzzle = scene.getObjectByName("muzzle");
+  if (!muzzle) throw new Error('gun model has no locator "muzzle"');
+  // Wherever the model sits in Blockbench, its muzzle goes to `muzzleAt`.
+  const shift = muzzleAt.clone().sub(muzzle.getWorldPosition(new THREE.Vector3()));
+  // The strips shrink toward their bones' pivot, so that is their rear end.
+  const stripBone = scene.getObjectByName("strip_l");
+  if (!stripBone) throw new Error('gun model has no bone "strip_l"');
+  const stripZ = stripBone.getWorldPosition(new THREE.Vector3()).z + shift.z;
+  const homes: Record<ModelPart, THREE.Vector3> = {
+    fixed: new THREE.Vector3(),
+    mag: BRICK_MAG_HOME,
+    slide: slideHome,
+    strip_l: new THREE.Vector3(0, 0, stripZ),
+    strip_r: new THREE.Vector3(0, 0, stripZ),
+  };
+  const geos: Record<ModelPart, THREE.BufferGeometry[]> = {
+    fixed: [],
+    mag: [],
+    slide: [],
+    strip_l: [],
+    strip_r: [],
+  };
+  let map: THREE.Texture | null = null;
+  scene.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
+    const mesh = node as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+    map ??= mesh.material.map;
+    let part: ModelPart = "fixed";
+    for (let p = mesh.parent; p; p = p.parent) {
+      const bone = MODEL_BONES.find((b) => b === p.name);
+      if (bone) {
+        part = bone;
+        break;
+      }
+    }
+    const home = homes[part];
+    const geo = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+    geo.translate(shift.x - home.x, shift.y - home.y, shift.z - home.z);
+    geos[part].push(geo);
+  });
+  if (!map) throw new Error("gun model has no texture");
+  const merged = (part: ModelPart) => {
+    if (geos[part].length === 0) throw new Error(`gun model has no parts in "${part}"`);
+    return mergeGeometries(geos[part]);
+  };
+  return {
+    fixed: merged("fixed"),
+    mag: merged("mag"),
+    slide: merged("slide"),
+    strips: [merged("strip_l"), merged("strip_r")],
+    stripZ,
+    material: paletteMaterial(map),
+  };
+}
+
+/** A new gun from a loaded model: its own groups and strip material, sharing the model's geometry. */
+export function gunModelParts(m: GunModel, slideHome: THREE.Vector3): GunParts {
+  const root = new THREE.Group();
+  root.add(new THREE.Mesh(m.fixed, m.material));
+  const mag = new THREE.Group();
+  mag.position.copy(BRICK_MAG_HOME);
+  mag.add(new THREE.Mesh(m.mag, m.material));
+  const slide = new THREE.Group();
+  slide.position.copy(slideHome);
+  slide.add(new THREE.Mesh(m.slide, m.material));
+  root.add(mag, slide);
+  const strip = stripMaterial();
+  const strips = m.strips.map((geo) => {
+    const mesh = new THREE.Mesh(geo, strip);
+    mesh.position.z = m.stripZ;
+    root.add(mesh);
+    return mesh;
+  });
+  return { root, mag, slide, strips, strip };
+}
+
+/** The older look, built from boxes: what the rifle is when the model is not loaded. */
+function boxParts(): GunParts {
   const root = new THREE.Group();
   const body = new THREE.MeshLambertMaterial({ color: PALETTE.GRAPHITE, flatShading: true });
   const shroud = new THREE.MeshLambertMaterial({ color: PALETTE.CONCRETE, flatShading: true });
   const ink = new THREE.MeshLambertMaterial({ color: PALETTE.INK, flatShading: true });
   const lens = new THREE.MeshBasicMaterial({ color: PALETTE.SIGNAL, side: THREE.DoubleSide });
-  // The ammo strip's own material: it changes colour and blinks, the optic lens does not.
-  const strip = new THREE.MeshLambertMaterial({
-    color: PALETTE.SIGNAL,
-    emissive: PALETTE.SIGNAL,
-    flatShading: true,
-  });
+  const strip = stripMaterial();
 
   // Receiver, with a raised rail along the top and a stub of stock behind it.
   box(root, body, [0.075, 0.095, 0.3], [0, 0, -0.26]);
@@ -145,16 +292,13 @@ export function buildBrick(): Brick {
   reticle.position.set(0, BRICK_SIGHT_Y, -0.2);
   reticle.add(new THREE.Mesh(new THREE.CircleGeometry(0.0035, 12), lens)); // a single dot
   root.add(reticle);
-  const mask = sightMask(0.06, 0.05, [0, BRICK_SIGHT_Y, -0.205]);
-  root.add(mask);
 
   // The slide on the rail: kicks back on every shot.
   const slide = new THREE.Group();
-  slide.position.set(0, 0.075, -0.36);
+  slide.position.copy(SLIDE_HOME);
   box(slide, shroud, [0.034, 0.022, 0.06], [0, 0, 0]);
   box(slide, ink, [0.012, 0.012, 0.03], [0, 0.015, 0.01]);
   root.add(slide);
-  const slideHome = slide.position.z;
 
   // Magazine ahead of the grip: its own group so a reload can move it.
   const mag = new THREE.Group();
@@ -174,6 +318,21 @@ export function buildBrick(): Brick {
     root.add(m);
     return m;
   });
+  return { root, mag, slide, strips: stripMeshes, strip };
+}
+
+export function buildBrick(): Brick {
+  const {
+    root,
+    mag,
+    slide,
+    strips: stripMeshes,
+    strip,
+  } = model ? gunModelParts(model, SLIDE_HOME) : boxParts();
+  // Both looks have the same sight window, so they share its mask.
+  const mask = sightMask(0.06, 0.05, [0, BRICK_SIGHT_Y, -0.205]);
+  root.add(mask);
+  const slideHome = slide.position.z;
 
   let kick = 0;
 

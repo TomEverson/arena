@@ -44,7 +44,7 @@ Architecture details: [spec/docs/architecture.md](spec/docs/architecture.md).
 | `pnpm vectors` | Re-record `testvectors/movement/*.json` from the TS sim (runs each scenario's verify) |
 | `pnpm bots` | Placeholder (prints "not implemented yet") |
 
-Server flags: `--addr=:8080 --level=../levels/greybox.json --fake-latency=80ms --loss=3%`, and for the match cycle `--countdown=5s --match-length=6m --results=15s --room-idle=1m`, `--no-match` (FFA rooms always live) and `--practice-level=../levels/greybox.json` (the practice range's level). Health: `GET /healthz`. A room has a mode, `ffa` or `practice`: `POST /api/rooms {"mode":"practice"}`, and players join with `/?room=CODE`. Opening the page without a room link shows a start screen (or use `?mode=practice` / `?mode=ffa`).
+Server flags: `--addr=:8080 --level=../levels/greybox.json --fake-latency=80ms --loss=3%`, and for the match cycle `--countdown=5s --match-length=6m --results=15s --room-idle=1m`, `--no-match` (FFA rooms always live) and `--practice-level=../levels/greybox.json` (the practice range's level). Health: `GET /healthz`. A room has a mode, `ffa` or `practice`: `POST /api/rooms {"mode":"practice"}`, and players join with `/?room=CODE`. Opening the page without a room link shows a start screen (or use `?mode=practice` / `?mode=ffa`). The start screen asks for a username and keeps it in localStorage (`arena.name`, `client/src/username.ts`); a link opened without one asks first. The name is not sent to the server yet.
 Prereqs: Node 22+, pnpm 10, Go 1.24+, `air` (`go install github.com/air-verse/air@latest`), optional `golangci-lint`.
 
 ## Layout

@@ -1,14 +1,31 @@
 import * as THREE from "three";
 
+import sniperUrl from "./models/sniper.glb?url";
 import { PALETTE } from "./palette";
-import { type Brick, BRICK_MAG_HOME, SIGHT_CLEAR_AT, sightMask } from "./rifle";
+import {
+  type Brick,
+  BRICK_MAG_HOME,
+  type GunModel,
+  gunModelParts,
+  type GunParts,
+  loadGunModel,
+  SIGHT_CLEAR_AT,
+  sightMask,
+} from "./rifle";
 
 /**
- * "Needle": the sniper rifle (weapon slot 2). A long, slim rifle built from boxes like the
- * Brick: a long barrel, a big scope along the top, a bolt on the right that cycles after every
- * shot, and the same SIGNAL ammo strip on the receiver (five rounds, so the strip drops in
- * big steps). Same gun space and the same interface as the Brick, so the viewmodel, the body and
- * the viewer treat both alike. The scope is hollow with a thin reticle at the eyepiece; aiming lines its axis up with the middle of the screen and the world zooms behind it.
+ * "Needle": the sniper rifle (weapon slot 2). A long, mostly BONE rifle in the same family as the
+ * Brick: a stock with a raised cheek rest, a big hollow scope along the top, a bolt on the right that
+ * cycles after every shot, a long handguard with a folded bipod, a thin fluted barrel with an
+ * angular muzzle brake, and the same SIGNAL ammo strip on the receiver (five rounds, so the
+ * strip drops in big steps). Same gun space and the same interface as the Brick, so the
+ * viewmodel, the body and the viewer treat both alike.
+ *
+ * The model is made in Blockbench (`art/blockbench/sniper.bbmodel`, exported as
+ * `models/sniper.glb`, same rules as the rifle's: see rifle.ts) and loaded once at startup with
+ * `loadSniperModel()`. Without it (the unit tests) the sniper falls back to an older look built
+ * from boxes. Either way the reticle is drawn in code at the eyepiece; aiming lines the scope's
+ * axis up with the middle of the screen and the world zooms behind it.
  *
  * Gun space: +X right, +Y up, -Z toward the muzzle; grip at z = -0.1.
  */
@@ -21,6 +38,8 @@ export const SNIPER_SIGHT_Y = 0.12;
 /** Where bullets (the tracer) leave. */
 export const SNIPER_MUZZLE = new THREE.Vector3(0, 0.02, -1.36);
 
+/** Where the bolt handle sits at rest (its group origin). */
+const BOLT_HOME = new THREE.Vector3(0.05, 0.03, -0.2);
 const BOLT_KICK = 0.09; // metres the bolt handle travels back
 const BOLT_SECONDS = 0.9; // the cycle after a shot: back, then forward
 const STRIP_LENGTH = 0.22;
@@ -41,7 +60,15 @@ function box(
   return mesh;
 }
 
-export function buildSniper(): Brick {
+let model: GunModel | undefined;
+
+/** Load the Blockbench sniper. Call once at startup, before building any sniper. */
+export async function loadSniperModel(): Promise<void> {
+  model = await loadGunModel(sniperUrl, SNIPER_MUZZLE, BOLT_HOME);
+}
+
+/** The older look, built from boxes: what the sniper is when the model is not loaded. */
+function boxParts(): GunParts & { rods: THREE.Group } {
   const root = new THREE.Group();
   const body = new THREE.MeshLambertMaterial({ color: PALETTE.GRAPHITE, flatShading: true });
   const shroud = new THREE.MeshLambertMaterial({ color: PALETTE.CONCRETE, flatShading: true });
@@ -95,28 +122,12 @@ export function buildSniper(): Brick {
   tube(-0.22, 0.02, 0.1, body); // eyepiece ring
   box(root, ink, [0.02, 0.05, 0.04], [0, 0.085, -0.26]); // rings
   box(root, ink, [0.02, 0.05, 0.04], [0, 0.085, -0.42]);
-  // The reticle: thin crosshair bars across the window and a SIGNAL dot, near the eye end.
-  // Four hairlines that stop short of the middle and a small SIGNAL dot, unlit so they stay crisp:
-  // the target is never hidden behind the reticle.
-  const hair = new THREE.MeshBasicMaterial({ color: PALETTE.INK });
-  const dot = new THREE.MeshBasicMaterial({ color: PALETTE.SIGNAL });
-  const [reach, gap, thick] = [0.042, 0.004, 0.0006];
-  for (const side of [-1, 1]) {
-    const mid = (side * (reach + gap)) / 2;
-    box(root, hair, [reach - gap, thick, 0.001], [mid, SNIPER_SIGHT_Y, -0.2]);
-    box(root, hair, [thick, reach - gap, 0.001], [0, SNIPER_SIGHT_Y + mid, -0.2]);
-  }
-  box(root, dot, [0.001, 0.001, 0.001], [0, SNIPER_SIGHT_Y, -0.2]);
-  const mask = sightMask(0.084, 0.084, [0, SNIPER_SIGHT_Y, -0.209]);
-  root.add(mask);
-
   // The bolt: a handle on the right side that kicks back and forward after every shot.
   const bolt = new THREE.Group();
-  bolt.position.set(0.05, 0.03, -0.2);
+  bolt.position.copy(BOLT_HOME);
   box(bolt, ink, [0.05, 0.012, 0.012], [0.03, 0, 0]);
   box(bolt, shroud, [0.022, 0.022, 0.022], [0.06, 0, 0]);
   root.add(bolt);
-  const boltHome = bolt.position.z;
 
   // A small box magazine under the receiver, in its own group for the reload.
   const mag = new THREE.Group();
@@ -134,6 +145,31 @@ export function buildSniper(): Brick {
     root.add(m);
     return m;
   });
+  return { root, mag, slide: bolt, strips: stripMeshes, strip, rods };
+}
+
+export function buildSniper(): Brick {
+  // The box look's scope rods stick out past the eyepiece, so they hide when aimed.
+  const boxes = model ? undefined : boxParts();
+  const rods = boxes?.rods;
+  const parts: GunParts = boxes ?? gunModelParts(model as GunModel, BOLT_HOME);
+  const { root, mag, slide: bolt, strips: stripMeshes, strip } = parts;
+  // The reticle: thin crosshair bars across the window and a SIGNAL dot, near the eye end.
+  // Four hairlines that stop short of the middle and a small SIGNAL dot, unlit so they stay crisp:
+  // the target is never hidden behind the reticle.
+  const hair = new THREE.MeshBasicMaterial({ color: PALETTE.INK });
+  const dot = new THREE.MeshBasicMaterial({ color: PALETTE.SIGNAL });
+  const [reach, gap, thick] = [0.042, 0.004, 0.0006];
+  for (const side of [-1, 1]) {
+    const mid = (side * (reach + gap)) / 2;
+    box(root, hair, [reach - gap, thick, 0.001], [mid, SNIPER_SIGHT_Y, -0.2]);
+    box(root, hair, [thick, reach - gap, 0.001], [0, SNIPER_SIGHT_Y + mid, -0.2]);
+  }
+  box(root, dot, [0.001, 0.001, 0.001], [0, SNIPER_SIGHT_Y, -0.2]);
+  const mask = sightMask(0.084, 0.084, [0, SNIPER_SIGHT_Y, -0.209]);
+  root.add(mask);
+
+  const boltHome = bolt.position.z;
 
   let cycle = 0; // 1 right after a shot, falling to 0 over BOLT_SECONDS
 
@@ -147,7 +183,7 @@ export function buildSniper(): Brick {
     },
     aim(t) {
       mask.visible = t >= SIGHT_CLEAR_AT;
-      rods.visible = !mask.visible;
+      if (rods) rods.visible = !mask.visible;
     },
     update(dt, ammo, time) {
       cycle = Math.max(0, cycle - dt / BOLT_SECONDS);

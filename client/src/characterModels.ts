@@ -90,19 +90,22 @@ function toCharacterModel(scene: THREE.Object3D): CharacterModel {
     }
   }
   if (!map) throw new Error("character model has no texture");
+  const material = paletteMaterial(map);
+  const flash = new THREE.MeshBasicMaterial({ color: PALETTE.BONE });
+  for (const meshes of Object.values(parts)) for (const m of meshes) m.material = material;
+  return { parts, material, flash };
+}
+
+/**
+ * The material for a Blockbench model's texture: sharp pixels, and the accents glow (see GLOW).
+ * Also used by the rifle (rifle.ts).
+ */
+export function paletteMaterial(map: THREE.Texture): THREE.MeshLambertMaterial {
   map.magFilter = THREE.NearestFilter;
   map.minFilter = THREE.NearestFilter;
   map.generateMipmaps = false;
   map.colorSpace = THREE.SRGBColorSpace;
-
-  const material = new THREE.MeshLambertMaterial({
-    map,
-    emissive: 0xffffff,
-    emissiveMap: glowMap(map),
-  });
-  const flash = new THREE.MeshBasicMaterial({ color: PALETTE.BONE });
-  for (const meshes of Object.values(parts)) for (const m of meshes) m.material = material;
-  return { parts, material, flash };
+  return new THREE.MeshLambertMaterial({ map, emissive: 0xffffff, emissiveMap: glowMap(map) });
 }
 
 /** A copy of the texture where only the glowing accents are lit (everything else black). */

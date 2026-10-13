@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
@@ -45,5 +47,30 @@ describe("Brick", () => {
     const box = new THREE.Box3().setFromObject(brick.root);
     expect(box.min.z).toBeGreaterThanOrEqual(BRICK_MUZZLE.z - 0.1); // nothing sticks out past the muzzle
     expect(box.max.x - box.min.x).toBeLessThan(0.12); // slim enough to hold
+  });
+});
+
+/**
+ * Checks the Blockbench gun models (.glb) against the rules in rifle.ts. If this fails after an
+ * edit in Blockbench, the muzzle locator or one of the moving parts' bones was renamed or emptied.
+ */
+describe.each(["rifle", "sniper"])("Blockbench model %s", (gun) => {
+  interface GltfNode {
+    name?: string;
+    children?: number[];
+    mesh?: number;
+  }
+  const buf = readFileSync(new URL(`./models/${gun}.glb`, import.meta.url));
+  const json = buf.subarray(20, 20 + buf.readUInt32LE(12)).toString("utf8");
+  const nodes = (JSON.parse(json) as { nodes: GltfNode[] }).nodes;
+
+  it("has a muzzle locator", () => {
+    expect(nodes.some((n) => n.name === "muzzle")).toBe(true);
+  });
+
+  it.each(["mag", "slide", "strip_l", "strip_r"])("has parts in the bone %s", (bone) => {
+    const node = nodes.find((n) => n.name === bone);
+    expect(node, `no bone named ${bone}`).toBeDefined();
+    expect(node?.children?.some((c) => nodes[c]?.mesh !== undefined)).toBe(true);
   });
 });

@@ -204,6 +204,9 @@ func TestBombardmentNeedsAFullChargeThenShellsAtOnce(t *testing.T) {
 	if n := len(skillEntitiesOf(d.w, protocol.EntityKindGrenade)); n != 1 || len(skillEntitiesOf(d.w, protocol.EntityKindStrike)) != 0 {
 		t.Fatalf("ultimate marker entities = %d grenades, %d strikes; want one marker and no strike", n, len(skillEntitiesOf(d.w, protocol.EntityKindStrike)))
 	}
+	if m := skillEntitiesOf(d.w, protocol.EntityKindGrenade)[0]; m.Flags != 1 {
+		t.Fatalf("the marker should be flagged so clients draw it as the beacon, not a frag grenade: flags %d", m.Flags)
+	}
 	d.settle(int(SkillBombardFuse*TickRate) + 1)
 	strikes := skillEntitiesOf(d.w, protocol.EntityKindStrike)
 	if len(strikes) != 1 {
@@ -693,7 +696,7 @@ func TestThunderSpearSticksInAWallThenExplodes(t *testing.T) {
 	}
 }
 
-func TestThunderSpearSticksInABodyForImpactDamageThenExplodes(t *testing.T) {
+func TestThunderSpearBouncesOffABodyAndCanBeEscaped(t *testing.T) {
 	d := assassinWithSpears(t, nil, Vec3{Z: -15})
 	d.step(&Input{Fire: true, ADS: true, Pitch: bodyPitch}, nil)
 	d.settle(20) // well short of the fuse
@@ -701,23 +704,40 @@ func TestThunderSpearSticksInABodyForImpactDamageThenExplodes(t *testing.T) {
 	if lost := full - d.b.Health.Health - d.b.Health.Shield; lost != SpearDamage {
 		t.Fatalf("on impact it did %v, want the launcher's %v", lost, float64(SpearDamage))
 	}
-	// The victim runs off with it stuck in them: it goes where they go, and the blast is theirs.
+	// It has bounced back toward the thrower (who is at z = 0), blinking, and is not on them.
+	sp := spears(d.w)
+	if len(sp) != 1 || sp[0].Flags != 1 || sp[0].Z <= d.b.State.Z+HalfWidth {
+		t.Fatalf("the spear should have bounced back off the body with its fuse lit: %+v", sp)
+	}
+	// The victim runs off: the spear stays behind, and they are clear of the blast.
 	away := &Input{MoveX: 1}
-	for i := 0; i < 20; i++ {
-		d.step(nil, away)
-	}
-	if sp := spears(d.w); len(sp) != 1 || math.Abs(sp[0].X-d.b.State.X) > HalfWidth+0.1 || d.b.State.X < 1 {
-		t.Fatalf("the spear should be carried along: spears %+v, victim at x = %v", sp, d.b.State.X)
-	}
 	for i := 0; i < int(SkillSpearFuse*TickRate)+5; i++ {
 		d.step(nil, away)
+		if s := spears(d.w); len(s) == 1 && math.Abs(s[0].X) > 0.5 {
+			t.Fatalf("the spear should not follow them: spear at x = %v, victim at x = %v", s[0].X, d.b.State.X)
+		}
 	}
+	if len(spears(d.w)) != 0 {
+		t.Fatal("the spear should have gone off")
+	}
+	if d.b.State.X < SkillSpearRadius+1 {
+		t.Fatalf("the victim should have run clear of the blast: x = %v", d.b.State.X)
+	}
+	if lost := full - d.b.Health.Health - d.b.Health.Shield; lost != SpearDamage {
+		t.Fatalf("clear of the blast, they should have lost only the impact's %v: lost %v", float64(SpearDamage), lost)
+	}
+}
+
+func TestThunderSpearBouncedOffABodyStillBlastsThemIfTheyStay(t *testing.T) {
+	d := assassinWithSpears(t, nil, Vec3{Z: -15})
+	d.step(&Input{Fire: true, ADS: true, Pitch: bodyPitch}, nil)
+	d.settle(int(SkillSpearFuse*TickRate) + 30)
 	if len(spears(d.w)) != 0 {
 		t.Fatal("the spear should have gone off")
 	}
 	blast := eventsOf(d.b, protocol.EventKindHurt)
 	if last := blast[len(blast)-1]; last.Amount != SkillSpearDamage || last.Flags&protocol.GameEventFlagBlast == 0 {
-		t.Fatalf("stuck in a body, the blast should do its full %v to them wherever they ran: %+v", float64(SkillSpearDamage), last)
+		t.Fatalf("it lands a step away, so standing still they take the blast's full %v: %+v", float64(SkillSpearDamage), last)
 	}
 	if d.b.Health.Alive {
 		t.Fatal("impact and blast together are more than full health and shield: they should be dead")

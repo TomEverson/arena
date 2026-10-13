@@ -46,8 +46,8 @@ type grenade struct {
 	fuse       float64
 }
 
-// spear is a thunder spear: it flies fast and nearly straight, sticks in the first thing it
-// hits, and explodes a moment later.
+// spear is a thunder spear: it flies fast and nearly straight, sticks in the first wall or
+// ground it hits (it bounces back off a body and drops), and explodes a moment later.
 type spear struct {
 	Entity
 	active     bool
@@ -55,11 +55,9 @@ type spear struct {
 	vx, vy, vz float64
 	flown      float64 // metres so far
 	stuck      bool
-	fuse       float64 // seconds until it goes off, once stuck
-	// stuckIn is the player or practice target it is stuck in (0: a wall or the ground), and
-	// (ox, oy, oz) is where on them, from their feet: it goes where they go until it goes off.
-	stuckIn    uint32
-	ox, oy, oz float64
+	// bounced: it has hit a body and is dropping back from them, its fuse already burning.
+	bounced bool
+	fuse    float64 // seconds until it goes off, once stuck or bounced
 }
 
 type barrier struct {
@@ -323,30 +321,36 @@ func (w *World) feetOf(id uint32) (x, y, z float64, ok bool) {
 
 // stepSpear flies a spear for a tick, or counts down its fuse once it has stuck. Flying, the
 // whole stretch it covers is cast against the level and against everyone but its owner, so it
-// cannot skip through a thin wall or a player. Whatever it hits, it sticks there. A body takes
-// the launcher's small impact damage and carries the spear with it: the blast, which is what
-// does the damage, goes off wherever they have got to.
+// cannot skip through a thin wall or a player. A wall or the ground it sticks in. A body takes
+// the launcher's small impact damage and the spear bounces back off them: its fuse starts, it
+// drops a little way back toward the thrower, sticks where it lands and goes off there (or in
+// the air, if the fuse runs out first). It does not stay with them, so they can get clear of
+// the blast.
 func (w *World) stepSpear(sp *spear) {
-	if sp.stuck {
-		if sp.stuckIn != 0 {
-			if x, y, z, ok := w.feetOf(sp.stuckIn); ok {
-				sp.X, sp.Y, sp.Z = x+sp.ox, y+sp.oy, z+sp.oz
-			} else {
-				sp.stuckIn = 0 // they died or left: it stays where it was
-			}
-		}
+	if sp.stuck || sp.bounced {
 		sp.fuse -= TickDT
 		if sp.fuse <= 0 {
 			w.explodeAt(sp.owner, sp.X, sp.Y, sp.Z, SkillSpearCore, SkillSpearRadius, SkillSpearDamage)
 			sp.active = false
+			return
 		}
-		return
+		if sp.stuck {
+			return
+		}
 	}
-	sp.vy -= SkillSpearGravity * TickDT
+	gravity := float64(SkillSpearGravity)
+	if sp.bounced {
+		gravity = SkillSpearBounceGravity
+	}
+	sp.vy -= gravity * TickDT
 	mx, my, mz := sp.vx*TickDT, sp.vy*TickDT, sp.vz*TickDT
 	l := math.Sqrt(mx*mx + my*my + mz*mz)
 	owner := w.byID(sp.owner)
-	n := w.fillBoxes(owner, float64(w.tick))
+	// Once it has bounced it only falls: it goes through bodies and stops at the level.
+	n := 0
+	if !sp.bounced {
+		n = w.fillBoxes(owner, float64(w.tick))
+	}
 	hit := CastRay(&w.level.Collision, w.boxes[:n], sp.X, sp.Y, sp.Z, mx/l, my/l, mz/l, l)
 	sp.X, sp.Y, sp.Z = hit.X, hit.Y, hit.Z
 	sp.flown += hit.T
@@ -357,21 +361,29 @@ func (w *World) stepSpear(sp *spear) {
 		if owner != nil {
 			w.dealDamage(owner, id, SpearDamage, false, 0)
 		}
-		// Stuck a hair inside the body, so they take the whole blast, and carried along with it.
-		// (A barrier is a wall: nothing to follow.)
-		if x, y, z, ok := w.feetOf(id); ok && id < SkillBarrierIdBase {
-			sp.X += mx / l * 0.05
-			sp.Y += my / l * 0.05
-			sp.Z += mz / l * 0.05
-			sp.stuckIn, sp.ox, sp.oy, sp.oz = id, sp.X-x, sp.Y-y, sp.Z-z
+		sp.fuse, sp.Flags = SkillSpearFuse, 1
+		if _, _, _, ok := w.feetOf(id); ok && id < SkillBarrierIdBase {
+			// A body: back out of it a hair, then off it the way it came, with a hop.
+			sp.X -= mx / l * 0.05
+			sp.Y -= my / l * 0.05
+			sp.Z -= mz / l * 0.05
+			sp.vx, sp.vy, sp.vz = 0, SkillSpearBounceUp, 0
+			if flat := math.Hypot(mx, mz); flat > 1e-9 {
+				sp.vx, sp.vz = -mx/flat*SkillSpearBounceBack, -mz/flat*SkillSpearBounceBack
+			}
+			sp.bounced = true
+		} else {
+			sp.stuck = true // a barrier is a wall: it sticks and stays
 		}
-		sp.stuck, sp.fuse, sp.Flags = true, SkillSpearFuse, 1
 	case hit.Kind == RayWorld, sp.flown >= SpearRange:
 		// Stuck a hair short of the surface, so the blast is on this side of the wall it is in.
 		sp.X -= mx / l * 0.05
 		sp.Y -= my / l * 0.05
 		sp.Z -= mz / l * 0.05
-		sp.stuck, sp.fuse, sp.Flags = true, SkillSpearFuse, 1
+		sp.stuck, sp.Flags = true, 1
+		if !sp.bounced {
+			sp.fuse = SkillSpearFuse // a bounced spear's fuse is already burning
+		}
 	}
 }
 
@@ -477,6 +489,7 @@ func (w *World) callStrike(p *Player, in *Input) {
 		g.Entity = Entity{
 			ID: w.skills.nextID(SkillGrenadeIdBase), TeamID: p.Entity.TeamID, Kind: protocol.EntityKindGrenade,
 			X: s.X, Y: s.Y + eyeHeight(s) - 0.2, Z: s.Z,
+			Flags: 1, // a marker, not a frag grenade: clients draw it as the beacon
 		}
 		p.Health.Ult = 0
 		p.Health.ProtectedFor = 0

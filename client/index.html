@@ -164,6 +164,25 @@
         color: #ffd24a;
         min-height: 1em;
       }
+      #dmgdir {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      /* One arc per attacker: a ring round the middle of the screen with only its top lit, turned to face them. */
+      #dmgdir i {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 46vh;
+        height: 46vh;
+        margin: -23vh 0 0 -23vh;
+        box-sizing: border-box;
+        border: 1.6vh solid transparent;
+        border-top-color: #ff4b1f;
+        border-radius: 50%;
+      }
       #hurt {
         position: fixed;
         inset: 0;
@@ -506,6 +525,35 @@
         letter-spacing: 12px;
         color: #ffd24a;
       }
+      #menu #menu-name {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 16px;
+        color: #9ab;
+      }
+      #menu #player-name {
+        width: 260px;
+        padding: 10px 12px;
+        font: 700 20px monospace;
+        color: #fff;
+        background: #16212e;
+        border: 2px solid #3a5068;
+        outline: none;
+      }
+      #menu #player-name:focus {
+        border-color: #ffd24a;
+      }
+      #menu #menu-join {
+        display: none;
+      }
+      #menu.joining #menu-join {
+        display: block;
+      }
+      #menu.joining #play-ffa,
+      #menu.joining #play-practice {
+        display: none;
+      }
       #menu .buttons {
         display: flex;
         gap: 20px;
@@ -620,6 +668,10 @@
   <body>
     <div id="menu">
       <h1>ARENA</h1>
+      <label id="menu-name">
+        Your name
+        <input id="player-name" type="text" maxlength="16" autocomplete="off" spellcheck="false" />
+      </label>
       <div class="buttons">
         <button id="play-ffa">
           Play FFA
@@ -628,6 +680,10 @@
         <button id="play-practice">
           Practice range
           <small>Movement course and shooting targets. No clock, targets do not shoot back.</small>
+        </button>
+        <button id="menu-join">
+          Join room
+          <small>You opened a room link. Enter a name to join it.</small>
         </button>
       </div>
       <div id="menu-note"></div>
@@ -642,6 +698,7 @@
     <div id="skills"></div>
     <div id="ammo"></div>
     <div id="vitals"></div>
+    <div id="dmgdir"></div>
     <div id="hurt"></div>
     <div id="death"></div>
     <div id="killfeed"></div>
@@ -689,7 +746,9 @@
         <input id="fov-range" type="range" min="60" max="120" step="1" />
         <span id="fov-value"></span>
       </div>
-      <label id="fullscreen-settings"><input id="fullscreen-toggle" type="checkbox" /> Fullscreen</label>
+      <label id="fullscreen-settings"
+        ><input id="fullscreen-toggle" type="checkbox" /> Fullscreen</label
+      >
       <div id="roominfo"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>

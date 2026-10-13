@@ -262,6 +262,9 @@ const (
 	SkillSpearSpeed          = 70
 	SkillSpearGravity        = 6
 	SkillSpearFuse           = 1
+	SkillSpearBounceBack     = 3
+	SkillSpearBounceUp       = 3
+	SkillSpearBounceGravity  = 20
 	SkillSpearRadius         = 4
 	SkillSpearCore           = 4
 	SkillSpearDamage         = 150

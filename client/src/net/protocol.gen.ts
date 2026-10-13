@@ -195,7 +195,7 @@ export interface Entity {
   pitch: number;
   /** Bit set of EntityFlags. */
   flags: number;
-  /** One of EntityKinds. Skill objects are entities too: a grenade in flight, a barrier (yaw 0 spans X, a quarter turn spans Z), a bombardment (flags 1 once the shells are falling), a practice-range recharge pickup (sent only while it can be taken), the point a grappling player is hooked to (teamId is that player's id), a thunder spear (yaw and pitch are the way it points; flags 1 once it has stuck and is about to go off). */
+  /** One of EntityKinds. Skill objects are entities too: a grenade in flight (flags 1: it is the marker that calls a bombardment, not a frag grenade), a barrier (yaw 0 spans X, a quarter turn spans Z), a bombardment (flags 1 once the shells are falling), a practice-range recharge pickup (sent only while it can be taken), the point a grappling player is hooked to (teamId is that player's id), a thunder spear (yaw and pitch are the way it points; flags 1 once its fuse is lit: stuck in a wall, or bounced off a body). */
   kind: number;
   /** One of HeroKinds, for a player: which character to draw. */
   hero: number;

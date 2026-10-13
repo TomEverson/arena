@@ -2,16 +2,17 @@ import * as THREE from "three";
 
 import { type BodyState, CharacterBody } from "./character";
 import { loadCharacterModels } from "./characterModels";
+import { loadKatanaModel } from "./katana";
 import { PALETTE } from "./palette";
 import { type ReloadPose, reloadPose } from "./reloadAnim";
 import { FX_MODES, type FxMode, RetroRenderer } from "./render";
-import { BRICK_MAG_HOME, BRICK_MUZZLE, buildBrick } from "./rifle";
+import { BRICK_MAG_HOME, BRICK_MUZZLE, buildBrick, loadBrickModel } from "./rifle";
 import { COMBAT, PARAMS as P, SKILL, SNIPER, SPEAR, WEAPON } from "./sim/params";
-import { buildSniper, SNIPER_MUZZLE } from "./sniper";
+import { buildSniper, loadSniperModel, SNIPER_MUZZLE } from "./sniper";
 import { buildSpear, SPEAR_MUZZLE, SPEAR_PAIR_GAP } from "./spear";
 
-// Blockbench character models: loaded before any character is made (see characterModels.ts).
-await loadCharacterModels();
+// Blockbench models: loaded before any character or gun is made (see characterModels.ts, rifle.ts, sniper.ts, katana.ts).
+await Promise.all([loadCharacterModels(), loadBrickModel(), loadSniperModel(), loadKatanaModel()]);
 
 /**
  * Dev-only character viewer and animation test stage (open /figure.html while `pnpm dev`

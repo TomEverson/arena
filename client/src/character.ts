@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import { type CharacterModel, characterModel, type ModelBone } from "./characterModels";
+import { buildKatana } from "./katana";
 import { PALETTE } from "./palette";
 import { type Brick, buildBrick } from "./rifle";
 import { PARAMS, SKILL } from "./sim/params";
@@ -159,7 +160,7 @@ const CROSS_END = [-0.15, 0.02, 0.46] as const;
 /** The blade is in the hand (not on the hip) for this part of the swing. */
 const SLASH_DRAWN = [0.13, 0.88] as const;
 /** The cable: from the hip tank to a point on the wall up ahead (the figure's own space, metres). */
-const CABLE_FROM = [0.23, 0.91, 0.03] as const;
+export const CABLE_FROM = [0.23, 0.91, 0.03] as const;
 const CABLE_TO = [0.4, 2.8, 1.8] as const;
 const CABLE_SHOOT_SECONDS = 0.12; // to fly out to the wall, and to reel back in
 const CABLE_THICKNESS = 0.014;
@@ -591,20 +592,25 @@ export class CharacterBody {
     this.elbows[1].add(blade);
     blade.position.set(0, -ARM_FORE, 0.01); // in the fist
     blade.rotation.x = -0.5; // angled forward, out of the fist
-    part(blade, ink, box(0.035, 0.07, 0.035), [0, -0.01, 0]); // grip
-    part(blade, metal, box(0.07, 0.015, 0.05), [0, -0.05, 0]); // guard
-    part(blade, material(PALETTE.HAZE), box(0.02, 0.3, 0.045), [0, -0.21, 0]); // blade
+    // A katana (katana.ts) pointing down out of the fist, its edge forward.
+    const drawn = buildKatana();
+    drawn.position.set(0, -0.05, 0);
+    drawn.rotation.x = -Math.PI / 2;
+    blade.add(drawn);
     blade.visible = false;
     if (this.rig) {
       // A blade in each hand, edge forward (hidden until the blades are what is held). Built here,
       // not with the body, so a Blockbench model gets them too.
       for (const elbow of this.elbows) {
-        const held = part(elbow, face, box(0.012, 0.06, 0.75), [0, -ARM_FORE, 0.42]);
+        const held = buildKatana();
+        held.position.set(0, -ARM_FORE, 0.05);
+        held.rotation.y = Math.PI; // the katana points -Z; the body faces +Z
+        elbow.add(held);
         held.visible = false;
         this.blades.push(held);
       }
     }
-    this.cable = part(this.root, metal, box(1, 1, 1), [0, 0, 0]);
+    this.cable = part(this.root, ink, box(1, 1, 1), [0, 0, 0]);
     this.cable.visible = false;
 
     scene.add(this.root);

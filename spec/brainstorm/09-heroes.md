@@ -210,6 +210,23 @@ Tom: "it should be 2 s at least", then, asked which part: "both gameplay and win
 - **Reload:** 6 s for the pair (`spear.reloadTime`; Tom, the same day, after the damage change: it was 4 s, then 8 s for a moment).
 - **Not playtested:** a stuck spear is now a certain kill a second later.
 
+### Spears bounce off bodies instead of sticking (Tom, 2026-10-14)
+"Make spears not stick to target (maybe bounceback)." This replaces "goes where they go" above: a spear stuck in someone was a certain kill, and nothing they did mattered.
+
+| | Before | Now |
+|---|---|---|
+| A spear hitting a body | stuck in them and was carried along; the blast was on them wherever they ran | does its 10, bounces back off them, drops and goes off where it lands |
+| A spear hitting a wall, the ground or a barrier | sticks there | the same |
+
+- **The bounce:** the 1 s fuse starts at the hit. The spear comes back the way it came at 3 m/s with a 3 m/s hop and falls fast (`spearBounceBack`, `spearBounceUp`, `spearBounceGravity` 20), so from chest height it lands about 1.5 m short of them after half a second, sticks there and goes off when the fuse ends (in the air, if it has not landed). After the bounce it passes through bodies and only stops at the level.
+- **What it means:** standing still they still take the full 150 (it lands well inside 4 m). Moving off at once gets them clear: they have 1 s to be more than 4 m from where it lands. The 10 on impact is unchanged, and so are the blast, the HAZARD ring under the spear (it follows the spear as it drops) and the blinking.
+- **Practice targets** are bodies: it bounces off them too. A barrier is still a wall.
+- **Where the code is:** `stepSpear` in `skills.go`; tests `TestThunderSpearBouncesOffABodyAndCanBeEscaped` and `TestThunderSpearBouncedOffABodyStillBlastsThemIfTheyStay`.
+- **Not playtested:** the bounce numbers are a first guess.
+
+### Grapple cables: black, from the hip gear (Tom, 2026-10-14)
+The grapple lines were SIGNAL and started near the hands (yours 0.35 m under the camera, other players' at chest height). They are now INK and start at the tanks of the hip gear, the first hook from the left tank and the second from the right, for you and for everyone else; yours come down with your hips when you crouch or slide. The rig's wall-run cable is INK too (it was CONCRETE). `main.ts` (where the lines start), `skillView.ts` (how they are drawn), `character.ts` (`CABLE_FROM`, the tank's place on the body).
+
 ### Overdrive: 10 s, and the spears work in it (Tom, 2026-10-13)
 "While overdrive, the spear can also be used and its reload will be reduced by half. And make the overdrive duration 10 s instead."
 

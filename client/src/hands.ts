@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { PALETTE } from "./palette";
+import { PALETTE, type PaletteName } from "./palette";
 
 /**
  * First-person arms holding the rifle (visual only). Built from boxes like the
@@ -9,8 +9,40 @@ import { PALETTE } from "./palette";
  * and future viewmodel animations automatically.
  *
  * Gun space: +X right, +Y up, -Z toward the muzzle. Grip at z -0.1, handguard at z -0.45.
- * Colors: INK gloves, CONCRETE sleeves, HAZE cuffs (contrast against the GRAPHITE gun).
+ * Colors follow the hero you play (`ARM_LOOKS`), so the arms match the body others see.
  */
+
+/** The three materials every first-person arm is made of (the gun hands and the bare fists share them). */
+export type ArmMaterials = Record<"glove" | "sleeve" | "cuff", THREE.MeshLambertMaterial>;
+
+/**
+ * Each hero's arm colours, taken from its character model (spec/art/style-guide.md):
+ * the trooper's GRAPHITE gloves and BONE forearm plates with a COBALT stripe, the assassin's INK
+ * gloves and GRAPHITE gauntlets with a BRASS edge. Any other look gets the plain arms.
+ */
+const PLAIN = { glove: "INK", sleeve: "CONCRETE", cuff: "HAZE" } as const;
+export const ARM_LOOKS: Record<string, Record<keyof ArmMaterials, PaletteName>> = {
+  trooper: { glove: "GRAPHITE", sleeve: "BONE", cuff: "COBALT" },
+  assassin: { glove: "INK", sleeve: "GRAPHITE", cuff: "BRASS" },
+};
+
+export function armMaterials(look: string): ArmMaterials {
+  const mats = {
+    glove: new THREE.MeshLambertMaterial(),
+    sleeve: new THREE.MeshLambertMaterial(),
+    cuff: new THREE.MeshLambertMaterial(),
+  };
+  paintArms(mats, look);
+  return mats;
+}
+
+/** Recolour the arms for a hero look. */
+export function paintArms(mats: ArmMaterials, look: string): void {
+  const colors = ARM_LOOKS[look] ?? PLAIN;
+  for (const part of ["glove", "sleeve", "cuff"] as const) {
+    mats[part].color.copy(PALETTE[colors[part]]);
+  }
+}
 
 export interface Hands {
   right: THREE.Group;
@@ -34,7 +66,7 @@ const box = (
  */
 function arm(
   gun: THREE.Group,
-  mats: Record<"glove" | "sleeve" | "cuff", THREE.Material>,
+  mats: ArmMaterials,
   hand: [number, number, number],
   pitch: number,
   yaw: number,
@@ -50,12 +82,7 @@ function arm(
   return pivot;
 }
 
-export function buildHands(gun: THREE.Group): Hands {
-  const mats = {
-    glove: new THREE.MeshLambertMaterial({ color: PALETTE.INK }),
-    sleeve: new THREE.MeshLambertMaterial({ color: PALETTE.CONCRETE }),
-    cuff: new THREE.MeshLambertMaterial({ color: PALETTE.HAZE }),
-  };
+export function buildHands(gun: THREE.Group, mats: ArmMaterials): Hands {
   return {
     // Trigger hand on the grip, forearm going down and back to the bottom right of the screen.
     right: arm(gun, mats, [0.005, -0.075, -0.09], 0.55, 0.15, 0.32),

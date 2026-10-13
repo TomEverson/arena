@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
-import { buildHands } from "./hands";
+import { type ArmMaterials, armMaterials, buildHands, paintArms } from "./hands";
+import { buildKatana } from "./katana";
 import { PALETTE } from "./palette";
 import { type ReloadPose, reloadPose } from "./reloadAnim";
 import { type Brick, BRICK_MAG_HOME, BRICK_MUZZLE, BRICK_SIGHT_Y, buildBrick } from "./rifle";
@@ -117,6 +118,8 @@ export class Fx {
   /** Seconds left of the draw (the gun rising into view after a switch). */
   private drawLeft = 0;
   private drawTotal = 0.4;
+  /** The arms' materials, shared by the gun hands and the bare fists: recoloured per hero. */
+  private readonly arms: ArmMaterials = armMaterials("trooper");
   private readonly leftHand: THREE.Group;
   private readonly leftHandHome = new THREE.Vector3();
   private readonly leftHandTurn = new THREE.Euler();
@@ -161,14 +164,12 @@ export class Fx {
     this.flashMesh.position.copy(BRICK_MUZZLE);
     this.flashMesh.visible = false;
     this.gun.add(this.flashMesh);
-    this.leftHand = buildHands(this.gun).left;
+    this.leftHand = buildHands(this.gun, this.arms).left;
     this.leftHandHome.copy(this.leftHand.position);
     this.leftHandTurn.copy(this.leftHand.rotation);
     this.gun.position.copy(HIP);
-    // The punching fist: an INK glove on a CONCRETE sleeve with a HAZE cuff, reaching back to the corner.
-    const glove = new THREE.MeshLambertMaterial({ color: PALETTE.INK });
-    const sleeve = new THREE.MeshLambertMaterial({ color: PALETTE.CONCRETE });
-    const cuff = new THREE.MeshLambertMaterial({ color: PALETTE.HAZE });
+    // The punching fist: a glove, a cuff and a sleeve reaching back to the corner, in the hero's colours.
+    const { glove, sleeve, cuff } = this.arms;
     const box = (
       mat: THREE.Material,
       w: number,
@@ -185,12 +186,10 @@ export class Fx {
     box(glove, 0.11, 0.1, 0.14, 0, 0, 0); // the fist
     box(cuff, 0.1, 0.1, 0.03, 0, 0, 0.09);
     box(sleeve, 0.1, 0.1, 0.5, 0, 0, 0.36); // the forearm, back toward the camera
-    // The blade: a long BONE edge held in the fist, pointing forward and a little up.
-    this.blade = new THREE.Mesh(
-      new THREE.BoxGeometry(0.012, 0.07, 0.85),
-      new THREE.MeshLambertMaterial({ color: PALETTE.BONE, flatShading: true }),
-    );
-    this.blade.position.set(0, 0.06, -0.5);
+    // The blade: a katana (katana.ts) held in the fist, pointing forward and a little up. It sits a
+    // little ahead of the grip's middle, so some of the handle shows between the fist and the guard.
+    this.blade = buildKatana();
+    this.blade.position.set(0, 0.01, -0.05);
     this.blade.visible = false;
     this.fist.add(this.blade);
     // The left hand: the same fist and blade, mirrored.
@@ -239,6 +238,11 @@ export class Fx {
   /** Where the gun in hand fires from (gun space). */
   private muzzle(): THREE.Vector3 {
     return this.gunIdx === 1 ? SNIPER_MUZZLE : this.gunIdx === 2 ? SPEAR_VIEW_MUZZLE : BRICK_MUZZLE;
+  }
+
+  /** Whose arms these are: they take the colours of that hero's look (hands.ts). */
+  setArms(look: string): void {
+    paintArms(this.arms, look);
   }
 
   /** Whose hands these are: the Assassin's empty hands hold a blade each. */

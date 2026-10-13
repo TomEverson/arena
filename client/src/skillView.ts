@@ -1,5 +1,6 @@
 import * as THREE from "three";
 
+import { buildGrenade } from "./grenade";
 import type { Pose } from "./net/interpolation";
 import { EntityKinds } from "./net/protocol.gen";
 import { PALETTE } from "./palette";
@@ -10,14 +11,16 @@ import { buildSpearShaft } from "./spear";
  * Skill objects, drawn from the entities the server sends for them (visual only; the server
  * decides everything they do, see server/internal/game/skills.go):
  *
- *   grenade      a small HAZARD box that tumbles; when it stops being sent it has gone off,
- *                so a blast is drawn where it last was.
+ *   grenade      a frag grenade that tumbles, or (flags 1) the beacon that calls a bombardment:
+ *                two colour schemes of one model (grenade.ts); when it stops being sent it has
+ *                gone off, so a blast is drawn where it last was.
  *   barrier      a SIGNAL pane (technology) with a brighter frame.
  *   bombardment  a HAZARD ring on the ground the size of the danger zone: it blinks during the
  *                warning, then streaks fall inside it while the shells land.
- *   spear        a thunder spear in flight, then stuck and blinking, with a HAZARD ring on the
+ *   spear        a thunder spear in flight, then blinking once its fuse is lit (stuck in a wall or
+ *                bounced off a body), with a HAZARD ring on the
  *                ground showing how far its blast will reach; a blast when it goes off.
- *   grapple      a SIGNAL line from a grappling player to the point they are hooked to.
+ *   grapple      an INK cable from a grappling player's hip gear to the point they are hooked to.
  *   pickup       the practice range's recharge: a SIGNAL box turning over a pad, bobbing. It is
  *                only sent while it can be taken, so it vanishes when someone takes it.
  *
@@ -34,7 +37,7 @@ interface View {
   /** Where it was last frame (a grenade's blast is drawn here). */
   last: THREE.Vector3;
   streaks?: THREE.Mesh[];
-  /** Seconds a spear has been stuck (it blinks until it goes off). */
+  /** Seconds a spear's fuse has been lit (it blinks until it goes off). */
   stuckFor?: number;
   /** A stuck spear's danger zone on the ground (its own object in the scene: it does not blink or tilt with the spear). */
   zone?: THREE.Group;
@@ -50,7 +53,7 @@ export interface SkillSounds {
   taken: THREE.Vector3[];
 }
 
-/** A grapple line to draw this frame: from a player's hand to the point they are hooked to. */
+/** A grapple line to draw this frame: from a tank of the player's hip gear to the point they are hooked to. */
 export interface GrappleLine {
   from: [number, number, number];
   to: [number, number, number];
@@ -70,7 +73,6 @@ export class SkillViews {
   private readonly blasts: { mesh: THREE.Mesh; life: number }[] = [];
   private readonly sounds: SkillSounds = { blasts: [], shelling: [], taken: [] };
 
-  private readonly grenadeGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
   private readonly hazard = new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD });
   private readonly pane = new THREE.MeshBasicMaterial({
     color: PALETTE.SIGNAL,
@@ -80,6 +82,8 @@ export class SkillViews {
     side: THREE.DoubleSide,
   });
   private readonly frame = new THREE.MeshBasicMaterial({ color: PALETTE.SIGNAL });
+  /** Grapple cables and their hooks: black, like the rig's wall-run cable (character.ts). */
+  private readonly cable = new THREE.MeshBasicMaterial({ color: PALETTE.INK });
   private readonly blastGeo = new THREE.SphereGeometry(1, 10, 8);
   private readonly lines: { rope: THREE.Mesh; hook: THREE.Mesh }[] = [];
   private readonly a = new THREE.Vector3();
@@ -134,11 +138,11 @@ export class SkillViews {
     v.zone.scale.setScalar(Math.sqrt(reach));
   }
 
-  private build(kind: number): View {
+  private build(kind: number, flags: number): View {
     const root = new THREE.Group();
     const view: View = { kind, root, last: new THREE.Vector3(), age: 0 };
     if (kind === EntityKinds.grenade) {
-      root.add(new THREE.Mesh(this.grenadeGeo, this.hazard));
+      root.add(buildGrenade((flags & 1) !== 0 ? "beacon" : "grenade"));
     } else if (kind === EntityKinds.barrier) {
       const [w, h, t] = [SKILL.barrierWidth, SKILL.barrierHeight, SKILL.barrierThickness];
       const pane = new THREE.Mesh(new THREE.BoxGeometry(w, h, t), this.pane);
@@ -190,11 +194,11 @@ export class SkillViews {
     return view;
   }
 
-  /** One thin SIGNAL box stretched between the two ends of each grapple line, with a hook at the far end. */
+  /** One thin INK box stretched between the two ends of each grapple line, with a hook at the far end. */
   private drawLines(lines: readonly GrappleLine[]): void {
     while (this.lines.length < lines.length) {
-      const rope = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 1), this.frame);
-      const hook = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), this.frame);
+      const rope = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 1), this.cable);
+      const hook = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), this.cable);
       this.scene.add(rope, hook);
       this.lines.push({ rope, hook });
     }
@@ -233,7 +237,7 @@ export class SkillViews {
       seen.add(pose.id);
       let v = this.views.get(pose.id);
       if (!v) {
-        v = this.build(pose.kind);
+        v = this.build(pose.kind, pose.flags);
         this.views.set(pose.id, v);
       }
       v.age += frameDt;

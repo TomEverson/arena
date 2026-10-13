@@ -2,11 +2,14 @@ import * as THREE from "three";
 
 import greybox from "../../levels/greybox.json";
 import { AudioEngine, type MoveSound, MoveSoundTracker, StepCounter } from "./audio";
-import { type BodyState, CharacterBody, HERO_LOOKS, HERO_NAMES } from "./character";
+import { type BodyState, CABLE_FROM, CharacterBody, HERO_LOOKS, HERO_NAMES } from "./character";
 import { loadCharacterModels } from "./characterModels";
+import { DamageIndicators } from "./damageIndicator";
 import { Fx } from "./fx";
+import { loadGrenadeModels } from "./grenade";
 import { HitFeedback } from "./hitFeedback";
 import { CombatHud } from "./hud";
+import { loadKatanaModel } from "./katana";
 import { buildLevelDecor } from "./levelDecor";
 import { buildLevelMeshes } from "./levelRender";
 import { levelByName } from "./levels";
@@ -43,6 +46,7 @@ import { PALETTE } from "./palette";
 import { PracticeStats } from "./practiceStats";
 import { RemoteViews } from "./remoteView";
 import { RENDER_HEIGHT, RENDER_WIDTH, RetroRenderer } from "./render";
+import { loadBrickModel } from "./rifle";
 import { castRay, type Hitbox } from "./sim/hitscan";
 import { buildCollisionWorld, type Level, parseLevel } from "./sim/level";
 import { bodyHeight, eyeHeight, hSpeed, spawnState } from "./sim/movement";
@@ -60,9 +64,17 @@ import {
   type WeaponState,
 } from "./sim/weapon";
 import { type GrappleLine, isSkillPose, SkillViews } from "./skillView";
+import { loadSniperModel } from "./sniper";
+import { loadUsername, saveUsername, USERNAME_MAX } from "./username";
 
-// Blockbench character models: loaded before any character is made (see characterModels.ts).
-await loadCharacterModels();
+// Blockbench models: loaded before any character or gun is made (see characterModels.ts, rifle.ts, sniper.ts, katana.ts, grenade.ts).
+await Promise.all([
+  loadCharacterModels(),
+  loadBrickModel(),
+  loadSniperModel(),
+  loadKatanaModel(),
+  loadGrenadeModels(),
+]);
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const hud = document.getElementById("hud") as HTMLDivElement;
@@ -177,6 +189,7 @@ function useSelfHero(hero: number): void {
   if (hero === selfHero) return;
   selfHero = hero;
   fx.setBlades(hero === HeroKinds.assassin);
+  fx.setArms(HERO_LOOKS[hero] ?? "trooper");
   scene.remove(selfBody.root);
   selfBody = new CharacterBody(scene, 99, HERO_LOOKS[hero] ?? "trooper");
   selfBody.setFirstPerson(true);
@@ -192,6 +205,9 @@ const selfState: BodyState = {
 };
 const fx = new Fx(scene, view.camera, view.viewScene, view.viewCamera);
 const hitFeedback = new HitFeedback();
+const damageDirs = new DamageIndicators();
+/** Who has hurt us since the last frame: their arcs are placed in the frame loop, where their positions are known. */
+const hurtBy: number[] = [];
 const ammoEl = document.getElementById("ammo") as HTMLDivElement;
 const slotsEl = document.getElementById("slots") as HTMLDivElement;
 const skillsEl = document.getElementById("skills") as HTMLDivElement;
@@ -594,6 +610,7 @@ function startNet(code: string): void {
         combatHud.onEvent(e);
         if (e.kind === EventKinds.hurt && e.other === myId) {
           audio.hurt(e.amount);
+          if (e.actor !== myId) hurtBy.push(e.actor); // (our own grenade has no direction to show)
           if ((e.flags & GameEventFlags.melee) !== 0) {
             // Shoved: the next correction is the knockback arriving. Blend it gently (and let it
             // be big) instead of snapping, and kick the camera now.
@@ -647,19 +664,58 @@ async function startRoom(mode: GameMode): Promise<void> {
   }
 }
 
-document.getElementById("play-ffa")?.addEventListener("click", () => void startRoom("ffa"));
+// The username (username.ts): asked for on the menu, kept as it is typed. Nothing starts without one.
+const nameInput = document.getElementById("player-name") as HTMLInputElement;
+nameInput.maxLength = USERNAME_MAX;
+nameInput.value = loadUsername();
+nameInput.addEventListener("input", () => {
+  if (saveUsername(nameInput.value)) menuNote.textContent = "";
+});
+// Typing a name is not playing: keep the keys away from the game's own key handlers.
+nameInput.addEventListener("keydown", (e) => e.stopPropagation());
+nameInput.addEventListener("keyup", (e) => e.stopPropagation());
+
+/** Run `start` if there is a username; otherwise say so and put the cursor in the name field. */
+function withUsername(start: () => void): void {
+  if (saveUsername(nameInput.value)) {
+    start();
+    return;
+  }
+  menuNote.textContent = "Enter a name first.";
+  nameInput.focus();
+}
+
+document
+  .getElementById("play-ffa")
+  ?.addEventListener("click", () => withUsername(() => void startRoom("ffa")));
 document
   .getElementById("play-practice")
-  ?.addEventListener("click", () => void startRoom("practice"));
+  ?.addEventListener("click", () => withUsername(() => void startRoom("practice")));
 
 {
   const code = roomFromUrl(location.search);
   const mode = modeFromUrl(location.search);
-  if (code)
-    startNet(code); // a room link: straight in
-  else if (mode)
-    void startRoom(mode); // ?mode=practice: skip the menu
-  else menuEl.classList.add("on"); // otherwise choose
+  // A room link goes straight in and ?mode=practice skips the menu, once there is a username.
+  const direct = code ? () => startNet(code) : mode ? () => void startRoom(mode) : undefined;
+  if (direct && loadUsername()) {
+    direct();
+  } else {
+    menuEl.classList.add("on"); // choose (and, the first time, say who you are)
+    if (direct) {
+      // Came by a link with no username yet: ask for it, then carry on to where the link goes.
+      menuEl.classList.add("joining");
+      const join = () =>
+        withUsername(() => {
+          menuEl.classList.remove("on", "joining");
+          direct();
+        });
+      document.getElementById("menu-join")?.addEventListener("click", join);
+      nameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") join();
+      });
+    }
+    if (!nameInput.value) nameInput.focus();
+  }
 }
 
 // --- Simulation ------------------------------------------------------------
@@ -892,6 +948,14 @@ function frame(nowMs: number): void {
         return pose ? [pose] : [];
       })
     : [];
+  // Damage direction: an arc toward where each attacker is standing now, kept pointing there as we turn.
+  for (const id of hurtBy) {
+    const from = poses.find((p) => p.id === id);
+    if (from) damageDirs.hit(id, from.x, from.z, nowMs);
+  }
+  hurtBy.length = 0;
+  if (dead) damageDirs.clear();
+  damageDirs.update(nowMs, cam.position.x, cam.position.z, look.yaw);
   remoteViews.update(
     poses.filter((p) => !isSkillPose(p)),
     frameDt,
@@ -909,26 +973,41 @@ function frame(nowMs: number): void {
   // Grapple lines: ours from the predicted state (no delay), everyone else's from their hook.
   const lines: GrappleLine[] = [];
   if (player.grappling && !dead) {
-    // One line from each hand, so two hooks read as a V.
-    const side = player.grapple2 ? 0.25 : 0;
-    const rx = Math.cos(look.yaw) * side;
-    const rz = -Math.sin(look.yaw) * side;
-    const hand = cam.position.y - 0.35;
+    // One line from each tank of the hip gear (the first hook from the left one), so two hooks
+    // read as a V. The hips come down with the body when it crouches or slides.
+    const rx = Math.cos(look.yaw) * CABLE_FROM[0];
+    const rz = -Math.sin(look.yaw) * CABLE_FROM[0];
+    const hips =
+      cam.position.y -
+      eyeHeight(player) +
+      (CABLE_FROM[1] * bodyHeight(player)) / PARAMS.standHeight;
     lines.push({
-      from: [cam.position.x - rx, hand, cam.position.z - rz],
+      from: [cam.position.x - rx, hips, cam.position.z - rz],
       to: [player.grappleX, player.grappleY, player.grappleZ],
     });
     if (player.grapple2)
       lines.push({
-        from: [cam.position.x + rx, hand, cam.position.z + rz],
+        from: [cam.position.x + rx, hips, cam.position.z + rz],
         to: [player.grapple2X, player.grapple2Y, player.grapple2Z],
       });
   }
+  // Everyone else's: from their hip gear too, the first hook from the left tank, the second from the right.
+  const hooksSeen = new Map<number, number>();
   for (const hook of skillPoses) {
     if (hook.kind !== EntityKinds.hook || hook.teamId === myId) continue;
     const owner = poses.find((p) => p.id === hook.teamId);
-    if (owner)
-      lines.push({ from: [owner.x, owner.y + 1.2, owner.z], to: [hook.x, hook.y, hook.z] });
+    if (!owner) continue;
+    const nth = hooksSeen.get(owner.id) ?? 0;
+    hooksSeen.set(owner.id, nth + 1);
+    const side = (nth === 0 ? -1 : 1) * CABLE_FROM[0];
+    lines.push({
+      from: [
+        owner.x + Math.cos(owner.yaw) * side,
+        owner.y + CABLE_FROM[1],
+        owner.z - Math.sin(owner.yaw) * side,
+      ],
+      to: [hook.x, hook.y, hook.z],
+    });
   }
   // A sound for each hook that goes out (the first, and the second of a V).
   const hooksOut = player.grappling ? (player.grapple2 ? 2 : 1) : 0;
