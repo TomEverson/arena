@@ -16,6 +16,8 @@ export const PALETTE_HEX = {
   ACID: "#c6ff1a", // traversal: "you can go here"
   HAZARD: "#ff4b1f", // danger: gunfire, hits, enemies
   SIGNAL: "#2de2e6", // technology: light strips, screens, HUD
+  // Team colors: characters only, never on world geometry.
+  COBALT: "#3170d8", // the blue team (the trooper's armor stripes)
 } as const;
 
 export type PaletteName = keyof typeof PALETTE_HEX;

@@ -3,6 +3,18 @@ import * as THREE from "three";
 import greybox from "../../levels/greybox.json";
 import { AudioEngine, type MoveSound, MoveSoundTracker, StepCounter } from "./audio";
 import { type BodyState, CharacterBody, HERO_LOOKS, HERO_NAMES } from "./character";
+import { loadCharacterModels } from "./characterModels";
+import {
+  aliveHitboxes,
+  type Dummy,
+  DUMMY_HEIGHT,
+  killDummy,
+  knockDummy,
+  makeDummies,
+  resetDummies,
+  stepDummies,
+} from "./dummies";
+import { DummyViews } from "./dummyView";
 import { Fx, HITSCAN_TRACER_SPEED } from "./fx";
 import { HitFeedback } from "./hitFeedback";
 import { CombatHud } from "./hud";
@@ -58,6 +70,9 @@ import {
   type WeaponState,
 } from "./sim/weapon";
 import { type GrappleLine, isSkillPose, SkillViews } from "./skillView";
+
+// Blockbench character models: loaded before any character is made (see characterModels.ts).
+await loadCharacterModels();
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const hud = document.getElementById("hud") as HTMLDivElement;

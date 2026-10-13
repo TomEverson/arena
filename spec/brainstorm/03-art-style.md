@@ -3,6 +3,7 @@
 ## Decided
 - **Direction:** Ultrakill-like: retro lo-fi (PS1 era), saturated reds/oranges/neon against dark grimy environments, chunky effects.
 - **No hand modeling.** Visuals come from shaders, color and game feel, not detailed assets.
+  *Revised 2026-10-13:* characters may be modeled in Blockbench (simple pixel-textured cubes, still animated in code); see `spec/art/style-guide.md`, "Blockbench models". Levels stay code and JSON.
 
 ## Why it fits a browser game
 Low-res textures, fog and flat shading are cheap on integrated GPUs, and fog doubles as draw-distance control. 32 low-poly players are trivial for WebGL.

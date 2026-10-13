@@ -1,12 +1,16 @@
 import * as THREE from "three";
 
 import { type BodyState, CharacterBody } from "./character";
+import { loadCharacterModels } from "./characterModels";
 import { PALETTE } from "./palette";
 import { type ReloadPose, reloadPose } from "./reloadAnim";
 import { FX_MODES, type FxMode, RetroRenderer } from "./render";
 import { BRICK_MAG_HOME, BRICK_MUZZLE, buildBrick } from "./rifle";
 import { COMBAT, PARAMS as P, WEAPON } from "./sim/params";
 import { buildSniper, SNIPER_MUZZLE } from "./sniper";
+
+// Blockbench character models: loaded before any character is made (see characterModels.ts).
+await loadCharacterModels();
 
 /**
  * Dev-only character viewer and animation test stage (open /figure.html while `pnpm dev`
