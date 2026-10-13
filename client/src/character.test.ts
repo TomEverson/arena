@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import { type ArmSolution, solveArm } from "./character";
+import { type ArmSolution, CharacterBody, type CharacterLook, solveArm } from "./character";
 
 // The arm as built: a shoulder at (shoulderX, 0.46, 0) hanging down -Y, an elbow 0.28 below it,
 // the middle of the fist 0.32 below the elbow. The shoulder group is rotated by `q` and the
@@ -62,5 +62,58 @@ describe("solveArm", () => {
     // The arm still points down (it may twist about its own axis, which cannot be seen).
     const dir = new THREE.Vector3(0, -1, 0).applyQuaternion(r.q);
     expect(dir.angleTo(new THREE.Vector3(0, -1, 0))).toBeLessThan(0.2);
+  });
+});
+
+describe("character looks", () => {
+  /** The body's own meshes: everything except the rifle group (the one holding the muzzle flash). */
+  function bodyMeshes(body: CharacterBody): THREE.Mesh[] {
+    const out: THREE.Mesh[] = [];
+    const walk = (o: THREE.Object3D) => {
+      const isGun = o.children.some(
+        (c) => c instanceof THREE.Mesh && c.material instanceof THREE.MeshBasicMaterial,
+      );
+      if (isGun) return;
+      if (o instanceof THREE.Mesh) out.push(o as THREE.Mesh);
+      o.children.forEach(walk);
+    };
+    walk(body.root);
+    return out;
+  }
+
+  it.each<CharacterLook>(["trooper", "assassin"])(
+    "%s stands inside the hitbox, feet on the floor, head in the head zone",
+    (look) => {
+      const body = new CharacterBody(new THREE.Scene(), 0, look);
+      body.root.updateMatrixWorld(true);
+      const meshes = bodyMeshes(body);
+      expect(meshes.length).toBeGreaterThan(15);
+      const all = new THREE.Box3();
+      for (const m of meshes) all.expandByObject(m);
+      // The hitbox is 0.6 x 1.8 x 0.6 m. Toes may poke a little past the front (as the trooper's do).
+      expect(all.min.x).toBeGreaterThanOrEqual(-0.3);
+      expect(all.max.x).toBeLessThanOrEqual(0.3);
+      expect(all.min.z).toBeGreaterThanOrEqual(-0.3);
+      expect(all.max.z).toBeLessThanOrEqual(0.3);
+      expect(all.min.y).toBeCloseTo(0, 2);
+      expect(all.max.y).toBeLessThanOrEqual(1.8);
+      expect(all.max.y).toBeGreaterThan(1.7); // and it fills the height
+    },
+  );
+
+  it("gives the assassin a narrower body than the trooper", () => {
+    const width = (look: CharacterLook) => {
+      const body = new CharacterBody(new THREE.Scene(), 0, look);
+      body.root.updateMatrixWorld(true);
+      // The torso and legs only: below the shoulders, ignoring the arms (x within 0.17 of the middle).
+      let w = 0;
+      for (const m of bodyMeshes(body)) {
+        const b = new THREE.Box3().setFromObject(m);
+        if (b.max.y < 1.3 && Math.abs((b.min.x + b.max.x) / 2) < 0.12)
+          w = Math.max(w, b.max.x - b.min.x);
+      }
+      return w;
+    };
+    expect(width("assassin")).toBeLessThan(width("trooper"));
   });
 });

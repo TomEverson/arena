@@ -270,6 +270,17 @@ function pivot(parent: THREE.Object3D, x: number, y: number): THREE.Group {
   return g;
 }
 
+/** The characters there are: each is a different set of parts on the same joints. */
+export type CharacterLook = "trooper" | "assassin";
+
+type Materials = Record<"armor" | "suit" | "ink" | "face" | "metal" | "light", THREE.Material>;
+interface Limbs {
+  legs: [THREE.Group, THREE.Group];
+  upper: THREE.Group;
+  arms: [THREE.Group, THREE.Group];
+  elbows: [THREE.Group, THREE.Group];
+}
+
 export class CharacterBody {
   readonly root = new THREE.Group();
   private readonly body = new THREE.Group();
@@ -342,8 +353,11 @@ export class CharacterBody {
   private readonly dash = zeroPose();
   private readonly pose = zeroPose();
 
-  /** `seed` offsets the idle animation so several characters don't breathe in sync. */
-  constructor(scene: THREE.Scene, seed = 0) {
+  /**
+   * `seed` offsets the idle animation so several characters don't breathe in sync; `look` picks
+   * which character it is (the parts only: joints, hitbox and animations are shared).
+   */
+  constructor(scene: THREE.Scene, seed = 0, look: CharacterLook = "trooper") {
     this.time = seed * 1.7;
     const material = (color: THREE.Color, glow = NO_GLOW) => {
       const m = {
@@ -364,8 +378,48 @@ export class CharacterBody {
     // The figure faces +Z in its own space; `root.rotation.y` turns it.
     this.root.add(this.body);
 
+    const limbs =
+      look === "assassin"
+        ? this.buildAssassin({ armor, suit, ink, face, metal, light })
+        : this.buildTrooper({ armor, suit, ink, face, metal, light });
+    this.legs = limbs.legs;
+    this.upper = limbs.upper;
+    this.arms = limbs.arms;
+    this.elbows = limbs.elbows;
+    const upper = this.upper;
+
+    // The rifle: slung at the hip while walking, up at the shoulder when aiming.
+    const gun = this.gun;
+    upper.add(gun);
+    // The Brick (rifle.ts) is built facing -Z; turn it to face +Z with the grip at the origin.
+    this.brick = buildBrick();
+    this.brick.root.rotation.y = Math.PI;
+    this.brick.root.position.z = -0.1;
+    gun.add(this.brick.root);
+    this.sniper = buildSniper();
+    this.sniper.root.rotation.y = Math.PI;
+    this.sniper.root.position.z = -0.1;
+    this.sniper.root.visible = false;
+    gun.add(this.sniper.root);
+    this.muzzleFlash = part(
+      gun,
+      new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
+      box(0.12, 0.12, 0.14),
+      [0, 0.012, 0.76],
+    );
+    this.muzzleFlash.visible = false;
+
+    scene.add(this.root);
+  }
+
+  /**
+   * The trooper: chunky armor, a big round helmet with a face and ear discs, flared boots,
+   * heavy forearms and fists.
+   */
+  private buildTrooper(m: Materials): Limbs {
+    const { armor, suit, ink, face, metal, light } = m;
     // Legs: slim thigh, big flared boot with a toe cap (feet touch y = 0).
-    this.legs = [-1, 1].map((side) => {
+    const legs = [-1, 1].map((side) => {
       const hip = pivot(this.body, side * 0.1, HIP_Y);
       part(hip, suit, tube(0.055, 0.05, 0.36), [0, -0.18, 0]); // thigh
       part(hip, ink, tube(0.105, 0.105, 0.03), [0, -0.46, 0]); // boot rim
@@ -376,7 +430,6 @@ export class CharacterBody {
 
     // Upper body, measured from the hips.
     const upper = pivot(this.body, 0, HIP_Y);
-    this.upper = upper;
     part(upper, ink, box(0.3, 0.16, 0.21), [0, 0, 0]); // shorts
     part(upper, armor, box(0.3, 0.42, 0.2), [0, 0.29, 0]); // chest
     this.headParts.push(part(upper, suit, box(0.32, 0.08, 0.21), [0, 0.48, 0])); // collar
@@ -401,7 +454,7 @@ export class CharacterBody {
     // Arms: slim upper arm, then an elbow, chunky forearm and fist (outer edge 0.285 m: inside
     // the 0.3 hitbox). Two bones, so the hands can reach the rifle.
     const elbows: THREE.Group[] = [];
-    this.arms = [-1, 1].map((side) => {
+    const arms = [-1, 1].map((side) => {
       const shoulder = pivot(upper, side * SHOULDER_X, SHOULDER_Y);
       part(shoulder, suit, tube(0.045, 0.04, ARM_UPPER), [0, -ARM_UPPER / 2, 0]); // upper arm
       const elbow = pivot(shoulder, 0, -ARM_UPPER);
@@ -414,30 +467,94 @@ export class CharacterBody {
       elbows.push(elbow);
       return shoulder;
     }) as [THREE.Group, THREE.Group];
-    this.elbows = elbows as [THREE.Group, THREE.Group];
+    return { legs, upper, arms, elbows: elbows as [THREE.Group, THREE.Group] };
+  }
 
-    // The rifle: slung at the hip while walking, up at the shoulder when aiming.
-    const gun = this.gun;
-    upper.add(gun);
-    // The Brick (rifle.ts) is built facing -Z; turn it to face +Z with the grip at the origin.
-    this.brick = buildBrick();
-    this.brick.root.rotation.y = Math.PI;
-    this.brick.root.position.z = -0.1;
-    gun.add(this.brick.root);
-    this.sniper = buildSniper();
-    this.sniper.root.rotation.y = Math.PI;
-    this.sniper.root.position.z = -0.1;
-    this.sniper.root.visible = false;
-    gun.add(this.sniper.root);
-    this.muzzleFlash = part(
-      gun,
-      new THREE.MeshBasicMaterial({ color: PALETTE.HAZARD }),
-      box(0.12, 0.12, 0.14),
-      [0, 0.012, 0.76],
-    );
-    this.muzzleFlash.visible = false;
+  /**
+   * The assassin: the fast one, built like a runner. Clean BONE plates over a dark suit, a wide
+   * chest tapering to a narrow waist, strong thighs and light greaves, a low sleek helmet with
+   * swept-back fins and a slanted HAZARD visor, and a HAZARD scarf whose tail hangs down the
+   * back: the scarf is the silhouette you recognise it by, and with the visor and the ankle and
+   * wrist bands it is what marks it as an enemy.
+   * Same joints and the same hitbox as the trooper: only the parts differ.
+   */
+  private buildAssassin(m: Materials): Limbs {
+    const { armor, suit, ink, face: plate, light } = m;
 
-    scene.add(this.root);
+    // Legs: a strong thigh with a plate on the outside, a dark knee, a light greave, a low boot
+    // with a toe (feet touch y = 0).
+    const legs = [-1, 1].map((side) => {
+      const hip = pivot(this.body, side * 0.095, HIP_Y);
+      part(hip, suit, tube(0.078, 0.058, 0.4), [0, -0.2, 0]); // thigh
+      part(hip, plate, box(0.03, 0.24, 0.1), [side * 0.07, -0.19, 0], [0, 0, side * 0.07]); // thigh plate
+      part(hip, ink, tube(0.06, 0.06, 0.07), [0, -0.43, 0]); // knee
+      part(hip, plate, box(0.07, 0.09, 0.04), [0, -0.43, 0.05]); // knee cap
+      part(hip, plate, tube(0.062, 0.048, 0.34), [0, -0.63, 0]); // greave
+      part(hip, armor, tube(0.055, 0.055, 0.035), [0, -0.8, 0]); // ankle band
+      part(hip, ink, box(0.1, 0.1, 0.16), [0, -0.87, 0.01]); // boot
+      part(hip, ink, box(0.09, 0.06, 0.1), [0, -0.89, 0.13]); // toe
+      return hip;
+    }) as [THREE.Group, THREE.Group];
+
+    // Upper body, measured from the hips: hips, a narrow waist, ribs, and a wide chest.
+    const upper = pivot(this.body, 0, HIP_Y);
+    part(upper, ink, box(0.26, 0.13, 0.18), [0, 0, 0]); // hips
+    part(upper, ink, box(0.28, 0.04, 0.2), [0, 0.07, 0]); // belt
+    part(upper, light, box(0.05, 0.03, 0.012), [0, 0.07, 0.102]); // buckle light
+    part(upper, suit, box(0.2, 0.12, 0.15), [0, 0.14, 0]); // waist
+    part(upper, suit, box(0.25, 0.12, 0.17), [0, 0.25, 0]); // ribs
+    part(upper, suit, box(0.33, 0.17, 0.19), [0, 0.385, 0]); // chest
+    // Chest plate: two BONE halves with a dark line between them, and one plate across the upper back.
+    for (const side of [-1, 1])
+      part(upper, plate, box(0.135, 0.15, 0.02), [side * 0.078, 0.385, 0.1]);
+    part(upper, plate, box(0.26, 0.12, 0.02), [0, 0.4, -0.1]);
+    // Shoulder caps.
+    for (const side of [-1, 1])
+      part(upper, plate, tube(0.045, 0.065, 0.07), [side * 0.2, 0.485, 0]);
+
+    // The scarf: a HAZARD wrap round the neck and a tail in two pieces down the back.
+    this.headParts.push(part(upper, armor, box(0.25, 0.085, 0.22), [0, 0.5, 0])); // wrap
+    this.headParts.push(part(upper, armor, box(0.11, 0.05, 0.06), [0.07, 0.5, 0.125])); // knot at the front
+    part(upper, armor, box(0.1, 0.24, 0.03), [-0.05, 0.37, -0.135], [0.25, 0, 0.08]); // tail, upper
+    part(upper, armor, box(0.085, 0.2, 0.025), [-0.065, 0.17, -0.175], [0.12, 0, 0.12]); // tail, lower
+    this.headParts.push(part(upper, ink, tube(0.045, 0.045, 0.05), [0, 0.56, 0])); // neck
+
+    // The helmet: a low BONE shell, wider than tall (it stays inside the head hitbox, 1.5..1.8 m),
+    // with a dark face, a HAZARD visor of two slits slanting down to the middle, and a fin swept
+    // back from each side.
+    const shell = part(upper, plate, new THREE.SphereGeometry(0.15, 8, 6), [0, 0.725, -0.015]);
+    shell.scale.set(1.05, 0.95, 1.1);
+    this.headParts.push(shell);
+    this.headParts.push(part(upper, ink, box(0.21, 0.15, 0.08), [0, 0.7, 0.1])); // face
+    for (const side of [-1, 1]) {
+      this.headParts.push(
+        part(
+          upper,
+          armor,
+          box(0.085, 0.026, 0.012),
+          [side * 0.05, 0.725, 0.143],
+          [0, 0, side * 0.32],
+        ),
+      ); // visor slit
+      this.headParts.push(
+        part(upper, plate, box(0.02, 0.07, 0.17), [side * 0.155, 0.76, -0.07], [0.45, 0, 0]),
+      ); // fin
+    }
+
+    // Arms: a slim upper arm, a BONE gauntlet with a HAZARD wrist band, a dark glove. Two bones,
+    // the same lengths as the trooper's, so the hands reach the rifle the same way.
+    const elbows: THREE.Group[] = [];
+    const arms = [-1, 1].map((side) => {
+      const shoulder = pivot(upper, side * SHOULDER_X, SHOULDER_Y);
+      part(shoulder, suit, tube(0.048, 0.04, ARM_UPPER), [0, -ARM_UPPER / 2, 0]); // upper arm
+      const elbow = pivot(shoulder, 0, -ARM_UPPER);
+      part(elbow, plate, tube(0.047, 0.058, 0.2), [0, -0.12, 0]); // gauntlet
+      part(elbow, armor, tube(0.06, 0.06, 0.03), [0, -0.235, 0]); // wrist band
+      part(elbow, ink, box(0.095, 0.1, 0.11), [0, -ARM_FORE, 0.01]); // glove
+      elbows.push(elbow);
+      return shoulder;
+    }) as [THREE.Group, THREE.Group];
+    return { legs, upper, arms, elbows: elbows as [THREE.Group, THREE.Group] };
   }
 
   /**
