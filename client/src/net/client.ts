@@ -1,7 +1,10 @@
+import { decode, encode } from "@msgpack/msgpack";
+
 import {
   type ClientMessage,
   type Input,
   parseServerMessage,
+  type ServerMessage,
   type SnapshotMessage,
   type WelcomeMessage,
 } from "./protocol.gen";
@@ -11,6 +14,8 @@ export interface NetStats {
   rttMs: number;
   jitterMs: number;
   snapshotsPerSecond: number;
+  /** Size of the most recently received snapshot, useful for tuning replication. */
+  snapshotBytes: number;
   /** Inputs of ours the server still has queued (from the latest snapshot). */
   queued: number;
 }
@@ -26,12 +31,27 @@ export interface NetHandlers {
 }
 
 const PING_EVERY_MS = 500;
+const SERVER_TYPES = new Set(["welcome", "snapshot", "pong"]);
+
+function parseServerMessageValue(value: unknown): ServerMessage | null {
+  if (!value || typeof value !== "object") return null;
+  const msg = value as { type?: unknown };
+  return typeof msg.type === "string" && SERVER_TYPES.has(msg.type)
+    ? (value as ServerMessage)
+    : null;
+}
 
 /** Thin WebSocket wrapper: parsing, ping/RTT, snapshot rate. No game logic. */
 export class NetClient {
   state: "connecting" | "open" | "closed" = "connecting";
   playerId: number | null = null;
-  readonly stats: NetStats = { rttMs: 0, jitterMs: 0, snapshotsPerSecond: 0, queued: 0 };
+  readonly stats: NetStats = {
+    rttMs: 0,
+    jitterMs: 0,
+    snapshotsPerSecond: 0,
+    snapshotBytes: 0,
+    queued: 0,
+  };
 
   private readonly ws: WebSocket;
   private pingTimer: ReturnType<typeof setInterval> | undefined;
@@ -43,6 +63,7 @@ export class NetClient {
     private readonly handlers: NetHandlers,
   ) {
     this.ws = new WebSocket(url);
+    this.ws.binaryType = "arraybuffer";
     this.ws.onopen = () => {
       this.state = "open";
       this.ping();
@@ -55,8 +76,10 @@ export class NetClient {
       this.handlers.onClose(wasConnected, ev.code);
     };
     this.ws.onmessage = (ev) => {
-      if (typeof ev.data !== "string") return;
-      const msg = parseServerMessage(ev.data);
+      const msg =
+        typeof ev.data === "string"
+          ? parseServerMessage(ev.data)
+          : parseServerMessageValue(decode(new Uint8Array(ev.data as ArrayBuffer)));
       if (!msg) return;
       switch (msg.type) {
         case "welcome":
@@ -65,6 +88,7 @@ export class NetClient {
           break;
         case "snapshot": {
           const now = performance.now();
+          this.stats.snapshotBytes = typeof ev.data === "string" ? ev.data.length : 0;
           this.snapshotTimes.push(now);
           while (this.snapshotTimes.length > 0 && now - (this.snapshotTimes[0] as number) > 1000)
             this.snapshotTimes.shift();
@@ -89,7 +113,7 @@ export class NetClient {
   }
 
   private send(msg: ClientMessage): void {
-    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(encode(msg));
   }
 
   private ping(): void {

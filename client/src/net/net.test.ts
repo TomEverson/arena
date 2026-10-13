@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ServerClock, TICK_MS } from "./clock";
 import { EventTracker } from "./events";
-import { INTERP_TICKS, lerpAngle, RemoteTracks } from "./interpolation";
+import { INTERP_TICKS, interpolationTicks, lerpAngle, RemoteTracks } from "./interpolation";
 import type { Entity, GameEvent } from "./protocol.gen";
 import { CorrectionSmoother, SMOOTH_TIME, SNAP_DISTANCE } from "./smoothing";
 
@@ -21,6 +21,13 @@ const ent = (id: number, x: number, extra: Partial<Entity> = {}): Entity => ({
 });
 
 describe("RemoteTracks", () => {
+  it("adds interpolation buffer only when jitter is elevated", () => {
+    expect(interpolationTicks(0)).toBe(INTERP_TICKS);
+    expect(interpolationTicks(8)).toBe(INTERP_TICKS);
+    expect(interpolationTicks(20)).toBe(INTERP_TICKS + 1);
+    expect(interpolationTicks(200)).toBe(10);
+  });
+
   it("interpolates between two snapshots", () => {
     const t = new RemoteTracks();
     t.push(10, [ent(2, 0)]);

@@ -140,7 +140,7 @@ export class BotClient {
       onSnapshot: (s) => {
         const wasAlive = this.health?.alive ?? true;
         this.clock.onSnapshot(s.tick, performance.now());
-        this.remotes.push(s.tick, s.entities);
+        this.remotes.push(s.tick, s.entities, s.removed, s.full);
         this.health = s.health;
         this.match = s.match;
         this.scores = s.scores;

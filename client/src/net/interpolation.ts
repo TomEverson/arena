@@ -2,6 +2,10 @@ import type { Entity } from "./protocol.gen";
 
 /** Remote players are drawn this many server ticks in the past (6 = 100 ms, three snapshots). */
 export const INTERP_TICKS = 6;
+/** Increase the remote buffer when jitter threatens to outrun the normal 100 ms cushion. */
+export function interpolationTicks(jitterMs: number): number {
+  return Math.min(10, INTERP_TICKS + Math.max(0, Math.ceil((jitterMs - 8) / 12)));
+}
 /** An entity missing from snapshots for this long is gone. */
 const FORGET_TICKS = 30;
 const MAX_SAMPLES = 32;
@@ -43,9 +47,22 @@ export class RemoteTracks {
   private readonly tracks = new Map<number, Sample[]>();
   private latestTick = 0;
 
-  push(tick: number, entities: readonly Entity[]): void {
+  push(
+    tick: number,
+    entities: readonly Entity[],
+    removed: readonly number[] = [],
+    full = true,
+  ): void {
     this.latestTick = Math.max(this.latestTick, tick);
+    const changed = new Set<number>();
+    if (full) {
+      const present = new Set(entities.map((e) => e.id));
+      for (const id of this.tracks.keys()) if (!present.has(id)) this.tracks.delete(id);
+    } else {
+      for (const id of removed) this.tracks.delete(id);
+    }
     for (const e of entities) {
+      changed.add(e.id);
       let samples = this.tracks.get(e.id);
       if (!samples) {
         samples = [];
@@ -58,7 +75,14 @@ export class RemoteTracks {
     }
     for (const [id, samples] of this.tracks) {
       const last = samples[samples.length - 1];
-      if (last && this.latestTick - last.tick > FORGET_TICKS) this.tracks.delete(id);
+      // Delta snapshots omit unchanged entities. Repeating the last state at the new tick keeps
+      // interpolation moving smoothly until the next changed sample arrives.
+      if (!changed.has(id) && last && last.tick < tick) {
+        samples.push({ tick, e: last.e });
+        if (samples.length > MAX_SAMPLES) samples.shift();
+      }
+      const current = samples[samples.length - 1];
+      if (current && this.latestTick - current.tick > FORGET_TICKS) this.tracks.delete(id);
     }
   }
 

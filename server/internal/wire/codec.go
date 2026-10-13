@@ -1,6 +1,6 @@
 // Package wire defines how messages are encoded on the socket.
-// The Codec interface lets us swap JSON for a binary format later without
-// touching the game or server code. The message shapes themselves are generated
+// The Codec interface keeps the game independent from the production binary format and the
+// human-readable JSON test codec. The message shapes themselves are generated
 // from /protocol/messages.json (package protocol).
 package wire
 

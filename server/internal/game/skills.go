@@ -706,9 +706,16 @@ func (w *World) stepPickups() {
 
 // skillEntities appends every skill object to a snapshot's entities.
 func (w *World) skillEntities(dst []Entity) []Entity {
+	return w.skillEntitiesRelevant(nil, dst)
+}
+
+func (w *World) skillEntitiesRelevant(viewer *Player, dst []Entity) []Entity {
 	// The point each grappling player is hooked to, so others can draw the line.
 	for _, p := range w.players {
 		if s := &p.State; s.Grappling && p.Health.Alive {
+			if !w.relevant(viewer, s.GrappleX, s.GrappleY, s.GrappleZ) {
+				continue
+			}
 			dst = append(dst, Entity{
 				ID: SkillHookIdBase + p.ID, TeamID: uint16(p.ID), Kind: protocol.EntityKindHook,
 				X: s.GrappleX, Y: s.GrappleY, Z: s.GrappleZ,
@@ -723,26 +730,28 @@ func (w *World) skillEntities(dst []Entity) []Entity {
 	}
 	for i := range w.pickups {
 		if k := &w.pickups[i]; k.placed && w.tick >= k.backAt {
-			dst = append(dst, k.Entity)
+			if w.relevant(viewer, k.X, k.Y, k.Z) {
+				dst = append(dst, k.Entity)
+			}
 		}
 	}
 	for i := range w.skills.grenades {
-		if g := &w.skills.grenades[i]; g.active {
+		if g := &w.skills.grenades[i]; g.active && w.relevant(viewer, g.X, g.Y, g.Z) {
 			dst = append(dst, g.Entity)
 		}
 	}
 	for i := range w.skills.barriers {
-		if b := &w.skills.barriers[i]; b.active {
+		if b := &w.skills.barriers[i]; b.active && w.relevant(viewer, b.X, b.Y, b.Z) {
 			dst = append(dst, b.Entity)
 		}
 	}
 	for i := range w.skills.strikes {
-		if st := &w.skills.strikes[i]; st.active {
+		if st := &w.skills.strikes[i]; st.active && w.relevant(viewer, st.X, st.Y, st.Z) {
 			dst = append(dst, st.Entity)
 		}
 	}
 	for i := range w.skills.spears {
-		if sp := &w.skills.spears[i]; sp.active {
+		if sp := &w.skills.spears[i]; sp.active && w.relevant(viewer, sp.X, sp.Y, sp.Z) {
 			dst = append(dst, sp.Entity)
 		}
 	}

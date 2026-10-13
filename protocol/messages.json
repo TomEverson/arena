@@ -547,10 +547,18 @@
           "type": "u8",
           "doc": "Inputs of yours still waiting on the server (a measure of how far ahead you are)."
         },
+        "full": {
+          "type": "bool",
+          "doc": "Whether entities is a complete relevance baseline. False means it is a delta from the previous snapshot."
+        },
         "you": "PlayerState",
         "entities": {
           "type": "[Entity]",
-          "doc": "Everyone else you can see (see entitiesFor)."
+          "doc": "Changed entities, or every relevant entity when full is true (see entitiesFor)."
+        },
+        "removed": {
+          "type": "[u32]",
+          "doc": "Entity IDs removed from the previous relevance baseline."
         },
         "health": "PlayerHealth",
         "weapon": "WeaponState",

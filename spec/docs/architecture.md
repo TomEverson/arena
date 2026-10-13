@@ -13,7 +13,7 @@ In dev, Vite serves the client on :5173 and proxies `/ws` and `/healthz` to the 
 - Snapshots are built every 2nd tick (30 Hz) into preallocated, pooled buffers (`Free`/`Out` channels), so
   the tick loop does not allocate. `TestStepDoesNotAllocate` enforces this.
 - Snapshot contents go through `entitiesFor(player)`, which currently returns everything.
-- `wire.Codec` isolates message encoding (JSON now, binary later).
+- `wire.Codec` isolates message encoding (`MsgPack` in production, JSON in focused tests).
 - `netsim.Link` implements `--fake-latency` and `--loss` for both directions.
 - Slow clients: if all of a player's snapshot buffers are in flight, that snapshot is skipped, never queued.
 - If the inbox is full, inputs are dropped rather than blocking the network goroutine.

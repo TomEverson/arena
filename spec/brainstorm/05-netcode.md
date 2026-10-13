@@ -21,7 +21,38 @@
 - Interest management (full snapshots are cheap at 32 players: about 15 KB/s down per client)
 - Multi-core region splitting
 - Client instancing and LOD
-- WebTransport
+
+## Current deployment direction: WebTransport
+
+The game should move from WebSocket/TCP to browser-native WebTransport over HTTP/3/QUIC. We are
+intentionally not keeping a WebSocket fallback: this is a real-time FPS and the target is low-latency,
+UDP-like datagrams rather than maximum compatibility.
+
+The preferred deployment is a direct public game server, not a normal Cloudflare Tunnel:
+
+```text
+Browser -> UDP/443 + HTTP/3 -> VPS running the Go WebTransport server
+```
+
+- Run the authoritative Go server directly on a VPS with UDP and TCP 443 open.
+- Use a real TLS certificate for the game hostname.
+- Keep the client on Cloudflare Pages or another HTTPS host if useful.
+- Use Cloudflare DNS in DNS-only mode for the game hostname; do not assume the normal HTTP proxy or
+  Cloudflare Tunnel forwards WebTransport datagrams.
+- A self-hosted QUIC relay or UDP tunnel is an alternative for development, but it must preserve the
+  browser's WebTransport HTTP/3 handshake, certificate identity, Origin handling and datagrams. A
+  generic UDP forwarder alone is not a WebTransport endpoint.
+
+Transport split:
+
+- Binary MessagePack payloads: production traffic avoids JSON parsing and numeric text overhead.
+- Delta snapshots: the first relevance snapshot is full; later snapshots carry changed entities and removals.
+- Unreliable datagrams: frequent player inputs and movement snapshots once WebTransport is active.
+- Reliable streams: welcome, match state, important events and resynchronization/keyframes.
+- Every datagram carries a sequence number; stale snapshots are discarded and keyframes repair loss.
+
+This direction requires HTTPS/HTTP/3 deployment, a WebTransport-capable Go server, loss and reorder
+tests, and a direct production endpoint before the client transport is switched over.
 
 ## Scaling notes (for later)
 - Bandwidth is the real limit at high player counts. Fixes: interest management via spatial grid, 16-bit quantization, delta snapshots, lower update rate for distant entities, binary packets.

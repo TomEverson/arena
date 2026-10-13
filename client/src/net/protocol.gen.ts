@@ -371,9 +371,13 @@ export interface SnapshotMessage {
   ackSeq: number;
   /** Inputs of yours still waiting on the server (a measure of how far ahead you are). */
   queued: number;
+  /** Whether entities is a complete relevance baseline. False means it is a delta from the previous snapshot. */
+  full: boolean;
   you: PlayerState;
-  /** Everyone else you can see (see entitiesFor). */
+  /** Changed entities, or every relevant entity when full is true (see entitiesFor). */
   entities: Entity[];
+  /** Entity IDs removed from the previous relevance baseline. */
+  removed: number[];
   health: PlayerHealth;
   weapon: WeaponState;
   /** Recent events for you (hits you landed, hits you took, kills anyone made). */

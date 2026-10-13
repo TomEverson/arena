@@ -78,7 +78,7 @@ func main() {
 	})
 	srv := &gameserver.Server{
 		Rooms:     rooms,
-		Codec:     wire.JSON{},
+		Codec:     wire.MsgPack{},
 		Link:      link,
 		LevelName: strings.TrimSuffix(filepath.Base(*levelPath), ".json"),
 	}

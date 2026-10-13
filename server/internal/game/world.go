@@ -26,8 +26,9 @@ const (
 	// MaxPlayers bounds every preallocated buffer so Step never grows a slice.
 	MaxPlayers = 64
 	// snapshotBuffers is the number of in-flight snapshots per player.
-	snapshotBuffers = 4
-	inboxSize       = 1024
+	snapshotBuffers       = 4
+	maxReplicatedEntities = MaxPlayers + maxTargets + maxSkillEntities
+	inboxSize             = 1024
 	// InputQueueSize is how many not-yet-simulated inputs we buffer per player.
 	InputQueueSize = 16
 
@@ -113,6 +114,11 @@ type Player struct {
 	qHead int
 	qLen  int
 
+	// Last entity baseline sent to this client. Delta construction happens on the world goroutine.
+	replication      [maxReplicatedEntities]Entity
+	replicationLen   int
+	replicationReady bool
+
 	initial    PlayerState
 	hasInitial bool
 	// rollHit is who this rolling dive has already cut (each body is cut once per dive).
@@ -138,6 +144,7 @@ func NewPlayer(id uint32) *Player {
 		p.Free <- &Snapshot{
 			Type:     protocol.ServerTypeSnapshot,
 			Entities: make([]Entity, 0, MaxPlayers+maxTargets+maxSkillEntities),
+			Removed:  make([]uint32, 0, maxReplicatedEntities),
 			Events:   make([]protocol.GameEvent, 0, eventRingSize),
 			Shots:    make([]protocol.Shot, 0, shotRingSize),
 			Scores:   make([]protocol.Score, 0, MaxPlayers),
@@ -550,6 +557,15 @@ func (w *World) sendSnapshots() {
 		s.Match = w.matchInfo()
 		s.Scores = w.scoresInto(s.Scores[:0])
 		s.Entities = w.entitiesFor(p, s.Entities[:0])
+		s.Full = !p.replicationReady
+		s.Removed = s.Removed[:0]
+		if p.replicationReady {
+			w.deltaEntities(p, s)
+		} else {
+			copy(p.replication[:], s.Entities)
+			p.replicationLen = len(s.Entities)
+			p.replicationReady = true
+		}
 		s.Events = p.recentEvents(s.Events[:0], w.tick)
 		s.Shots = w.shots.recent(s.Shots[:0], w.tick)
 		select {
@@ -560,17 +576,102 @@ func (w *World) sendSnapshots() {
 	}
 }
 
+// deltaEntities replaces the current relevance set with changed entities and explicit removals.
+// Unchanged entities stay in the per-client baseline, so the client can keep interpolating them.
+func (w *World) deltaEntities(viewer *Player, s *Snapshot) {
+	var current [maxReplicatedEntities]bool
+	for i := 0; i < viewer.replicationLen; i++ {
+		old := &viewer.replication[i]
+		found := false
+		for j := range s.Entities {
+			if s.Entities[j].ID == old.ID {
+				found = true
+				break
+			}
+		}
+		if found || w.inInterest(viewer, old.X, old.Y, old.Z) {
+			current[i] = true
+			continue
+		}
+		s.Removed = append(s.Removed, old.ID)
+		last := viewer.replicationLen - 1
+		viewer.replication[i] = viewer.replication[last]
+		viewer.replicationLen--
+		if i < last {
+			current[i] = current[last]
+		}
+		current[last] = false
+		i--
+	}
+
+	write := 0
+	for i := range s.Entities {
+		e := s.Entities[i]
+		idx := -1
+		for j := 0; j < viewer.replicationLen; j++ {
+			if viewer.replication[j].ID == e.ID {
+				idx = j
+				break
+			}
+		}
+		changed := idx < 0
+		if idx < 0 {
+			idx = viewer.replicationLen
+			viewer.replicationLen++
+		}
+		if changed || viewer.replication[idx] != e {
+			viewer.replication[idx] = e
+			s.Entities[write] = e
+			write++
+		}
+	}
+	s.Entities = s.Entities[:write]
+}
+
 // entitiesFor is the single choke point for what a player may see.
 // Interest management / fog of war / team visibility will live here.
-// Currently returns everyone else (the player's own state is sent as `you`).
+// The radius is deliberately at least the sniper's range so this first pass does not change
+// current combat reach. Distant entities are replicated less often, which reduces snapshot
+// work without changing the simulation or hit detection.
 func (w *World) entitiesFor(viewer *Player, dst []Entity) []Entity {
 	for _, p := range w.players {
-		if p != viewer {
+		if p != viewer && w.relevant(viewer, p.Entity.X, p.Entity.Y, p.Entity.Z) {
 			dst = append(dst, p.Entity)
 		}
 	}
 	for i := range w.targets {
-		dst = append(dst, w.targets[i].Entity)
+		if w.relevant(viewer, w.targets[i].Entity.X, w.targets[i].Entity.Y, w.targets[i].Entity.Z) {
+			dst = append(dst, w.targets[i].Entity)
+		}
 	}
-	return w.skillEntities(dst)
+	return w.skillEntitiesRelevant(viewer, dst)
+}
+
+const interestRadius = SniperRange
+const interestNear = 100.0
+const interestMid = 180.0
+
+func (w *World) relevant(viewer *Player, x, y, z float64) bool {
+	if viewer == nil {
+		return true
+	}
+	distance := math.Hypot(x-viewer.State.X, z-viewer.State.Z)
+	if distance > interestRadius || math.Abs(y-viewer.State.Y) > interestRadius {
+		return false
+	}
+	period := uint64(1)
+	if distance > interestMid {
+		period = 3
+	} else if distance > interestNear {
+		period = 2
+	}
+	return w.tick/snapshotEvery%period == 0
+}
+
+func (w *World) inInterest(viewer *Player, x, y, z float64) bool {
+	if viewer == nil {
+		return true
+	}
+	return math.Hypot(x-viewer.State.X, z-viewer.State.Z) <= interestRadius &&
+		math.Abs(y-viewer.State.Y) <= interestRadius
 }

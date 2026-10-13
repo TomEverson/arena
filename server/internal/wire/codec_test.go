@@ -73,3 +73,28 @@ func TestEncodeWelcomeAndPong(t *testing.T) {
 		t.Errorf("pong = %s", p)
 	}
 }
+
+func TestMsgPackRoundTripAndCompactness(t *testing.T) {
+	msg := &protocol.ClientMessage{Type: protocol.ClientTypeInput, Inputs: []protocol.Input{
+		{Seq: 41, MoveX: -1, MoveZ: 0.5, Yaw: 1.25, Pitch: -0.3},
+		{Seq: 42, MoveX: -1, MoveZ: 0.5, Yaw: 1.25, Pitch: -0.3, Jump: true, Dash: true},
+	}}
+	jsonBytes, err := appendJSON(nil, msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packed, err := appendMsgPack(nil, msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got protocol.ClientMessage
+	if err := (MsgPack{}).DecodeClient(packed, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != msg.Type || len(got.Inputs) != len(msg.Inputs) || got.Inputs[1] != msg.Inputs[1] {
+		t.Fatalf("round trip = %+v, want %+v", got, *msg)
+	}
+	if len(packed) >= len(jsonBytes) {
+		t.Fatalf("msgpack input was not compact: %d bytes vs JSON welcome %d bytes", len(packed), len(jsonBytes))
+	}
+}

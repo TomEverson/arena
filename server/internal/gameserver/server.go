@@ -40,6 +40,10 @@ type Server struct {
 	// LevelName is reported to clients so they can check they run the same map.
 	LevelName string
 	nextID    atomic.Uint32
+	// Snapshot metrics are intentionally kept at the network edge: they measure the encoded
+	// payload that clients actually receive, rather than the in-memory game snapshot.
+	snapshotCount atomic.Uint64
+	snapshotBytes atomic.Uint64
 }
 
 func (s *Server) Handler() http.Handler {
@@ -58,7 +62,20 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "rooms": s.Rooms.Count()})
+	count := s.snapshotCount.Load()
+	bytes := s.snapshotBytes.Load()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":        "ok",
+		"rooms":         s.Rooms.Count(),
+		"snapshots":     count,
+		"snapshotBytes": bytes,
+		"averageSnapshot": func() uint64 {
+			if count == 0 {
+				return 0
+			}
+			return bytes / count
+		}(),
+	})
 }
 
 // handleCreateRoom starts a new room and returns its code: the link is /?room=<code>.
@@ -242,6 +259,8 @@ func (s *Server) writeLoop(ctx context.Context, p *game.Player, send func([]byte
 				log.Printf("encode snapshot: %v", err)
 				continue
 			}
+			s.snapshotCount.Add(1)
+			s.snapshotBytes.Add(uint64(len(buf)))
 			send(buf)
 		}
 	}

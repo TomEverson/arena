@@ -15,7 +15,7 @@ import { canAct } from "./matchui";
 import { NetClient } from "./net/client";
 import { ServerClock } from "./net/clock";
 import { EventTracker, ShotTracker } from "./net/events";
-import { INTERP_TICKS, RemoteTracks } from "./net/interpolation";
+import { interpolationTicks, RemoteTracks } from "./net/interpolation";
 import { Predictor } from "./net/prediction";
 import {
   EntityFlags,
@@ -312,6 +312,7 @@ document.addEventListener("pointerlockchange", () => {
 });
 
 const axis = (pos: string, neg: string) => Number(held.has(pos)) - Number(held.has(neg));
+const INPUT_SEND_EVERY = 2; // Send two simulated ticks per datagram; include four inputs for overlap.
 
 // --- Networking ------------------------------------------------------------
 // Online (default): the server owns the truth. We predict our own movement with the
@@ -443,7 +444,10 @@ const HEAD_GAP = 0.15;
 /** Where a target's head is on screen right now (for the marker that follows them), or null. */
 function headAnchor(id: number): { x: number; y: number } | null {
   const pose = clock.ready
-    ? remotes.sample(id, clock.tickAt(performance.now()) - INTERP_TICKS)
+    ? remotes.sample(
+        id,
+        clock.tickAt(performance.now()) - interpolationTicks(net?.stats.jitterMs ?? 0),
+      )
     : null;
   if (!pose) return null;
   const height = pose.flags & EntityFlags.crouching ? PARAMS.crouchHeight : PARAMS.standHeight;
@@ -482,7 +486,7 @@ function startNet(code: string): void {
     },
     onSnapshot(s) {
       clock.onSnapshot(s.tick, performance.now());
-      remotes.push(s.tick, s.entities);
+      remotes.push(s.tick, s.entities, s.removed, s.full);
       health = s.health;
       useSelfHero(s.health.hero);
       showHeroes(s.health.hero, s.health.nextHero);
@@ -655,10 +659,11 @@ const sim = new FixedTimestep(() => {
   if (predictor) {
     // Online: predict now (movement and weapon), tell the server (the last few inputs, so a lost
     // message loses nothing). viewTick says which moment of the world our screen is showing.
-    const viewTick = clock.ready ? clock.tickAt(performance.now()) - INTERP_TICKS : 0;
+    const interpTicks = interpolationTicks(net?.stats.jitterMs ?? 0);
+    const viewTick = clock.ready ? clock.tickAt(performance.now()) - interpTicks : 0;
     predictor.step(input, look.pitch, viewTick);
     player = predictor.state;
-    net?.sendInputs(predictor.recent());
+    if (simTicks % INPUT_SEND_EVERY === 0) net?.sendInputs(predictor.recent(4));
     if (predictor.lastShot) shotSounds(predictor.lastShot);
     if (predictor.lastShot?.fired) {
       practiceStats.onShot();
@@ -683,9 +688,9 @@ function netHud(): string {
   const st = net.stats;
   return (
     `net: online #${net.playerId} | ping ${st.rttMs.toFixed(0)} ms ±${st.jitterMs.toFixed(0)} | ` +
-    `${st.snapshotsPerSecond} snap/s | server queue ${st.queued} | unacked ${predictor.pending}\n` +
+    `${st.snapshotsPerSecond} snap/s ${st.snapshotBytes} B | server queue ${st.queued} | unacked ${predictor.pending}\n` +
     `prediction: ${predictor.corrections} corrections, worst ${(predictor.maxError * 100).toFixed(1)} cm | ` +
-    `room ${roomCode} | ${remotes.ids().length} remote | interp ${(INTERP_TICKS * 1000) / TICK_RATE} ms ${netNote}`
+    `room ${roomCode} | ${remotes.ids().length} remote | interp ${(interpolationTicks(st.jitterMs) * 1000) / TICK_RATE} ms ${netNote}`
   );
 }
 
@@ -782,8 +787,8 @@ function frame(nowMs: number): void {
   const posed = player.dashTime > 0 || player.sliding || player.mantling;
   selfBody.root.visible = (selfBodyShown && !posed) || dead;
 
-  // Other players: where they were INTERP_TICKS ago, interpolated between snapshots.
-  const renderTick = clock.tickAt(nowMs) - INTERP_TICKS;
+  // Other players: where they were a jitter-adjusted buffer ago, interpolated between snapshots.
+  const renderTick = clock.tickAt(nowMs) - interpolationTicks(net?.stats.jitterMs ?? 0);
   const poses = clock.ready
     ? remotes.ids().flatMap((id) => {
         const pose = remotes.sample(id, renderTick);

@@ -348,12 +348,16 @@ type Snapshot struct {
 	// Last input sequence the server has simulated for you. `you` is your state right after it.
 	AckSeq uint32 `json:"ackSeq"`
 	// Inputs of yours still waiting on the server (a measure of how far ahead you are).
-	Queued uint8       `json:"queued"`
-	You    PlayerState `json:"you"`
-	// Everyone else you can see (see entitiesFor).
-	Entities []Entity     `json:"entities"`
-	Health   PlayerHealth `json:"health"`
-	Weapon   WeaponState  `json:"weapon"`
+	Queued uint8 `json:"queued"`
+	// Whether entities is a complete relevance baseline. False means it is a delta from the previous snapshot.
+	Full bool        `json:"full"`
+	You  PlayerState `json:"you"`
+	// Changed entities, or every relevant entity when full is true (see entitiesFor).
+	Entities []Entity `json:"entities"`
+	// Entity IDs removed from the previous relevance baseline.
+	Removed []uint32     `json:"removed"`
+	Health  PlayerHealth `json:"health"`
+	Weapon  WeaponState  `json:"weapon"`
 	// Recent events for you (hits you landed, hits you took, kills anyone made).
 	Events []GameEvent `json:"events"`
 	// Recent shots fired by anyone (bullets to draw).
