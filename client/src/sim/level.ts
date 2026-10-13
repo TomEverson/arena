@@ -8,6 +8,34 @@ export interface Level {
   spawnZones: LevelSpawn[];
   /** Practice dummies (Phase 1 gunplay testing). */
   targets: LevelTarget[];
+  /** Looks only, like `surface` and `glow`: movement and the server never read these three. */
+  sky?: string;
+  signs: LevelSign[];
+  props: LevelProp[];
+}
+
+/** Looks only: text painted flat on a wall or on the ground. */
+export interface LevelSign {
+  id: string;
+  text: string;
+  /** Centre of the text. */
+  pos: [number, number, number];
+  /** Height of the letters, metres. */
+  size: number;
+  /** Which way it faces: "up" (on the ground) or a wall's outward direction. */
+  face: string;
+  /** On the ground: turned this far about Y (0 = the letters' tops point north, -Z). */
+  yaw: number;
+}
+
+/** Looks only: a prop built from boxes by the renderer. It is not in the collision world. */
+export interface LevelProp {
+  id: string;
+  kind: string;
+  pos: [number, number, number];
+  size?: [number, number, number];
+  face?: string;
+  yaw: number;
 }
 
 export interface LevelBox {
@@ -15,6 +43,10 @@ export interface LevelBox {
   /** Centre of the box. */
   pos: [number, number, number];
   size: [number, number, number];
+  /** Looks only (the renderer's; movement and the server ignore them): which surface it is drawn with. */
+  surface?: string;
+  /** Looks only: where it carries a light strip ("edges", "door-x" or "door-z"). */
+  glow?: string;
 }
 
 export interface LevelRamp extends LevelBox {
@@ -74,6 +106,8 @@ function parseBox(v: unknown, path: string): LevelBox {
     pos: vec3(o.pos, `${path}.pos`),
     size: vec3(o.size, `${path}.size`, true),
   };
+  if (typeof o.surface === "string") box.surface = o.surface;
+  if (typeof o.glow === "string") box.glow = o.glow;
   return box;
 }
 
@@ -107,6 +141,30 @@ export function parseLevel(json: unknown): Level {
     }),
     spawnZones: list(o.spawnZones, "spawnZones").map((z, i) => parseBox(z, `spawnZones[${i}]`)),
     targets: list(o.targets, "targets").map((t, i) => parseTarget(t, `targets[${i}]`)),
+    ...(typeof o.sky === "string" ? { sky: o.sky } : {}),
+    signs: list(o.signs, "signs").map((v, i) => {
+      const s = record(v, `signs[${i}]`);
+      return {
+        id: String(s.id),
+        text: String(s.text),
+        pos: vec3(s.pos, `signs[${i}].pos`),
+        size: typeof s.size === "number" ? s.size : 1,
+        face: typeof s.face === "string" ? s.face : "up",
+        yaw: typeof s.yaw === "number" ? s.yaw : 0,
+      };
+    }),
+    props: list(o.props, "props").map((v, i) => {
+      const p = record(v, `props[${i}]`);
+      const prop: LevelProp = {
+        id: String(p.id),
+        kind: String(p.kind),
+        pos: vec3(p.pos, `props[${i}].pos`),
+        yaw: typeof p.yaw === "number" ? p.yaw : 0,
+      };
+      if (p.size !== undefined) prop.size = vec3(p.size, `props[${i}].size`, true);
+      if (typeof p.face === "string") prop.face = p.face;
+      return prop;
+    }),
   };
 }
 

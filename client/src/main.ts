@@ -7,6 +7,7 @@ import { loadCharacterModels } from "./characterModels";
 import { Fx } from "./fx";
 import { HitFeedback } from "./hitFeedback";
 import { CombatHud } from "./hud";
+import { buildLevelDecor } from "./levelDecor";
 import { buildLevelMeshes } from "./levelRender";
 import { levelByName } from "./levels";
 import { FixedTimestep, TICK_RATE } from "./loop";
@@ -74,16 +75,44 @@ let level = parseLevel(greybox);
 let world = buildCollisionWorld(level);
 
 const scene = new THREE.Scene();
-scene.background = PALETTE.HAZE;
 // Haze, not a wall: clear out to 100 m, then thickening slowly, so a player across the 200 m map
 // (283 m corner to corner, inside the sniper's 250 m range) is still plainly visible.
-scene.fog = new THREE.Fog(PALETTE.HAZE, 100, 500);
-let levelMeshes = buildLevelMeshes(level);
-scene.add(levelMeshes);
-scene.add(new THREE.HemisphereLight(PALETTE.BONE, PALETTE.GRAPHITE, 1.2));
+const fog = new THREE.Fog(PALETTE.HAZE, 100, 500);
+scene.fog = fog;
+const skyLight = new THREE.HemisphereLight(PALETTE.BONE, PALETTE.GRAPHITE, 1.2);
 const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-sun.position.set(20, 40, 10);
-scene.add(sun);
+scene.add(skyLight, sun);
+/** The night sky's colour: between INK and GRAPHITE, so roofs and towers still stand out against it. */
+const NIGHT = PALETTE.INK.clone().lerp(PALETTE.GRAPHITE, 0.45);
+
+/**
+ * The sky, fog and lights for a level's `sky`: day (the default) or "night". Night is moonlit,
+ * not dark: the world drops about a step down the palette, the sky goes nearly black, and the
+ * light strips and lamps (which are unlit) are what stands out. Players must still be easy to see.
+ */
+function applySky(sky: string | undefined): void {
+  const night = sky === "night";
+  scene.background = night ? NIGHT : PALETTE.HAZE;
+  fog.color.copy(night ? NIGHT : PALETTE.HAZE);
+  fog.near = night ? 70 : 100;
+  fog.far = night ? 420 : 500;
+  skyLight.color.copy(night ? PALETTE.HAZE : PALETTE.BONE);
+  skyLight.groundColor.copy(night ? PALETTE.INK : PALETTE.GRAPHITE);
+  skyLight.intensity = night ? 0.85 : 1.2;
+  sun.intensity = night ? 0.75 : 1.5; // the moon
+  if (night) sun.position.set(-30, 40, -18);
+  else sun.position.set(20, 40, 10);
+}
+
+/** A level's meshes: what you can touch, and its looks-only extras. */
+function buildLevel(l: Level): THREE.Group {
+  const group = buildLevelMeshes(l);
+  group.add(buildLevelDecor(l));
+  return group;
+}
+let levelMeshes = buildLevel(level);
+scene.add(levelMeshes);
+applySky(level.sky);
 
 /** Switch to another map: new collision world and new meshes (the old ones are dropped). */
 function useLevel(next: Level): void {
@@ -94,8 +123,9 @@ function useLevel(next: Level): void {
   levelMeshes.traverse((o) => {
     if (o instanceof THREE.Mesh) (o.geometry as THREE.BufferGeometry).dispose();
   });
-  levelMeshes = buildLevelMeshes(level);
+  levelMeshes = buildLevel(level);
   scene.add(levelMeshes);
+  applySky(level.sky);
 }
 
 const view = new RetroRenderer(canvas, scene);

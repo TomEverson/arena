@@ -1,6 +1,7 @@
 {
   "name": "ffa",
   "version": 1,
+  "sky": "night",
   "bounds": {
     "min": [
       -100,
@@ -25,7 +26,8 @@
         202,
         26,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "wall-s",
@@ -38,7 +40,8 @@
         202,
         26,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "wall-w",
@@ -51,7 +54,8 @@
         1,
         26,
         200
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "wall-e",
@@ -64,7 +68,8 @@
         1,
         26,
         200
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "bridge-ns",
@@ -77,7 +82,9 @@
         4,
         0.5,
         20
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "bridge-w",
@@ -90,7 +97,9 @@
         8,
         0.5,
         4
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "bridge-e",
@@ -103,7 +112,9 @@
         8,
         0.5,
         4
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "crown-pillar-nw",
@@ -116,7 +127,8 @@
         1,
         6.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "crown-pillar-ne",
@@ -129,7 +141,8 @@
         1,
         6.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "crown-pillar-sw",
@@ -142,7 +155,8 @@
         1,
         6.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "crown-pillar-se",
@@ -155,7 +169,8 @@
         1,
         6.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "crown",
@@ -168,7 +183,9 @@
         4,
         0.5,
         6
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "crown-w",
@@ -181,7 +198,9 @@
         1,
         0.5,
         4
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "crown-e",
@@ -194,7 +213,9 @@
         1,
         0.5,
         4
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "crown-cover",
@@ -207,7 +228,8 @@
         4,
         1,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "crown-column",
@@ -220,7 +242,8 @@
         1.6,
         3,
         1.6
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "rim-n-w",
@@ -233,7 +256,8 @@
         7,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "rim-n-e",
@@ -246,7 +270,8 @@
         7,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "rim-s-w",
@@ -259,7 +284,8 @@
         7,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "rim-s-e",
@@ -272,7 +298,8 @@
         7,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "rim-e-n",
@@ -285,7 +312,8 @@
         2,
         2.2,
         3
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "rim-e-s",
@@ -298,7 +326,8 @@
         2,
         2.2,
         7
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "rim-w-n",
@@ -311,7 +340,8 @@
         2,
         2.2,
         7
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "rim-w-s",
@@ -324,7 +354,8 @@
         2,
         2.2,
         3
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "tunnel-roof",
@@ -337,7 +368,9 @@
         6,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "door-x"
     },
     {
       "id": "pit-crate-nw",
@@ -350,7 +383,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "pit-wall-nw",
@@ -363,7 +397,8 @@
         1,
         2,
         2.5
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "pit-crate-se",
@@ -376,7 +411,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "pit-wall-se",
@@ -389,7 +425,8 @@
         1,
         2,
         2.5
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "pit-crate-ne",
@@ -402,7 +439,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "pit-crate-sw",
@@ -415,7 +453,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "deck-n",
@@ -428,7 +467,9 @@
         42,
         0.5,
         6
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "deck-e",
@@ -441,7 +482,9 @@
         6,
         0.5,
         36
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "deck-link",
@@ -454,7 +497,9 @@
         6,
         0.5,
         4
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "deck-post-n-12",
@@ -467,7 +512,8 @@
         1,
         3.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "deck-post-n12",
@@ -480,7 +526,8 @@
         1,
         3.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "deck-post-n20",
@@ -493,7 +540,8 @@
         1,
         3.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "deck-post-e-16",
@@ -506,7 +554,8 @@
         1,
         3.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "deck-post-e-8",
@@ -519,7 +568,8 @@
         1,
         3.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "deck-post-e11",
@@ -532,7 +582,8 @@
         1,
         3.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "arcade-wall-n",
@@ -545,7 +596,8 @@
         10,
         3.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "arcade-wall-e",
@@ -558,7 +610,8 @@
         1,
         3.5,
         8
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "arcade-wall-ne",
@@ -571,7 +624,8 @@
         2,
         3.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "deck-cover-n",
@@ -584,7 +638,8 @@
         4,
         1.2000000000000002,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "deck-cover-e",
@@ -597,7 +652,8 @@
         1,
         1.2000000000000002,
         4
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "deck-cover-ne",
@@ -610,7 +666,8 @@
         2,
         2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "nw-block-n",
@@ -623,7 +680,8 @@
         10,
         6,
         2.5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "nw-block-s",
@@ -636,7 +694,8 @@
         10,
         6,
         2.5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "nw-block-roof",
@@ -649,7 +708,9 @@
         10,
         3,
         3
-      ]
+      ],
+      "surface": "concrete",
+      "glow": "door-x"
     },
     {
       "id": "nw-roof-cover",
@@ -662,7 +723,8 @@
         2,
         1.2000000000000002,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "run-wall-w",
@@ -675,7 +737,8 @@
         1,
         10,
         10
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "run-wall-e",
@@ -688,7 +751,8 @@
         1,
         10,
         10
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "east-plat",
@@ -701,7 +765,8 @@
         5,
         3,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "se-block-w",
@@ -714,7 +779,8 @@
         3.5,
         6,
         8
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "se-block-e",
@@ -727,7 +793,8 @@
         3.5,
         6,
         8
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "se-block-top",
@@ -740,7 +807,9 @@
         3,
         4.6,
         8
-      ]
+      ],
+      "surface": "concrete",
+      "glow": "door-z"
     },
     {
       "id": "se-roof-cover",
@@ -753,7 +822,8 @@
         1,
         1.2000000000000002,
         4
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "room-wall-w",
@@ -766,7 +836,8 @@
         1,
         7,
         10
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "room-wall-s",
@@ -779,7 +850,8 @@
         9,
         7,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "room-wall-n-a",
@@ -792,7 +864,8 @@
         3,
         7,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "room-wall-n-b",
@@ -805,7 +878,8 @@
         3.5,
         7,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "room-lintel-n",
@@ -818,7 +892,9 @@
         2.5,
         4.4,
         1
-      ]
+      ],
+      "surface": "panel",
+      "glow": "door-z"
     },
     {
       "id": "room-wall-e-a",
@@ -831,7 +907,8 @@
         1,
         7,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "room-wall-e-b",
@@ -844,7 +921,8 @@
         1,
         7,
         4
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "room-lintel-e",
@@ -857,7 +935,9 @@
         1,
         4.4,
         3
-      ]
+      ],
+      "surface": "panel",
+      "glow": "door-x"
     },
     {
       "id": "room-roof",
@@ -870,7 +950,8 @@
         8,
         0.5,
         8
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "room-roof-cover",
@@ -883,7 +964,8 @@
         4,
         1.1999999999999993,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "room-crate",
@@ -896,7 +978,8 @@
         1.5,
         1.2,
         1.5
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "catwalk-n",
@@ -909,7 +992,9 @@
         4,
         0.5,
         19
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "catwalk-s",
@@ -922,7 +1007,9 @@
         4,
         0.5,
         19
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "catwalk-post-22",
@@ -935,7 +1022,8 @@
         1,
         4.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "catwalk-post-13",
@@ -948,7 +1036,8 @@
         1,
         4.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "catwalk-post12",
@@ -961,7 +1050,8 @@
         1,
         4.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "catwalk-post21",
@@ -974,7 +1064,8 @@
         1,
         4.5,
         1
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "catwalk-step",
@@ -987,7 +1078,8 @@
         2,
         2.5,
         2
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "gantry",
@@ -1000,7 +1092,9 @@
         18,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gantry-step",
@@ -1013,7 +1107,8 @@
         3,
         3,
         2
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "gantry-post-e",
@@ -1026,20 +1121,8 @@
         1,
         5,
         1
-      ]
-    },
-    {
-      "id": "north-block",
-      "pos": [
-        -4,
-        1.75,
-        -18
       ],
-      "size": [
-        8,
-        3.5,
-        6
-      ]
+      "surface": "pillar"
     },
     {
       "id": "west-block",
@@ -1052,20 +1135,8 @@
         5,
         3.5,
         6
-      ]
-    },
-    {
-      "id": "south-block",
-      "pos": [
-        -6,
-        1.75,
-        15.5
       ],
-      "size": [
-        6,
-        3.5,
-        5
-      ]
+      "surface": "concrete"
     },
     {
       "id": "east-block",
@@ -1078,12 +1149,13 @@
         3,
         3.5,
         5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "north-crate",
       "pos": [
-        5,
+        10,
         0.6,
         -15
       ],
@@ -1091,7 +1163,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "north-wall",
@@ -1104,7 +1177,8 @@
         1,
         2.2,
         6
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "west-wall",
@@ -1117,7 +1191,8 @@
         1,
         2.2,
         5
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "west-crate",
@@ -1130,7 +1205,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "west-wall-s",
@@ -1143,7 +1219,8 @@
         1,
         2.2,
         5
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "south-wall",
@@ -1156,12 +1233,13 @@
         6,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "south-wall-e",
       "pos": [
-        4.5,
+        6.5,
         1.1,
         15.5
       ],
@@ -1169,7 +1247,8 @@
         1,
         2.2,
         5
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "se-wall",
@@ -1182,7 +1261,8 @@
         1,
         2.5,
         5
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "se-crate",
@@ -1195,7 +1275,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "east-wall",
@@ -1208,7 +1289,8 @@
         1,
         2.2,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "sw-wall",
@@ -1221,7 +1303,640 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
+    },
+    {
+      "id": "spire-n-leg-nw",
+      "pos": [
+        -4.5,
+        15.25,
+        -19.5
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "spire-n-leg-ne",
+      "pos": [
+        4.5,
+        15.25,
+        -19.5
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "spire-n-leg-sw",
+      "pos": [
+        -4.5,
+        15.25,
+        -14.5
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "spire-n-leg-se",
+      "pos": [
+        4.5,
+        15.25,
+        -14.5
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "spire-n-floor-0",
+      "pos": [
+        -2,
+        5.25,
+        -17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-floor-1",
+      "pos": [
+        2,
+        8.75,
+        -17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-wall-1",
+      "pos": [
+        0.15,
+        7,
+        -17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-floor-2",
+      "pos": [
+        -2,
+        12.25,
+        -17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-wall-2",
+      "pos": [
+        -0.15,
+        10.5,
+        -17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-floor-3",
+      "pos": [
+        2,
+        15.75,
+        -17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-wall-3",
+      "pos": [
+        0.15,
+        14,
+        -17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-floor-4",
+      "pos": [
+        -2,
+        19.25,
+        -17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-wall-4",
+      "pos": [
+        -0.15,
+        17.5,
+        -17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-floor-5",
+      "pos": [
+        2,
+        22.75,
+        -17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-wall-5",
+      "pos": [
+        0.15,
+        21,
+        -17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-floor-6",
+      "pos": [
+        -2,
+        26.25,
+        -17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-wall-6",
+      "pos": [
+        -0.15,
+        24.5,
+        -17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-floor-7",
+      "pos": [
+        2,
+        29.75,
+        -17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-wall-7",
+      "pos": [
+        0.15,
+        28,
+        -17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-cover-top",
+      "pos": [
+        2,
+        30.6,
+        -17
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "spire-n-cover-mid",
+      "pos": [
+        -3,
+        27.1,
+        -17
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        4
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "spire-n-step",
+      "pos": [
+        -6.25,
+        1.5,
+        -17
+      ],
+      "size": [
+        2.5,
+        3,
+        3
+      ],
+      "surface": "concrete"
+    },
+    {
+      "id": "spire-s-leg-nw",
+      "pos": [
+        -4.5,
+        15.25,
+        14.5
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "spire-s-leg-ne",
+      "pos": [
+        4.5,
+        15.25,
+        14.5
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "spire-s-leg-sw",
+      "pos": [
+        -4.5,
+        15.25,
+        19.5
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "spire-s-leg-se",
+      "pos": [
+        4.5,
+        15.25,
+        19.5
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "spire-s-floor-0",
+      "pos": [
+        -2,
+        5.25,
+        17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-floor-1",
+      "pos": [
+        2,
+        8.75,
+        17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-wall-1",
+      "pos": [
+        0.15,
+        7,
+        17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-floor-2",
+      "pos": [
+        -2,
+        12.25,
+        17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-wall-2",
+      "pos": [
+        -0.15,
+        10.5,
+        17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-floor-3",
+      "pos": [
+        2,
+        15.75,
+        17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-wall-3",
+      "pos": [
+        0.15,
+        14,
+        17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-floor-4",
+      "pos": [
+        -2,
+        19.25,
+        17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-wall-4",
+      "pos": [
+        -0.15,
+        17.5,
+        17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-floor-5",
+      "pos": [
+        2,
+        22.75,
+        17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-wall-5",
+      "pos": [
+        0.15,
+        21,
+        17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-floor-6",
+      "pos": [
+        -2,
+        26.25,
+        17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-wall-6",
+      "pos": [
+        -0.15,
+        24.5,
+        17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-floor-7",
+      "pos": [
+        2,
+        29.75,
+        17
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-wall-7",
+      "pos": [
+        0.15,
+        28,
+        17
+      ],
+      "size": [
+        0.3,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-cover-top",
+      "pos": [
+        2,
+        30.6,
+        17
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "spire-s-cover-mid",
+      "pos": [
+        -3,
+        27.1,
+        17
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        4
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "spire-s-step",
+      "pos": [
+        -6.25,
+        1.5,
+        17
+      ],
+      "size": [
+        2.5,
+        3,
+        3
+      ],
+      "surface": "concrete"
     },
     {
       "id": "nw-pass-n",
@@ -1234,7 +1949,8 @@
         18,
         7,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "nw-pass-s",
@@ -1247,7 +1963,8 @@
         18,
         7,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "nw-pass-roof",
@@ -1260,7 +1977,9 @@
         18,
         4,
         4
-      ]
+      ],
+      "surface": "concrete",
+      "glow": "door-x"
     },
     {
       "id": "nw-pass-cover",
@@ -1273,7 +1992,8 @@
         4,
         1.1999999999999993,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "nw-room-n0",
@@ -1286,7 +2006,8 @@
         18,
         6,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "nw-room-s0",
@@ -1299,7 +2020,8 @@
         7,
         6,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "nw-room-s1",
@@ -1312,7 +2034,9 @@
         3,
         3.4,
         1
-      ]
+      ],
+      "surface": "panel",
+      "glow": "door-z"
     },
     {
       "id": "nw-room-s2",
@@ -1325,7 +2049,8 @@
         8,
         6,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "nw-room-w0",
@@ -1338,7 +2063,8 @@
         1,
         6,
         5
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "nw-room-w1",
@@ -1351,7 +2077,9 @@
         1,
         3.4,
         3
-      ]
+      ],
+      "surface": "panel",
+      "glow": "door-x"
     },
     {
       "id": "nw-room-w2",
@@ -1364,7 +2092,8 @@
         1,
         6,
         6
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "nw-room-e0",
@@ -1377,7 +2106,8 @@
         1,
         6,
         14
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "nw-room-roof",
@@ -1390,7 +2120,8 @@
         16,
         0.5,
         14
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "nw-room-crate",
@@ -1403,7 +2134,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "nw-skybridge",
@@ -1416,7 +2148,9 @@
         14,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "nw-tall",
@@ -1429,7 +2163,8 @@
         16,
         9,
         20
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "nw-tall-ledge",
@@ -1442,7 +2177,8 @@
         4,
         3,
         12
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "nw-low",
@@ -1455,7 +2191,8 @@
         20,
         4,
         18
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "nw-low-cover",
@@ -1468,7 +2205,8 @@
         4,
         1.2000000000000002,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "nw-crate-a",
@@ -1481,12 +2219,13 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "nw-wall-a",
       "pos": [
-        -70.5,
+        -75.5,
         1.1,
         -64
       ],
@@ -1494,7 +2233,8 @@
         1,
         2.2,
         8
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "nw-crate-b",
@@ -1507,20 +2247,22 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "nw-wall-b",
       "pos": [
         -63,
         1.1,
-        -62.5
+        -59.5
       ],
       "size": [
         6,
         2.2,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "nw-crate-c",
@@ -1533,7 +2275,324 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "nw-spire-nw-leg-nw",
+      "pos": [
+        -70.5,
+        15.25,
+        -67
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "nw-spire-nw-leg-ne",
+      "pos": [
+        -61.5,
+        15.25,
+        -67
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "nw-spire-nw-leg-sw",
+      "pos": [
+        -70.5,
+        15.25,
+        -62
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "nw-spire-nw-leg-se",
+      "pos": [
+        -61.5,
+        15.25,
+        -62
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "nw-spire-nw-floor-0",
+      "pos": [
+        -68,
+        5.25,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-floor-1",
+      "pos": [
+        -64,
+        8.75,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-wall-1",
+      "pos": [
+        -65.85,
+        7,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-floor-2",
+      "pos": [
+        -68,
+        12.25,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-wall-2",
+      "pos": [
+        -66.15,
+        10.5,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-floor-3",
+      "pos": [
+        -64,
+        15.75,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-wall-3",
+      "pos": [
+        -65.85,
+        14,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-floor-4",
+      "pos": [
+        -68,
+        19.25,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-wall-4",
+      "pos": [
+        -66.15,
+        17.5,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-floor-5",
+      "pos": [
+        -64,
+        22.75,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-wall-5",
+      "pos": [
+        -65.85,
+        21,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-floor-6",
+      "pos": [
+        -68,
+        26.25,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-wall-6",
+      "pos": [
+        -66.15,
+        24.5,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-floor-7",
+      "pos": [
+        -64,
+        29.75,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-wall-7",
+      "pos": [
+        -65.85,
+        28,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-cover-top",
+      "pos": [
+        -64,
+        30.6,
+        -64.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "nw-spire-nw-cover-mid",
+      "pos": [
+        -69,
+        27.1,
+        -64.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        4
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "nw-spire-nw-step",
+      "pos": [
+        -72.25,
+        1.5,
+        -64.5
+      ],
+      "size": [
+        2.5,
+        3,
+        3
+      ],
+      "surface": "concrete"
     },
     {
       "id": "se-pass-n",
@@ -1546,7 +2605,8 @@
         18,
         7,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "se-pass-s",
@@ -1559,7 +2619,8 @@
         18,
         7,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "se-pass-roof",
@@ -1572,7 +2633,9 @@
         18,
         4,
         4
-      ]
+      ],
+      "surface": "concrete",
+      "glow": "door-x"
     },
     {
       "id": "se-pass-cover",
@@ -1585,7 +2648,8 @@
         4,
         1.1999999999999993,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "se-room-n0",
@@ -1598,7 +2662,8 @@
         18,
         6,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "se-room-s0",
@@ -1611,7 +2676,8 @@
         7,
         6,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "se-room-s1",
@@ -1624,7 +2690,9 @@
         3,
         3.4,
         1
-      ]
+      ],
+      "surface": "panel",
+      "glow": "door-z"
     },
     {
       "id": "se-room-s2",
@@ -1637,7 +2705,8 @@
         8,
         6,
         1
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "se-room-w0",
@@ -1650,7 +2719,8 @@
         1,
         6,
         5
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "se-room-w1",
@@ -1663,7 +2733,9 @@
         1,
         3.4,
         3
-      ]
+      ],
+      "surface": "panel",
+      "glow": "door-x"
     },
     {
       "id": "se-room-w2",
@@ -1676,7 +2748,8 @@
         1,
         6,
         6
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "se-room-e0",
@@ -1689,7 +2762,8 @@
         1,
         6,
         14
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "se-room-roof",
@@ -1702,7 +2776,8 @@
         16,
         0.5,
         14
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "se-room-crate",
@@ -1715,7 +2790,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "se-skybridge",
@@ -1728,7 +2804,9 @@
         14,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "se-tall",
@@ -1741,7 +2819,8 @@
         16,
         9,
         20
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "se-tall-ledge",
@@ -1754,7 +2833,8 @@
         4,
         3,
         12
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "se-low",
@@ -1767,7 +2847,8 @@
         20,
         4,
         18
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "se-low-cover",
@@ -1780,7 +2861,8 @@
         4,
         1.2000000000000002,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "se-crate-a",
@@ -1793,12 +2875,13 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "se-wall-a",
       "pos": [
-        70.5,
+        75.5,
         1.1,
         64
       ],
@@ -1806,7 +2889,8 @@
         1,
         2.2,
         8
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "se-crate-b",
@@ -1819,20 +2903,22 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "se-wall-b",
       "pos": [
         63,
         1.1,
-        62.5
+        59.5
       ],
       "size": [
         6,
         2.2,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "se-crate-c",
@@ -1845,7 +2931,324 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "se-spire-se-leg-nw",
+      "pos": [
+        70.5,
+        15.25,
+        67
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "se-spire-se-leg-ne",
+      "pos": [
+        61.5,
+        15.25,
+        67
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "se-spire-se-leg-sw",
+      "pos": [
+        70.5,
+        15.25,
+        62
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "se-spire-se-leg-se",
+      "pos": [
+        61.5,
+        15.25,
+        62
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "se-spire-se-floor-0",
+      "pos": [
+        68,
+        5.25,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-floor-1",
+      "pos": [
+        64,
+        8.75,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-wall-1",
+      "pos": [
+        65.85,
+        7,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-floor-2",
+      "pos": [
+        68,
+        12.25,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-wall-2",
+      "pos": [
+        66.15,
+        10.5,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-floor-3",
+      "pos": [
+        64,
+        15.75,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-wall-3",
+      "pos": [
+        65.85,
+        14,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-floor-4",
+      "pos": [
+        68,
+        19.25,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-wall-4",
+      "pos": [
+        66.15,
+        17.5,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-floor-5",
+      "pos": [
+        64,
+        22.75,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-wall-5",
+      "pos": [
+        65.85,
+        21,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-floor-6",
+      "pos": [
+        68,
+        26.25,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-wall-6",
+      "pos": [
+        66.15,
+        24.5,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-floor-7",
+      "pos": [
+        64,
+        29.75,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-wall-7",
+      "pos": [
+        65.85,
+        28,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-cover-top",
+      "pos": [
+        64,
+        30.6,
+        64.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "se-spire-se-cover-mid",
+      "pos": [
+        69,
+        27.1,
+        64.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        4
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "se-spire-se-step",
+      "pos": [
+        72.25,
+        1.5,
+        64.5
+      ],
+      "size": [
+        2.5,
+        3,
+        3
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ne-box-00",
@@ -1858,7 +3261,8 @@
         14,
         6,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "ne-box-01",
@@ -1871,7 +3275,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "ne-box-02",
@@ -1884,7 +3289,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "ne-box-10",
@@ -1897,7 +3303,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "ne-box-11",
@@ -1910,7 +3317,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "ne-box-12",
@@ -1923,7 +3331,8 @@
         10,
         6,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "ne-box-20",
@@ -1936,7 +3345,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "ne-box-21",
@@ -1949,7 +3359,8 @@
         14,
         6,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "ne-box-22",
@@ -1962,7 +3373,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "ne-box-30",
@@ -1975,7 +3387,8 @@
         14,
         6,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "ne-box-31",
@@ -1988,7 +3401,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "ne-box-32",
@@ -2001,7 +3415,8 @@
         10,
         3,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "ne-box-40",
@@ -2014,7 +3429,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "ne-box-41",
@@ -2027,7 +3443,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "ne-box-42",
@@ -2040,7 +3457,8 @@
         14,
         6,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "ne-crane-leg-a",
@@ -2053,7 +3471,8 @@
         2,
         10,
         2
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "ne-crane-leg-b",
@@ -2066,7 +3485,8 @@
         2,
         10,
         2
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "ne-crane-beam",
@@ -2079,7 +3499,9 @@
         48,
         1,
         2
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "ne-crate-a",
@@ -2092,7 +3514,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "ne-crate-b",
@@ -2105,7 +3528,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "ne-wall-a",
@@ -2118,7 +3542,324 @@
         6,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
+    },
+    {
+      "id": "ne-spire-ne-leg-nw",
+      "pos": [
+        61.5,
+        15.25,
+        -67
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "ne-spire-ne-leg-ne",
+      "pos": [
+        70.5,
+        15.25,
+        -67
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "ne-spire-ne-leg-sw",
+      "pos": [
+        61.5,
+        15.25,
+        -62
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "ne-spire-ne-leg-se",
+      "pos": [
+        70.5,
+        15.25,
+        -62
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "ne-spire-ne-floor-0",
+      "pos": [
+        64,
+        5.25,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-floor-1",
+      "pos": [
+        68,
+        8.75,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-wall-1",
+      "pos": [
+        66.15,
+        7,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-floor-2",
+      "pos": [
+        64,
+        12.25,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-wall-2",
+      "pos": [
+        65.85,
+        10.5,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-floor-3",
+      "pos": [
+        68,
+        15.75,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-wall-3",
+      "pos": [
+        66.15,
+        14,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-floor-4",
+      "pos": [
+        64,
+        19.25,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-wall-4",
+      "pos": [
+        65.85,
+        17.5,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-floor-5",
+      "pos": [
+        68,
+        22.75,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-wall-5",
+      "pos": [
+        66.15,
+        21,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-floor-6",
+      "pos": [
+        64,
+        26.25,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-wall-6",
+      "pos": [
+        65.85,
+        24.5,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-floor-7",
+      "pos": [
+        68,
+        29.75,
+        -64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-wall-7",
+      "pos": [
+        66.15,
+        28,
+        -64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-cover-top",
+      "pos": [
+        68,
+        30.6,
+        -64.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "ne-spire-ne-cover-mid",
+      "pos": [
+        63,
+        27.1,
+        -64.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        4
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "ne-spire-ne-step",
+      "pos": [
+        59.75,
+        1.5,
+        -64.5
+      ],
+      "size": [
+        2.5,
+        3,
+        3
+      ],
+      "surface": "concrete"
     },
     {
       "id": "sw-box-00",
@@ -2131,7 +3872,8 @@
         14,
         6,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "sw-box-01",
@@ -2144,7 +3886,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "sw-box-02",
@@ -2157,7 +3900,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "sw-box-10",
@@ -2170,7 +3914,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "sw-box-11",
@@ -2183,7 +3928,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "sw-box-12",
@@ -2196,7 +3942,8 @@
         10,
         6,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "sw-box-20",
@@ -2209,7 +3956,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "sw-box-21",
@@ -2222,7 +3970,8 @@
         14,
         6,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "sw-box-22",
@@ -2235,7 +3984,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "sw-box-30",
@@ -2248,7 +3998,8 @@
         14,
         6,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "sw-box-31",
@@ -2261,7 +4012,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "sw-box-32",
@@ -2274,7 +4026,8 @@
         10,
         3,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "sw-box-40",
@@ -2287,7 +4040,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "sw-box-41",
@@ -2300,7 +4054,8 @@
         14,
         3,
         3
-      ]
+      ],
+      "surface": "container-light"
     },
     {
       "id": "sw-box-42",
@@ -2313,7 +4068,8 @@
         14,
         6,
         3
-      ]
+      ],
+      "surface": "container"
     },
     {
       "id": "sw-crane-leg-a",
@@ -2326,7 +4082,8 @@
         2,
         10,
         2
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "sw-crane-leg-b",
@@ -2339,7 +4096,8 @@
         2,
         10,
         2
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "sw-crane-beam",
@@ -2352,7 +4110,9 @@
         48,
         1,
         2
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "sw-crate-a",
@@ -2365,7 +4125,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "sw-crate-b",
@@ -2378,7 +4139,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "sw-wall-a",
@@ -2391,7 +4153,324 @@
         6,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
+    },
+    {
+      "id": "sw-spire-sw-leg-nw",
+      "pos": [
+        -61.5,
+        15.25,
+        67
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "sw-spire-sw-leg-ne",
+      "pos": [
+        -70.5,
+        15.25,
+        67
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "sw-spire-sw-leg-sw",
+      "pos": [
+        -61.5,
+        15.25,
+        62
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "sw-spire-sw-leg-se",
+      "pos": [
+        -70.5,
+        15.25,
+        62
+      ],
+      "size": [
+        1,
+        30.5,
+        1
+      ],
+      "surface": "pillar"
+    },
+    {
+      "id": "sw-spire-sw-floor-0",
+      "pos": [
+        -64,
+        5.25,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-floor-1",
+      "pos": [
+        -68,
+        8.75,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-wall-1",
+      "pos": [
+        -66.15,
+        7,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-floor-2",
+      "pos": [
+        -64,
+        12.25,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-wall-2",
+      "pos": [
+        -65.85,
+        10.5,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-floor-3",
+      "pos": [
+        -68,
+        15.75,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-wall-3",
+      "pos": [
+        -66.15,
+        14,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-floor-4",
+      "pos": [
+        -64,
+        19.25,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-wall-4",
+      "pos": [
+        -65.85,
+        17.5,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-floor-5",
+      "pos": [
+        -68,
+        22.75,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-wall-5",
+      "pos": [
+        -66.15,
+        21,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-floor-6",
+      "pos": [
+        -64,
+        26.25,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-wall-6",
+      "pos": [
+        -65.85,
+        24.5,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-floor-7",
+      "pos": [
+        -68,
+        29.75,
+        64.5
+      ],
+      "size": [
+        4,
+        0.5,
+        6
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-wall-7",
+      "pos": [
+        -66.15,
+        28,
+        64.5
+      ],
+      "size": [
+        0.29999999999999716,
+        3,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-cover-top",
+      "pos": [
+        -68,
+        30.6,
+        64.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sw-spire-sw-cover-mid",
+      "pos": [
+        -63,
+        27.1,
+        64.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        4
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sw-spire-sw-step",
+      "pos": [
+        -59.75,
+        1.5,
+        64.5
+      ],
+      "size": [
+        2.5,
+        3,
+        3
+      ],
+      "surface": "concrete"
     },
     {
       "id": "n-bridge",
@@ -2404,7 +4483,9 @@
         4,
         0.5,
         28
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "n-island-w",
@@ -2417,7 +4498,8 @@
         5,
         3,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "n-island-e",
@@ -2430,7 +4512,8 @@
         5,
         1.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "n-crate-w",
@@ -2443,7 +4526,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "n-crate-e",
@@ -2456,7 +4540,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "n-wall-e",
@@ -2469,7 +4554,8 @@
         1,
         2,
         6
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "n-kerb-n-w",
@@ -2482,7 +4568,8 @@
         8,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "n-kerb-n-e",
@@ -2495,7 +4582,8 @@
         16,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "n-kerb-s-w",
@@ -2508,7 +4596,8 @@
         16,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "n-kerb-s-e",
@@ -2521,7 +4610,8 @@
         8,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "n-hall-n-w",
@@ -2534,7 +4624,8 @@
         15,
         5,
         7
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "n-hall-n-e",
@@ -2547,7 +4638,8 @@
         11,
         5,
         7
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "n-hall-n-top",
@@ -2560,7 +4652,9 @@
         4,
         2,
         7
-      ]
+      ],
+      "surface": "concrete",
+      "glow": "door-z"
     },
     {
       "id": "n-hall-s-w",
@@ -2573,7 +4667,8 @@
         11,
         5,
         7
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "n-hall-s-e",
@@ -2586,7 +4681,8 @@
         15,
         5,
         7
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "n-hall-s-top",
@@ -2599,7 +4695,9 @@
         4,
         2,
         7
-      ]
+      ],
+      "surface": "concrete",
+      "glow": "door-z"
     },
     {
       "id": "n-crate-n",
@@ -2612,7 +4710,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "n-wall-n",
@@ -2625,7 +4724,8 @@
         1,
         2.5,
         7
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "n-crate-s",
@@ -2638,7 +4738,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "n-wall-s",
@@ -2651,7 +4752,8 @@
         1,
         2.5,
         7
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "s-bridge",
@@ -2664,7 +4766,9 @@
         4,
         0.5,
         28
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "s-island-w",
@@ -2677,7 +4781,8 @@
         5,
         3,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "s-island-e",
@@ -2690,7 +4795,8 @@
         5,
         1.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "s-crate-w",
@@ -2703,7 +4809,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "s-crate-e",
@@ -2716,7 +4823,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "s-wall-e",
@@ -2729,7 +4837,8 @@
         1,
         2,
         6
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "s-kerb-n-w",
@@ -2742,7 +4851,8 @@
         8,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "s-kerb-n-e",
@@ -2755,7 +4865,8 @@
         16,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "s-kerb-s-w",
@@ -2768,7 +4879,8 @@
         16,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "s-kerb-s-e",
@@ -2781,7 +4893,8 @@
         8,
         2.2,
         2
-      ]
+      ],
+      "surface": "stripe"
     },
     {
       "id": "s-hall-n-w",
@@ -2794,7 +4907,8 @@
         15,
         5,
         7
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "s-hall-n-e",
@@ -2807,7 +4921,8 @@
         11,
         5,
         7
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "s-hall-n-top",
@@ -2820,7 +4935,9 @@
         4,
         2,
         7
-      ]
+      ],
+      "surface": "concrete",
+      "glow": "door-z"
     },
     {
       "id": "s-hall-s-w",
@@ -2833,7 +4950,8 @@
         11,
         5,
         7
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "s-hall-s-e",
@@ -2846,7 +4964,8 @@
         15,
         5,
         7
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "s-hall-s-top",
@@ -2859,7 +4978,9 @@
         4,
         2,
         7
-      ]
+      ],
+      "surface": "concrete",
+      "glow": "door-z"
     },
     {
       "id": "s-crate-n",
@@ -2872,7 +4993,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "s-wall-n",
@@ -2885,7 +5007,8 @@
         1,
         2.5,
         7
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "s-crate-s",
@@ -2898,7 +5021,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "s-wall-s",
@@ -2911,7 +5035,8 @@
         1,
         2.5,
         7
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "w-step-1",
@@ -2924,7 +5049,8 @@
         48,
         2,
         16
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "w-step-2",
@@ -2937,7 +5063,8 @@
         32,
         2,
         10
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "w-step-3",
@@ -2950,7 +5077,8 @@
         16,
         2,
         5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "w-cover-1",
@@ -2963,7 +5091,8 @@
         4,
         1.2000000000000002,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "w-cover-2",
@@ -2976,7 +5105,8 @@
         4,
         1.2000000000000002,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "w-tower",
@@ -2989,7 +5119,8 @@
         10,
         16,
         10
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "w-alley-w",
@@ -3002,7 +5133,8 @@
         1,
         9,
         20
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "w-alley-e",
@@ -3015,7 +5147,8 @@
         1,
         9,
         20
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "w-mid-block",
@@ -3028,7 +5161,8 @@
         8,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "w-crate-a",
@@ -3041,7 +5175,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "w-wall-a",
@@ -3054,7 +5189,8 @@
         8,
         2.2,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "w-wall-b",
@@ -3067,7 +5203,8 @@
         1,
         2.5,
         8
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "w-crate-b",
@@ -3080,7 +5217,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "e-step-1",
@@ -3093,7 +5231,8 @@
         48,
         2,
         16
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "e-step-2",
@@ -3106,7 +5245,8 @@
         32,
         2,
         10
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "e-step-3",
@@ -3119,7 +5259,8 @@
         16,
         2,
         5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "e-cover-1",
@@ -3132,7 +5273,8 @@
         4,
         1.2000000000000002,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "e-cover-2",
@@ -3145,7 +5287,8 @@
         4,
         1.2000000000000002,
         1
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "e-tower",
@@ -3158,7 +5301,8 @@
         10,
         16,
         10
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "e-alley-w",
@@ -3171,7 +5315,8 @@
         1,
         9,
         20
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "e-alley-e",
@@ -3184,7 +5329,8 @@
         1,
         9,
         20
-      ]
+      ],
+      "surface": "panel"
     },
     {
       "id": "e-mid-block",
@@ -3197,7 +5343,8 @@
         8,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "e-crate-a",
@@ -3210,7 +5357,8 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
     },
     {
       "id": "e-wall-a",
@@ -3223,7 +5371,8 @@
         8,
         2.2,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "e-wall-b",
@@ -3236,7 +5385,8 @@
         1,
         2.5,
         8
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "e-crate-b",
@@ -3249,7 +5399,463 @@
         2,
         1.2,
         2
-      ]
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-centre",
+      "pos": [
+        0,
+        26.25,
+        0
+      ],
+      "size": [
+        3,
+        0.5,
+        28
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sky-centre-cover-0",
+      "pos": [
+        1,
+        27.1,
+        -1
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-north",
+      "pos": [
+        -2,
+        26.25,
+        -64.5
+      ],
+      "size": [
+        128,
+        0.5,
+        3
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sky-north-cover-0",
+      "pos": [
+        -53,
+        27.1,
+        -65.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-north-cover-1",
+      "pos": [
+        -29,
+        27.1,
+        -63.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-north-cover-2",
+      "pos": [
+        -5,
+        27.1,
+        -65.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-north-cover-3",
+      "pos": [
+        19,
+        27.1,
+        -63.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-north-cover-4",
+      "pos": [
+        43,
+        27.1,
+        -65.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-south",
+      "pos": [
+        2,
+        26.25,
+        64.5
+      ],
+      "size": [
+        128,
+        0.5,
+        3
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sky-south-cover-0",
+      "pos": [
+        -49,
+        27.1,
+        63.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-south-cover-1",
+      "pos": [
+        -25,
+        27.1,
+        65.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-south-cover-2",
+      "pos": [
+        -1,
+        27.1,
+        63.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-south-cover-3",
+      "pos": [
+        23,
+        27.1,
+        65.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-south-cover-4",
+      "pos": [
+        47,
+        27.1,
+        63.5
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-west",
+      "pos": [
+        -66,
+        26.25,
+        0
+      ],
+      "size": [
+        3,
+        0.5,
+        123
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sky-west-cover-0",
+      "pos": [
+        -67,
+        27.1,
+        -48.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-west-cover-1",
+      "pos": [
+        -65,
+        27.1,
+        -24.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-west-cover-2",
+      "pos": [
+        -67,
+        27.1,
+        -0.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-west-cover-3",
+      "pos": [
+        -65,
+        27.1,
+        23.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-west-cover-4",
+      "pos": [
+        -67,
+        27.1,
+        47.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-east",
+      "pos": [
+        66,
+        26.25,
+        0
+      ],
+      "size": [
+        3,
+        0.5,
+        123
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sky-east-cover-0",
+      "pos": [
+        65,
+        27.1,
+        -48.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-east-cover-1",
+      "pos": [
+        67,
+        27.1,
+        -24.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-east-cover-2",
+      "pos": [
+        65,
+        27.1,
+        -0.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-east-cover-3",
+      "pos": [
+        67,
+        27.1,
+        23.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-east-cover-4",
+      "pos": [
+        65,
+        27.1,
+        47.5
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-spine-n",
+      "pos": [
+        0,
+        26.25,
+        -41.5
+      ],
+      "size": [
+        3,
+        0.5,
+        43
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sky-spine-n-cover-0",
+      "pos": [
+        1,
+        27.1,
+        -50
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-spine-n-cover-1",
+      "pos": [
+        1,
+        27.1,
+        -26
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-spine-s",
+      "pos": [
+        0,
+        26.25,
+        41.5
+      ],
+      "size": [
+        3,
+        0.5,
+        43
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sky-spine-s-cover-0",
+      "pos": [
+        1,
+        27.1,
+        33
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "sky-spine-s-cover-1",
+      "pos": [
+        1,
+        27.1,
+        57
+      ],
+      "size": [
+        1,
+        1.1999999999999993,
+        2
+      ],
+      "surface": "crate"
     },
     {
       "id": "gate-0",
@@ -3262,7 +5868,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-0-wall",
@@ -3275,7 +5883,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-1",
@@ -3288,7 +5897,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-1-wall",
@@ -3301,7 +5912,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-2",
@@ -3314,7 +5926,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-2-wall",
@@ -3327,7 +5941,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-3",
@@ -3340,7 +5955,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-3-wall",
@@ -3353,7 +5970,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-4",
@@ -3366,7 +5984,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-4-wall",
@@ -3379,7 +5999,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-5",
@@ -3392,7 +6013,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-5-wall",
@@ -3405,7 +6028,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-6",
@@ -3418,7 +6042,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-6-wall",
@@ -3431,7 +6057,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-7",
@@ -3444,7 +6071,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-7-wall",
@@ -3457,7 +6086,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-8",
@@ -3470,7 +6100,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-8-wall",
@@ -3483,7 +6115,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-9",
@@ -3496,7 +6129,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-9-wall",
@@ -3509,7 +6144,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-10",
@@ -3522,7 +6158,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-10-wall",
@@ -3535,7 +6173,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-11",
@@ -3548,7 +6187,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-11-wall",
@@ -3561,7 +6202,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "cross-wn",
@@ -3574,7 +6216,8 @@
         4,
         8,
         4
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "cross-ws",
@@ -3587,7 +6230,8 @@
         4,
         8,
         4
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "gate-12",
@@ -3600,7 +6244,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-12-wall",
@@ -3613,7 +6259,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-13",
@@ -3626,7 +6273,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-13-wall",
@@ -3639,7 +6288,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-14",
@@ -3652,7 +6302,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-14-wall",
@@ -3665,7 +6317,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-15",
@@ -3678,7 +6331,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-15-wall",
@@ -3691,7 +6346,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-16",
@@ -3704,7 +6360,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-16-wall",
@@ -3717,7 +6375,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-17",
@@ -3730,7 +6389,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-17-wall",
@@ -3743,7 +6404,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-18",
@@ -3756,7 +6418,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-18-wall",
@@ -3769,7 +6433,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-19",
@@ -3782,7 +6447,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-19-wall",
@@ -3795,7 +6462,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-20",
@@ -3808,7 +6476,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-20-wall",
@@ -3821,7 +6491,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-21",
@@ -3834,7 +6505,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-21-wall",
@@ -3847,7 +6520,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-22",
@@ -3860,7 +6534,9 @@
         3,
         0.5,
         8
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-22-wall",
@@ -3873,7 +6549,8 @@
         1,
         2.5,
         4
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "gate-23",
@@ -3886,7 +6563,9 @@
         8,
         0.5,
         3
-      ]
+      ],
+      "surface": "metal",
+      "glow": "edges"
     },
     {
       "id": "gate-23-wall",
@@ -3899,7 +6578,8 @@
         4,
         2.5,
         1
-      ]
+      ],
+      "surface": "barrier"
     },
     {
       "id": "cross-en",
@@ -3912,7 +6592,8 @@
         4,
         8,
         4
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "cross-es",
@@ -3925,7 +6606,8 @@
         4,
         8,
         4
-      ]
+      ],
+      "surface": "pillar"
     },
     {
       "id": "ring-x-m0",
@@ -3938,7 +6620,8 @@
         6,
         3.5,
         3.5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-m0",
@@ -3951,7 +6634,8 @@
         3.5,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-p0",
@@ -3964,7 +6648,8 @@
         6,
         3.5,
         3.5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-p0",
@@ -3977,7 +6662,8 @@
         3.5,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-m1",
@@ -3990,7 +6676,8 @@
         6,
         3.5,
         3
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-m1",
@@ -4003,7 +6690,8 @@
         3,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-p1",
@@ -4016,7 +6704,8 @@
         6,
         3.5,
         3
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-p1",
@@ -4029,7 +6718,8 @@
         3,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-m2",
@@ -4042,7 +6732,8 @@
         6,
         3.5,
         3.5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-m2",
@@ -4055,7 +6746,8 @@
         3.5,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-p2",
@@ -4068,7 +6760,8 @@
         6,
         3.5,
         3.5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-p2",
@@ -4081,7 +6774,8 @@
         3.5,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-m3",
@@ -4094,7 +6788,8 @@
         6,
         3.5,
         3
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-m3",
@@ -4107,7 +6802,8 @@
         3,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-p3",
@@ -4120,7 +6816,8 @@
         6,
         3.5,
         3
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-p3",
@@ -4133,7 +6830,8 @@
         3,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-m4",
@@ -4146,7 +6844,8 @@
         6,
         3.5,
         3.5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-m4",
@@ -4159,7 +6858,8 @@
         3.5,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-p4",
@@ -4172,7 +6872,8 @@
         6,
         3.5,
         3.5
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-p4",
@@ -4185,7 +6886,8 @@
         3.5,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-m5",
@@ -4198,7 +6900,8 @@
         6,
         3.5,
         3
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-m5",
@@ -4211,7 +6914,8 @@
         3,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-x-p5",
@@ -4224,7 +6928,8 @@
         6,
         3.5,
         3
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "ring-z-p5",
@@ -4237,7 +6942,8 @@
         3,
         3.5,
         6
-      ]
+      ],
+      "surface": "concrete"
     },
     {
       "id": "floor-base",
@@ -4250,7 +6956,8 @@
         202,
         1,
         202
-      ]
+      ],
+      "surface": "pit"
     },
     {
       "id": "floor-0",
@@ -4263,7 +6970,8 @@
         202,
         3,
         21
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-1",
@@ -4276,7 +6984,8 @@
         79,
         3,
         28
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-2",
@@ -4289,7 +6998,8 @@
         79,
         3,
         28
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-3",
@@ -4302,7 +7012,8 @@
         202,
         3,
         42
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-4",
@@ -4315,7 +7026,8 @@
         91,
         3,
         8.5
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-5",
@@ -4328,7 +7040,8 @@
         77,
         3,
         3
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-6",
@@ -4341,7 +7054,8 @@
         91,
         3,
         8.5
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-7",
@@ -4354,7 +7068,8 @@
         91,
         3,
         20
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-8",
@@ -4367,7 +7082,8 @@
         202,
         3,
         42
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-9",
@@ -4380,7 +7096,8 @@
         79,
         3,
         28
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-10",
@@ -4393,7 +7110,8 @@
         79,
         3,
         28
-      ]
+      ],
+      "surface": "ground"
     },
     {
       "id": "floor-11",
@@ -4406,7 +7124,8 @@
         202,
         3,
         21
-      ]
+      ],
+      "surface": "ground"
     }
   ],
   "ramps": [
@@ -4422,7 +7141,8 @@
         3,
         3
       ],
-      "rises": "+x"
+      "rises": "+x",
+      "surface": "ramp"
     },
     {
       "id": "pit-ramp-sw",
@@ -4436,7 +7156,8 @@
         3,
         3
       ],
-      "rises": "-x"
+      "rises": "-x",
+      "surface": "ramp"
     },
     {
       "id": "tunnel-ramp",
@@ -4450,7 +7171,8 @@
         3,
         3
       ],
-      "rises": "-x"
+      "rises": "-x",
+      "surface": "ramp"
     },
     {
       "id": "deck-ramp-nw",
@@ -4464,7 +7186,8 @@
         4,
         3
       ],
-      "rises": "+x"
+      "rises": "+x",
+      "surface": "ramp"
     },
     {
       "id": "deck-ramp-se",
@@ -4478,7 +7201,8 @@
         4,
         10
       ],
-      "rises": "-z"
+      "rises": "-z",
+      "surface": "ramp"
     },
     {
       "id": "nw-low-ramp",
@@ -4492,7 +7216,8 @@
         4,
         6
       ],
-      "rises": "+x"
+      "rises": "+x",
+      "surface": "ramp"
     },
     {
       "id": "se-low-ramp",
@@ -4506,7 +7231,8 @@
         4,
         6
       ],
-      "rises": "-x"
+      "rises": "-x",
+      "surface": "ramp"
     },
     {
       "id": "n-ramp-w",
@@ -4520,7 +7246,8 @@
         3,
         4
       ],
-      "rises": "-x"
+      "rises": "-x",
+      "surface": "ramp"
     },
     {
       "id": "n-ramp-e",
@@ -4534,7 +7261,8 @@
         3,
         4
       ],
-      "rises": "+x"
+      "rises": "+x",
+      "surface": "ramp"
     },
     {
       "id": "s-ramp-w",
@@ -4548,7 +7276,8 @@
         3,
         4
       ],
-      "rises": "+x"
+      "rises": "+x",
+      "surface": "ramp"
     },
     {
       "id": "s-ramp-e",
@@ -4562,7 +7291,8 @@
         3,
         4
       ],
-      "rises": "-x"
+      "rises": "-x",
+      "surface": "ramp"
     },
     {
       "id": "w-ramp",
@@ -4576,7 +7306,8 @@
         2,
         8
       ],
-      "rises": "-z"
+      "rises": "-z",
+      "surface": "ramp"
     },
     {
       "id": "e-ramp",
@@ -4590,7 +7321,8 @@
         2,
         8
       ],
-      "rises": "+z"
+      "rises": "+z",
+      "surface": "ramp"
     }
   ],
   "controlPoints": [],
@@ -4908,5 +7640,1929 @@
       ]
     }
   ],
-  "targets": []
+  "targets": [],
+  "signs": [
+    {
+      "id": "sign-wall-NW-z",
+      "text": "NW",
+      "pos": [
+        -66,
+        20,
+        -99.96
+      ],
+      "size": 7,
+      "face": "+z"
+    },
+    {
+      "id": "sign-wall-NW-x",
+      "text": "NW",
+      "pos": [
+        -99.96,
+        20,
+        -66
+      ],
+      "size": 7,
+      "face": "+x"
+    },
+    {
+      "id": "sign-floor-NW-01",
+      "text": "NW",
+      "pos": [
+        -66,
+        0.03,
+        -35.8
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 0
+    },
+    {
+      "id": "sign-floor-NW-10",
+      "text": "NW",
+      "pos": [
+        -35.8,
+        0.03,
+        -66
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "sign-wall-N-z",
+      "text": "N",
+      "pos": [
+        0,
+        20,
+        -99.96
+      ],
+      "size": 7,
+      "face": "+z"
+    },
+    {
+      "id": "sign-floor-N-01",
+      "text": "N",
+      "pos": [
+        0,
+        0.03,
+        -35.8
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 0
+    },
+    {
+      "id": "sign-floor-N--10",
+      "text": "N",
+      "pos": [
+        -30.2,
+        0.03,
+        -66
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": -1.5707963267948966
+    },
+    {
+      "id": "sign-floor-N-10",
+      "text": "N",
+      "pos": [
+        30.2,
+        0.03,
+        -66
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "sign-wall-NE-z",
+      "text": "NE",
+      "pos": [
+        66,
+        20,
+        -99.96
+      ],
+      "size": 7,
+      "face": "+z"
+    },
+    {
+      "id": "sign-wall-NE-x",
+      "text": "NE",
+      "pos": [
+        99.96,
+        20,
+        -66
+      ],
+      "size": 7,
+      "face": "-x"
+    },
+    {
+      "id": "sign-floor-NE-01",
+      "text": "NE",
+      "pos": [
+        66,
+        0.03,
+        -35.8
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 0
+    },
+    {
+      "id": "sign-floor-NE--10",
+      "text": "NE",
+      "pos": [
+        35.8,
+        0.03,
+        -66
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": -1.5707963267948966
+    },
+    {
+      "id": "sign-wall-W-x",
+      "text": "W",
+      "pos": [
+        -99.96,
+        20,
+        0
+      ],
+      "size": 7,
+      "face": "+x"
+    },
+    {
+      "id": "sign-floor-W-0-1",
+      "text": "W",
+      "pos": [
+        -66,
+        0.03,
+        -30.2
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "sign-floor-W-01",
+      "text": "W",
+      "pos": [
+        -66,
+        0.03,
+        30.2
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 0
+    },
+    {
+      "id": "sign-floor-W-10",
+      "text": "W",
+      "pos": [
+        -35.8,
+        0.03,
+        0
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "sign-floor-C-0-1",
+      "text": "C",
+      "pos": [
+        0,
+        0.03,
+        -32.2
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "sign-floor-C-01",
+      "text": "C",
+      "pos": [
+        0,
+        0.03,
+        32.2
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 0
+    },
+    {
+      "id": "sign-floor-C--10",
+      "text": "C",
+      "pos": [
+        -32.2,
+        0.03,
+        0
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": -1.5707963267948966
+    },
+    {
+      "id": "sign-floor-C-10",
+      "text": "C",
+      "pos": [
+        32.2,
+        0.03,
+        0
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "sign-wall-E-x",
+      "text": "E",
+      "pos": [
+        99.96,
+        20,
+        0
+      ],
+      "size": 7,
+      "face": "-x"
+    },
+    {
+      "id": "sign-floor-E-0-1",
+      "text": "E",
+      "pos": [
+        66,
+        0.03,
+        -30.2
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "sign-floor-E-01",
+      "text": "E",
+      "pos": [
+        66,
+        0.03,
+        30.2
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 0
+    },
+    {
+      "id": "sign-floor-E--10",
+      "text": "E",
+      "pos": [
+        35.8,
+        0.03,
+        0
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": -1.5707963267948966
+    },
+    {
+      "id": "sign-wall-SW-z",
+      "text": "SW",
+      "pos": [
+        -66,
+        20,
+        99.96
+      ],
+      "size": 7,
+      "face": "-z"
+    },
+    {
+      "id": "sign-wall-SW-x",
+      "text": "SW",
+      "pos": [
+        -99.96,
+        20,
+        66
+      ],
+      "size": 7,
+      "face": "+x"
+    },
+    {
+      "id": "sign-floor-SW-0-1",
+      "text": "SW",
+      "pos": [
+        -66,
+        0.03,
+        35.8
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "sign-floor-SW-10",
+      "text": "SW",
+      "pos": [
+        -35.8,
+        0.03,
+        66
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "sign-wall-S-z",
+      "text": "S",
+      "pos": [
+        0,
+        20,
+        99.96
+      ],
+      "size": 7,
+      "face": "-z"
+    },
+    {
+      "id": "sign-floor-S-0-1",
+      "text": "S",
+      "pos": [
+        0,
+        0.03,
+        35.8
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "sign-floor-S--10",
+      "text": "S",
+      "pos": [
+        -30.2,
+        0.03,
+        66
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": -1.5707963267948966
+    },
+    {
+      "id": "sign-floor-S-10",
+      "text": "S",
+      "pos": [
+        30.2,
+        0.03,
+        66
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "sign-wall-SE-z",
+      "text": "SE",
+      "pos": [
+        66,
+        20,
+        99.96
+      ],
+      "size": 7,
+      "face": "-z"
+    },
+    {
+      "id": "sign-wall-SE-x",
+      "text": "SE",
+      "pos": [
+        99.96,
+        20,
+        66
+      ],
+      "size": 7,
+      "face": "-x"
+    },
+    {
+      "id": "sign-floor-SE-0-1",
+      "text": "SE",
+      "pos": [
+        66,
+        0.03,
+        35.8
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "sign-floor-SE--10",
+      "text": "SE",
+      "pos": [
+        35.8,
+        0.03,
+        66
+      ],
+      "size": 2.6,
+      "face": "up",
+      "yaw": -1.5707963267948966
+    }
+  ],
+  "props": [
+    {
+      "id": "lamp-NW--1-1",
+      "kind": "lamp",
+      "pos": [
+        -94.9,
+        0,
+        -94.9
+      ],
+      "yaw": -2.356194490192345
+    },
+    {
+      "id": "lamp-NW--11",
+      "kind": "lamp",
+      "pos": [
+        -94.9,
+        0,
+        -37.1
+      ],
+      "yaw": -0.7853981633974483
+    },
+    {
+      "id": "lamp-NW-1-1",
+      "kind": "lamp",
+      "pos": [
+        -37.1,
+        0,
+        -94.9
+      ],
+      "yaw": 2.356194490192345
+    },
+    {
+      "id": "lamp-NW-11",
+      "kind": "lamp",
+      "pos": [
+        -37.1,
+        0,
+        -37.1
+      ],
+      "yaw": 0.7853981633974483
+    },
+    {
+      "id": "lamp-N--1-1",
+      "kind": "lamp",
+      "pos": [
+        -28.9,
+        0,
+        -94.9
+      ],
+      "yaw": -2.356194490192345
+    },
+    {
+      "id": "lamp-N--11",
+      "kind": "lamp",
+      "pos": [
+        -28.9,
+        0,
+        -37.1
+      ],
+      "yaw": -0.7853981633974483
+    },
+    {
+      "id": "lamp-N-1-1",
+      "kind": "lamp",
+      "pos": [
+        28.9,
+        0,
+        -94.9
+      ],
+      "yaw": 2.356194490192345
+    },
+    {
+      "id": "lamp-N-11",
+      "kind": "lamp",
+      "pos": [
+        28.9,
+        0,
+        -37.1
+      ],
+      "yaw": 0.7853981633974483
+    },
+    {
+      "id": "lamp-NE--1-1",
+      "kind": "lamp",
+      "pos": [
+        37.1,
+        0,
+        -94.9
+      ],
+      "yaw": -2.356194490192345
+    },
+    {
+      "id": "lamp-NE--11",
+      "kind": "lamp",
+      "pos": [
+        37.1,
+        0,
+        -37.1
+      ],
+      "yaw": -0.7853981633974483
+    },
+    {
+      "id": "lamp-NE-1-1",
+      "kind": "lamp",
+      "pos": [
+        94.9,
+        0,
+        -94.9
+      ],
+      "yaw": 2.356194490192345
+    },
+    {
+      "id": "lamp-NE-11",
+      "kind": "lamp",
+      "pos": [
+        94.9,
+        0,
+        -37.1
+      ],
+      "yaw": 0.7853981633974483
+    },
+    {
+      "id": "lamp-W--1-1",
+      "kind": "lamp",
+      "pos": [
+        -94.9,
+        0,
+        -28.9
+      ],
+      "yaw": -2.356194490192345
+    },
+    {
+      "id": "lamp-W--11",
+      "kind": "lamp",
+      "pos": [
+        -94.9,
+        0,
+        28.9
+      ],
+      "yaw": -0.7853981633974483
+    },
+    {
+      "id": "lamp-W-1-1",
+      "kind": "lamp",
+      "pos": [
+        -37.1,
+        0,
+        -28.9
+      ],
+      "yaw": 2.356194490192345
+    },
+    {
+      "id": "lamp-W-11",
+      "kind": "lamp",
+      "pos": [
+        -37.1,
+        0,
+        28.9
+      ],
+      "yaw": 0.7853981633974483
+    },
+    {
+      "id": "lamp-C--1-1",
+      "kind": "lamp",
+      "pos": [
+        -30.9,
+        0,
+        -30.9
+      ],
+      "yaw": -2.356194490192345
+    },
+    {
+      "id": "lamp-C--11",
+      "kind": "lamp",
+      "pos": [
+        -30.9,
+        0,
+        30.9
+      ],
+      "yaw": -0.7853981633974483
+    },
+    {
+      "id": "lamp-C-1-1",
+      "kind": "lamp",
+      "pos": [
+        30.9,
+        0,
+        -30.9
+      ],
+      "yaw": 2.356194490192345
+    },
+    {
+      "id": "lamp-C-11",
+      "kind": "lamp",
+      "pos": [
+        30.9,
+        0,
+        30.9
+      ],
+      "yaw": 0.7853981633974483
+    },
+    {
+      "id": "lamp-E--1-1",
+      "kind": "lamp",
+      "pos": [
+        37.1,
+        0,
+        -28.9
+      ],
+      "yaw": -2.356194490192345
+    },
+    {
+      "id": "lamp-E--11",
+      "kind": "lamp",
+      "pos": [
+        37.1,
+        0,
+        28.9
+      ],
+      "yaw": -0.7853981633974483
+    },
+    {
+      "id": "lamp-E-1-1",
+      "kind": "lamp",
+      "pos": [
+        94.9,
+        0,
+        -28.9
+      ],
+      "yaw": 2.356194490192345
+    },
+    {
+      "id": "lamp-E-11",
+      "kind": "lamp",
+      "pos": [
+        94.9,
+        0,
+        28.9
+      ],
+      "yaw": 0.7853981633974483
+    },
+    {
+      "id": "lamp-SW--1-1",
+      "kind": "lamp",
+      "pos": [
+        -94.9,
+        0,
+        37.1
+      ],
+      "yaw": -2.356194490192345
+    },
+    {
+      "id": "lamp-SW--11",
+      "kind": "lamp",
+      "pos": [
+        -94.9,
+        0,
+        94.9
+      ],
+      "yaw": -0.7853981633974483
+    },
+    {
+      "id": "lamp-SW-1-1",
+      "kind": "lamp",
+      "pos": [
+        -37.1,
+        0,
+        37.1
+      ],
+      "yaw": 2.356194490192345
+    },
+    {
+      "id": "lamp-SW-11",
+      "kind": "lamp",
+      "pos": [
+        -37.1,
+        0,
+        94.9
+      ],
+      "yaw": 0.7853981633974483
+    },
+    {
+      "id": "lamp-S--1-1",
+      "kind": "lamp",
+      "pos": [
+        -28.9,
+        0,
+        37.1
+      ],
+      "yaw": -2.356194490192345
+    },
+    {
+      "id": "lamp-S--11",
+      "kind": "lamp",
+      "pos": [
+        -28.9,
+        0,
+        94.9
+      ],
+      "yaw": -0.7853981633974483
+    },
+    {
+      "id": "lamp-S-1-1",
+      "kind": "lamp",
+      "pos": [
+        28.9,
+        0,
+        37.1
+      ],
+      "yaw": 2.356194490192345
+    },
+    {
+      "id": "lamp-S-11",
+      "kind": "lamp",
+      "pos": [
+        28.9,
+        0,
+        94.9
+      ],
+      "yaw": 0.7853981633974483
+    },
+    {
+      "id": "lamp-SE--1-1",
+      "kind": "lamp",
+      "pos": [
+        37.1,
+        0,
+        37.1
+      ],
+      "yaw": -2.356194490192345
+    },
+    {
+      "id": "lamp-SE--11",
+      "kind": "lamp",
+      "pos": [
+        37.1,
+        0,
+        94.9
+      ],
+      "yaw": -0.7853981633974483
+    },
+    {
+      "id": "lamp-SE-1-1",
+      "kind": "lamp",
+      "pos": [
+        94.9,
+        0,
+        37.1
+      ],
+      "yaw": 2.356194490192345
+    },
+    {
+      "id": "lamp-SE-11",
+      "kind": "lamp",
+      "pos": [
+        94.9,
+        0,
+        94.9
+      ],
+      "yaw": 0.7853981633974483
+    },
+    {
+      "id": "pipe-n-9",
+      "kind": "pipe",
+      "pos": [
+        0,
+        9,
+        -100
+      ],
+      "face": "+z",
+      "size": [
+        200,
+        0.22,
+        0.22
+      ]
+    },
+    {
+      "id": "pipe-n-9.6",
+      "kind": "pipe",
+      "pos": [
+        0,
+        9.6,
+        -100
+      ],
+      "face": "+z",
+      "size": [
+        200,
+        0.22,
+        0.22
+      ]
+    },
+    {
+      "id": "unit-n--90",
+      "kind": "unit",
+      "pos": [
+        -90,
+        5.5,
+        -100
+      ],
+      "face": "+z"
+    },
+    {
+      "id": "unit-n--50",
+      "kind": "unit",
+      "pos": [
+        -50,
+        5.5,
+        -100
+      ],
+      "face": "+z"
+    },
+    {
+      "id": "unit-n--30",
+      "kind": "unit",
+      "pos": [
+        -30,
+        5.5,
+        -100
+      ],
+      "face": "+z"
+    },
+    {
+      "id": "unit-n--10",
+      "kind": "unit",
+      "pos": [
+        -10,
+        5.5,
+        -100
+      ],
+      "face": "+z"
+    },
+    {
+      "id": "unit-n-10",
+      "kind": "unit",
+      "pos": [
+        10,
+        5.5,
+        -100
+      ],
+      "face": "+z"
+    },
+    {
+      "id": "unit-n-30",
+      "kind": "unit",
+      "pos": [
+        30,
+        5.5,
+        -100
+      ],
+      "face": "+z"
+    },
+    {
+      "id": "unit-n-50",
+      "kind": "unit",
+      "pos": [
+        50,
+        5.5,
+        -100
+      ],
+      "face": "+z"
+    },
+    {
+      "id": "unit-n-90",
+      "kind": "unit",
+      "pos": [
+        90,
+        5.5,
+        -100
+      ],
+      "face": "+z"
+    },
+    {
+      "id": "pipe-s-9",
+      "kind": "pipe",
+      "pos": [
+        0,
+        9,
+        100
+      ],
+      "face": "-z",
+      "size": [
+        200,
+        0.22,
+        0.22
+      ]
+    },
+    {
+      "id": "pipe-s-9.6",
+      "kind": "pipe",
+      "pos": [
+        0,
+        9.6,
+        100
+      ],
+      "face": "-z",
+      "size": [
+        200,
+        0.22,
+        0.22
+      ]
+    },
+    {
+      "id": "unit-s--90",
+      "kind": "unit",
+      "pos": [
+        -90,
+        5.5,
+        100
+      ],
+      "face": "-z"
+    },
+    {
+      "id": "unit-s--50",
+      "kind": "unit",
+      "pos": [
+        -50,
+        5.5,
+        100
+      ],
+      "face": "-z"
+    },
+    {
+      "id": "unit-s--30",
+      "kind": "unit",
+      "pos": [
+        -30,
+        5.5,
+        100
+      ],
+      "face": "-z"
+    },
+    {
+      "id": "unit-s--10",
+      "kind": "unit",
+      "pos": [
+        -10,
+        5.5,
+        100
+      ],
+      "face": "-z"
+    },
+    {
+      "id": "unit-s-10",
+      "kind": "unit",
+      "pos": [
+        10,
+        5.5,
+        100
+      ],
+      "face": "-z"
+    },
+    {
+      "id": "unit-s-30",
+      "kind": "unit",
+      "pos": [
+        30,
+        5.5,
+        100
+      ],
+      "face": "-z"
+    },
+    {
+      "id": "unit-s-50",
+      "kind": "unit",
+      "pos": [
+        50,
+        5.5,
+        100
+      ],
+      "face": "-z"
+    },
+    {
+      "id": "unit-s-90",
+      "kind": "unit",
+      "pos": [
+        90,
+        5.5,
+        100
+      ],
+      "face": "-z"
+    },
+    {
+      "id": "pipe-w-9",
+      "kind": "pipe",
+      "pos": [
+        -100,
+        9,
+        0
+      ],
+      "face": "+x",
+      "size": [
+        200,
+        0.22,
+        0.22
+      ]
+    },
+    {
+      "id": "pipe-w-9.6",
+      "kind": "pipe",
+      "pos": [
+        -100,
+        9.6,
+        0
+      ],
+      "face": "+x",
+      "size": [
+        200,
+        0.22,
+        0.22
+      ]
+    },
+    {
+      "id": "unit-w--90",
+      "kind": "unit",
+      "pos": [
+        -100,
+        5.5,
+        -90
+      ],
+      "face": "+x"
+    },
+    {
+      "id": "unit-w--50",
+      "kind": "unit",
+      "pos": [
+        -100,
+        5.5,
+        -50
+      ],
+      "face": "+x"
+    },
+    {
+      "id": "unit-w--30",
+      "kind": "unit",
+      "pos": [
+        -100,
+        5.5,
+        -30
+      ],
+      "face": "+x"
+    },
+    {
+      "id": "unit-w--10",
+      "kind": "unit",
+      "pos": [
+        -100,
+        5.5,
+        -10
+      ],
+      "face": "+x"
+    },
+    {
+      "id": "unit-w-10",
+      "kind": "unit",
+      "pos": [
+        -100,
+        5.5,
+        10
+      ],
+      "face": "+x"
+    },
+    {
+      "id": "unit-w-30",
+      "kind": "unit",
+      "pos": [
+        -100,
+        5.5,
+        30
+      ],
+      "face": "+x"
+    },
+    {
+      "id": "unit-w-50",
+      "kind": "unit",
+      "pos": [
+        -100,
+        5.5,
+        50
+      ],
+      "face": "+x"
+    },
+    {
+      "id": "unit-w-90",
+      "kind": "unit",
+      "pos": [
+        -100,
+        5.5,
+        90
+      ],
+      "face": "+x"
+    },
+    {
+      "id": "pipe-e-9",
+      "kind": "pipe",
+      "pos": [
+        100,
+        9,
+        0
+      ],
+      "face": "-x",
+      "size": [
+        200,
+        0.22,
+        0.22
+      ]
+    },
+    {
+      "id": "pipe-e-9.6",
+      "kind": "pipe",
+      "pos": [
+        100,
+        9.6,
+        0
+      ],
+      "face": "-x",
+      "size": [
+        200,
+        0.22,
+        0.22
+      ]
+    },
+    {
+      "id": "unit-e--90",
+      "kind": "unit",
+      "pos": [
+        100,
+        5.5,
+        -90
+      ],
+      "face": "-x"
+    },
+    {
+      "id": "unit-e--50",
+      "kind": "unit",
+      "pos": [
+        100,
+        5.5,
+        -50
+      ],
+      "face": "-x"
+    },
+    {
+      "id": "unit-e--30",
+      "kind": "unit",
+      "pos": [
+        100,
+        5.5,
+        -30
+      ],
+      "face": "-x"
+    },
+    {
+      "id": "unit-e--10",
+      "kind": "unit",
+      "pos": [
+        100,
+        5.5,
+        -10
+      ],
+      "face": "-x"
+    },
+    {
+      "id": "unit-e-10",
+      "kind": "unit",
+      "pos": [
+        100,
+        5.5,
+        10
+      ],
+      "face": "-x"
+    },
+    {
+      "id": "unit-e-30",
+      "kind": "unit",
+      "pos": [
+        100,
+        5.5,
+        30
+      ],
+      "face": "-x"
+    },
+    {
+      "id": "unit-e-50",
+      "kind": "unit",
+      "pos": [
+        100,
+        5.5,
+        50
+      ],
+      "face": "-x"
+    },
+    {
+      "id": "unit-e-90",
+      "kind": "unit",
+      "pos": [
+        100,
+        5.5,
+        90
+      ],
+      "face": "-x"
+    },
+    {
+      "id": "mast-wall--100--100",
+      "kind": "mast",
+      "pos": [
+        -100.49999999999999,
+        26,
+        -100.49999999999999
+      ],
+      "size": [
+        0.25,
+        8,
+        0.25
+      ]
+    },
+    {
+      "id": "mast-wall-100--100",
+      "kind": "mast",
+      "pos": [
+        100.49999999999999,
+        26,
+        -100.49999999999999
+      ],
+      "size": [
+        0.25,
+        8,
+        0.25
+      ]
+    },
+    {
+      "id": "mast-wall--100-100",
+      "kind": "mast",
+      "pos": [
+        -100.49999999999999,
+        26,
+        100.49999999999999
+      ],
+      "size": [
+        0.25,
+        8,
+        0.25
+      ]
+    },
+    {
+      "id": "mast-wall-100-100",
+      "kind": "mast",
+      "pos": [
+        100.49999999999999,
+        26,
+        100.49999999999999
+      ],
+      "size": [
+        0.25,
+        8,
+        0.25
+      ]
+    },
+    {
+      "id": "mast-wall-0--100",
+      "kind": "mast",
+      "pos": [
+        0,
+        26,
+        -100.49999999999999
+      ],
+      "size": [
+        0.25,
+        8,
+        0.25
+      ]
+    },
+    {
+      "id": "mast-wall-0-100",
+      "kind": "mast",
+      "pos": [
+        0,
+        26,
+        100.49999999999999
+      ],
+      "size": [
+        0.25,
+        8,
+        0.25
+      ]
+    },
+    {
+      "id": "mast-wall--100-0",
+      "kind": "mast",
+      "pos": [
+        -100.49999999999999,
+        26,
+        0
+      ],
+      "size": [
+        0.25,
+        8,
+        0.25
+      ]
+    },
+    {
+      "id": "mast-wall-100-0",
+      "kind": "mast",
+      "pos": [
+        100.49999999999999,
+        26,
+        0
+      ],
+      "size": [
+        0.25,
+        8,
+        0.25
+      ]
+    },
+    {
+      "id": "mast-spire-n",
+      "kind": "mast",
+      "pos": [
+        4.5,
+        30.5,
+        -14.5
+      ],
+      "size": [
+        0.15,
+        5,
+        0.15
+      ]
+    },
+    {
+      "id": "mast-spire-s",
+      "kind": "mast",
+      "pos": [
+        4.5,
+        30.5,
+        19.5
+      ],
+      "size": [
+        0.15,
+        5,
+        0.15
+      ]
+    },
+    {
+      "id": "mast-spire-nw",
+      "kind": "mast",
+      "pos": [
+        -61.5,
+        30.5,
+        -62
+      ],
+      "size": [
+        0.15,
+        5,
+        0.15
+      ]
+    },
+    {
+      "id": "mast-spire-se",
+      "kind": "mast",
+      "pos": [
+        70.5,
+        30.5,
+        67
+      ],
+      "size": [
+        0.15,
+        5,
+        0.15
+      ]
+    },
+    {
+      "id": "mast-spire-ne",
+      "kind": "mast",
+      "pos": [
+        70.5,
+        30.5,
+        -62
+      ],
+      "size": [
+        0.15,
+        5,
+        0.15
+      ]
+    },
+    {
+      "id": "mast-spire-sw",
+      "kind": "mast",
+      "pos": [
+        -61.5,
+        30.5,
+        67
+      ],
+      "size": [
+        0.15,
+        5,
+        0.15
+      ]
+    },
+    {
+      "id": "mast-tower-1",
+      "kind": "mast",
+      "pos": [
+        -49,
+        16,
+        11
+      ],
+      "size": [
+        0.2,
+        6,
+        0.2
+      ]
+    },
+    {
+      "id": "mast-crane-1",
+      "kind": "mast",
+      "pos": [
+        66,
+        11,
+        -43
+      ],
+      "size": [
+        0.15,
+        3,
+        0.15
+      ]
+    },
+    {
+      "id": "hook-crane-1",
+      "kind": "hook",
+      "pos": [
+        72,
+        10,
+        -43
+      ],
+      "size": [
+        0.6,
+        3.6,
+        0.6
+      ]
+    },
+    {
+      "id": "mast-tower--1",
+      "kind": "mast",
+      "pos": [
+        49,
+        16,
+        -11
+      ],
+      "size": [
+        0.2,
+        6,
+        0.2
+      ]
+    },
+    {
+      "id": "mast-crane--1",
+      "kind": "mast",
+      "pos": [
+        -66,
+        11,
+        43
+      ],
+      "size": [
+        0.15,
+        3,
+        0.15
+      ]
+    },
+    {
+      "id": "hook-crane--1",
+      "kind": "hook",
+      "pos": [
+        -72,
+        10,
+        43
+      ],
+      "size": [
+        0.6,
+        3.6,
+        0.6
+      ]
+    },
+    {
+      "id": "tower-0",
+      "kind": "tower",
+      "pos": [
+        7,
+        0,
+        239
+      ],
+      "size": [
+        24,
+        84,
+        15
+      ]
+    },
+    {
+      "id": "tower-1",
+      "kind": "tower",
+      "pos": [
+        62,
+        0,
+        190
+      ],
+      "size": [
+        15,
+        41,
+        30
+      ]
+    },
+    {
+      "id": "tower-2",
+      "kind": "tower",
+      "pos": [
+        109,
+        0,
+        182
+      ],
+      "size": [
+        21,
+        65,
+        24
+      ]
+    },
+    {
+      "id": "tower-3",
+      "kind": "tower",
+      "pos": [
+        152,
+        0,
+        172
+      ],
+      "size": [
+        21,
+        62,
+        28
+      ]
+    },
+    {
+      "id": "tower-4",
+      "kind": "tower",
+      "pos": [
+        161,
+        0,
+        132
+      ],
+      "size": [
+        15,
+        75,
+        27
+      ]
+    },
+    {
+      "id": "tower-5",
+      "kind": "tower",
+      "pos": [
+        166,
+        0,
+        86
+      ],
+      "size": [
+        30,
+        44,
+        21
+      ]
+    },
+    {
+      "id": "tower-6",
+      "kind": "tower",
+      "pos": [
+        177,
+        0,
+        46
+      ],
+      "size": [
+        16,
+        69,
+        26
+      ]
+    },
+    {
+      "id": "tower-7",
+      "kind": "tower",
+      "pos": [
+        216,
+        0,
+        20
+      ],
+      "size": [
+        29,
+        51,
+        23
+      ]
+    },
+    {
+      "id": "tower-8",
+      "kind": "tower",
+      "pos": [
+        195,
+        0,
+        -29
+      ],
+      "size": [
+        22,
+        74,
+        19
+      ]
+    },
+    {
+      "id": "tower-9",
+      "kind": "tower",
+      "pos": [
+        223,
+        0,
+        -77
+      ],
+      "size": [
+        24,
+        57,
+        30
+      ]
+    },
+    {
+      "id": "tower-10",
+      "kind": "tower",
+      "pos": [
+        156,
+        0,
+        -103
+      ],
+      "size": [
+        18,
+        84,
+        23
+      ]
+    },
+    {
+      "id": "tower-11",
+      "kind": "tower",
+      "pos": [
+        131,
+        0,
+        -134
+      ],
+      "size": [
+        21,
+        47,
+        14
+      ]
+    },
+    {
+      "id": "tower-12",
+      "kind": "tower",
+      "pos": [
+        118,
+        0,
+        -196
+      ],
+      "size": [
+        16,
+        65,
+        26
+      ]
+    },
+    {
+      "id": "tower-13",
+      "kind": "tower",
+      "pos": [
+        61,
+        0,
+        -192
+      ],
+      "size": [
+        21,
+        70,
+        27
+      ]
+    },
+    {
+      "id": "tower-14",
+      "kind": "tower",
+      "pos": [
+        30,
+        0,
+        -207
+      ],
+      "size": [
+        27,
+        86,
+        19
+      ]
+    },
+    {
+      "id": "tower-15",
+      "kind": "tower",
+      "pos": [
+        -21,
+        0,
+        -188
+      ],
+      "size": [
+        18,
+        85,
+        25
+      ]
+    },
+    {
+      "id": "tower-16",
+      "kind": "tower",
+      "pos": [
+        -42,
+        0,
+        -174
+      ],
+      "size": [
+        19,
+        79,
+        26
+      ]
+    },
+    {
+      "id": "tower-17",
+      "kind": "tower",
+      "pos": [
+        -91,
+        0,
+        -190
+      ],
+      "size": [
+        26,
+        59,
+        19
+      ]
+    },
+    {
+      "id": "tower-18",
+      "kind": "tower",
+      "pos": [
+        -118,
+        0,
+        -148
+      ],
+      "size": [
+        28,
+        48,
+        25
+      ]
+    },
+    {
+      "id": "tower-19",
+      "kind": "tower",
+      "pos": [
+        -164,
+        0,
+        -124
+      ],
+      "size": [
+        18,
+        64,
+        19
+      ]
+    },
+    {
+      "id": "tower-20",
+      "kind": "tower",
+      "pos": [
+        -176,
+        0,
+        -99
+      ],
+      "size": [
+        21,
+        76,
+        28
+      ]
+    },
+    {
+      "id": "tower-21",
+      "kind": "tower",
+      "pos": [
+        -187,
+        0,
+        -41
+      ],
+      "size": [
+        25,
+        67,
+        15
+      ]
+    },
+    {
+      "id": "tower-22",
+      "kind": "tower",
+      "pos": [
+        -233,
+        0,
+        -3
+      ],
+      "size": [
+        23,
+        81,
+        15
+      ]
+    },
+    {
+      "id": "tower-23",
+      "kind": "tower",
+      "pos": [
+        -201,
+        0,
+        41
+      ],
+      "size": [
+        30,
+        84,
+        17
+      ]
+    },
+    {
+      "id": "tower-24",
+      "kind": "tower",
+      "pos": [
+        -220,
+        0,
+        80
+      ],
+      "size": [
+        27,
+        87,
+        29
+      ]
+    },
+    {
+      "id": "tower-25",
+      "kind": "tower",
+      "pos": [
+        -205,
+        0,
+        119
+      ],
+      "size": [
+        18,
+        87,
+        18
+      ]
+    },
+    {
+      "id": "tower-26",
+      "kind": "tower",
+      "pos": [
+        -154,
+        0,
+        175
+      ],
+      "size": [
+        24,
+        66,
+        20
+      ]
+    },
+    {
+      "id": "tower-27",
+      "kind": "tower",
+      "pos": [
+        -101,
+        0,
+        145
+      ],
+      "size": [
+        14,
+        45,
+        26
+      ]
+    },
+    {
+      "id": "tower-28",
+      "kind": "tower",
+      "pos": [
+        -80,
+        0,
+        184
+      ],
+      "size": [
+        22,
+        88,
+        17
+      ]
+    },
+    {
+      "id": "tower-29",
+      "kind": "tower",
+      "pos": [
+        -29,
+        0,
+        208
+      ],
+      "size": [
+        21,
+        65,
+        15
+      ]
+    }
+  ]
 }

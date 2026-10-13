@@ -1,8 +1,10 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
+import { PALETTE } from "./palette";
 import { rampSurface } from "./sim/collision";
 import { type Level, type LevelBox, toAabb } from "./sim/level";
-import { applyWorldUvs, numberTexture, surfaceTextures } from "./surfaces";
+import { applyWorldUvs, numberTexture, surfaceKind, surfaceTextures } from "./surfaces";
 
 /** Cheap stable hash (0..1) so each piece of greybox gets a slightly different shade. */
 function shade(id: string): number {
@@ -12,12 +14,13 @@ function shade(id: string): number {
 }
 
 /**
- * Surface material: the texture carries the palette colors (wall panels, floor plates),
- * the material color only varies brightness per box (0.7..1.1) so boxes stay distinguishable.
+ * Surface material: the texture carries the palette colors and says what the piece is (its
+ * `surface` in the level data: concrete, container steel, a walkway, a crate...). The material
+ * color only varies brightness per box (0.7..1.1) so boxes stay distinguishable.
  */
-function surfaceMaterial(id: string, kind: "wall" | "floor"): THREE.MeshLambertMaterial {
-  const tex = surfaceTextures()[kind];
-  const g = 0.7 + shade(id) * 0.4;
+function surfaceMaterial(b: LevelBox, face: "wall" | "floor"): THREE.MeshLambertMaterial {
+  const tex = surfaceTextures(surfaceKind(b.surface))[face];
+  const g = 0.7 + shade(b.id) * 0.4;
   return new THREE.MeshLambertMaterial({
     map: tex,
     color: new THREE.Color(g, g, g),
@@ -27,8 +30,8 @@ function surfaceMaterial(id: string, kind: "wall" | "floor"): THREE.MeshLambertM
 
 /** One material per box face, in BoxGeometry's group order: +X, -X, +Y (top), -Y, +Z, -Z. */
 function boxMaterials(b: LevelBox): THREE.Material[] {
-  const wall = surfaceMaterial(b.id, "wall");
-  const floor = surfaceMaterial(b.id, "floor");
+  const wall = surfaceMaterial(b, "wall");
+  const floor = surfaceMaterial(b, "floor");
   return [wall, wall, floor, floor, wall, wall];
 }
 
@@ -119,6 +122,78 @@ function rampGeometry(
   return new THREE.BufferGeometry().setFromPoints(pts);
 }
 
+/** How tall a light strip is, and how far it stands out from the face it is on (metres). */
+const STRIP_TALL = 0.07;
+const STRIP_PROUD = 0.03;
+
+/**
+ * Light strips (the style guide's roadmap step 4), as two unlit meshes, one per colour:
+ *
+ *   SIGNAL (technology) where a piece's `glow` says: "edges" runs a strip along both long sides
+ *   of a walkway just under its top, so decks, catwalks, gates and bridges read from below and
+ *   from far off; "door-x" and "door-z" run one along the bottom of the faces you walk through,
+ *   the head of a doorway or passage.
+ *
+ *   ACID (traversal: "you can go here") along both edges of every ramp's slope.
+ *
+ * Visual only: nothing here is in the collision world.
+ */
+function lightStrips(level: Level): THREE.Group {
+  const signal: THREE.BufferGeometry[] = [];
+  const acid: THREE.BufferGeometry[] = [];
+  const bar = (into: THREE.BufferGeometry[], size: [number, number, number]) => {
+    const g = new THREE.BoxGeometry(...size);
+    into.push(g);
+    return g;
+  };
+  for (const b of level.boxes) {
+    if (!b.glow) continue;
+    const [w, h, d] = b.size;
+    const [x, y, z] = b.pos;
+    if (b.glow === "edges") {
+      const up = y + h / 2 - STRIP_TALL / 2 - 0.03;
+      for (const s of [-1, 1]) {
+        if (w >= d) bar(signal, [w, STRIP_TALL, STRIP_PROUD]).translate(x, up, z + (s * d) / 2);
+        else bar(signal, [STRIP_PROUD, STRIP_TALL, d]).translate(x + (s * w) / 2, up, z);
+      }
+    } else if (b.glow === "door-x" || b.glow === "door-z") {
+      const low = y - h / 2 + STRIP_TALL / 2 + 0.03;
+      for (const s of [-1, 1]) {
+        if (b.glow === "door-z")
+          bar(signal, [w, STRIP_TALL, STRIP_PROUD]).translate(x, low, z + (s * d) / 2);
+        else bar(signal, [STRIP_PROUD, STRIP_TALL, d]).translate(x + (s * w) / 2, low, z);
+      }
+    }
+  }
+  for (const r of level.ramps) {
+    const [w, h, d] = r.size;
+    const [x, y, z] = r.pos;
+    const alongX = r.rises[1] === "x";
+    const up = r.rises[0] === "+" ? 1 : -1;
+    const run = alongX ? w : d;
+    const tilt = Math.atan2(h, run) * up;
+    const length = Math.hypot(run, h);
+    for (const s of [-1, 1]) {
+      // A flat bar the length of the slope, tilted to lie on it, a hair above, at each side edge.
+      const g = alongX
+        ? bar(acid, [length, 0.03, 0.12]).rotateZ(tilt)
+        : bar(acid, [0.12, 0.03, length]).rotateX(-tilt);
+      const side = (s * ((alongX ? d : w) - 0.3)) / 2;
+      g.translate(x + (alongX ? 0 : side), y + 0.03, z + (alongX ? side : 0));
+    }
+  }
+  const group = new THREE.Group();
+  for (const [geos, color] of [
+    [signal, PALETTE.SIGNAL],
+    [acid, PALETTE.ACID],
+  ] as const) {
+    if (geos.length === 0) continue;
+    group.add(new THREE.Mesh(mergeGeometries(geos), new THREE.MeshBasicMaterial({ color })));
+    for (const g of geos) g.dispose();
+  }
+  return group;
+}
+
 export function buildLevelMeshes(level: Level): THREE.Group {
   const group = new THREE.Group();
   for (const b of level.boxes) {
@@ -133,10 +208,11 @@ export function buildLevelMeshes(level: Level): THREE.Group {
     const geo = rampGeometry(toAabb(r), r.rises);
     geo.computeVertexNormals();
     applyWorldUvs(geo, new THREE.Vector3());
-    const mat = surfaceMaterial(r.id, "floor");
+    const mat = surfaceMaterial(r, "floor");
     mat.side = THREE.DoubleSide;
     group.add(new THREE.Mesh(geo, mat));
   }
   group.add(paintedNumbers(level));
+  group.add(lightStrips(level));
   return group;
 }

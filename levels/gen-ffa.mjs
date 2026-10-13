@@ -7,6 +7,10 @@
 //   centre:      three heights. A sunken pit (-3 m) under a cross of bridges with the crown on
 //                top; a ground ring with a building in each corner; a high loop of decks, roofs,
 //                catwalks and a gantry (4 to 7 m).
+//   spires:      six open towers 30 m tall: one north and one south of the pit, and one in the
+//                middle of each corner district. Skybridges 26.5 m up join them all: a ring
+//                round the four corners, and a spine from its north side to its south through
+//                the two centre spires. The high ground, and a long way to fall.
 //   corners:     "blocks" (north-west, south-east): four buildings on streets, one a room, one
 //                with a passage, a skybridge between two roofs.
 //                "yard" (north-east, south-west): staggered rows of containers, some stacked,
@@ -50,8 +54,53 @@ const shape = (xs, [y0, y1], zs) => {
     size: [x1 - x0, y1 - y0, z1 - z0],
   };
 };
-const span = (id, xs, ys, zs) =>
-  boxes.push({ id: at.pre + id, ...shape(xs, ys, zs) });
+/**
+ * How a piece is drawn (the client's levelRender.ts; the server ignores both): `surface` is which
+ * generated textures it gets, `glow` where it carries a SIGNAL light strip ("edges": along its
+ * long top edges, a walkway; "door-x" or "door-z": along the bottom of its faces across X or Z,
+ * the head of a doorway or passage that runs that way). Decided here from the piece's own name
+ * (without the district prefix), first match wins. Looks only: nothing here changes the shapes.
+ */
+const SURFACES = [
+  [/^floor-base$/, "pit"],
+  [/^floor-\d+$/, "ground"],
+  [/crate|cover/, "crate"],
+  [/^box-\d+$/, "container"],
+  [/post|pillar|column|leg|^cross-/, "pillar"],
+  [/step/, "concrete"],
+  [/^gate-\d+-wall$/, "barrier"],
+  [/^(deck|catwalk|gantry|gate|skybridge|crane-beam|bridge|crown|tunnel-roof|spire|sky-)/, "metal"],
+  [/^(rim|kerb)-/, "stripe"],
+  [/^room|^tower$/, "panel"],
+  [/^(run-wall|alley)-/, "panel"],
+  [/wall/, "barrier"],
+];
+const WALKWAY =
+  /^(deck-[ne]|deck-link|catwalk-[ns]|gantry|gate-\d+|skybridge|crane-beam|bridge(-\w+)?|crown(-[we])?|spire-\w+-floor-\d|sky-[a-z-]+)$/;
+const DOORS = {
+  "room-lintel-n": "door-z",
+  "room-lintel-e": "door-x",
+  "pass-roof": "door-x",
+  "nw-block-roof": "door-x",
+  "se-block-top": "door-z",
+  "hall-n-top": "door-z",
+  "hall-s-top": "door-z",
+  "tunnel-roof": "door-x",
+};
+const look = (id, glow) => {
+  // (The perimeter is the only "wall-n/s/w/e" outside a district: the districts' are low walls.)
+  const perimeter = at.pre === "" && /^wall-[nswe]$/.test(id);
+  let surface = perimeter
+    ? "panel"
+    : (SURFACES.find(([re]) => re.test(id))?.[1] ?? "concrete");
+  // Every other container is the light kind, so a yard is not one colour.
+  if (surface === "container" && (Number(id.at(-1)) + Number(id.at(-2))) % 2)
+    surface = "container-light";
+  const g = glow ?? DOORS[id] ?? (WALKWAY.test(id) ? "edges" : undefined);
+  return g ? { surface, glow: g } : { surface };
+};
+const span = (id, xs, ys, zs, glow) =>
+  boxes.push({ id: at.pre + id, ...shape(xs, ys, zs), ...look(id, glow) });
 const block = (id, xs, zs, h) => span(id, xs, [0, h], zs);
 const ramp = (id, xs, ys, zs, rises) => {
   const flipped = (rises[1] === "x" ? at.fx : at.fz) < 0;
@@ -59,6 +108,7 @@ const ramp = (id, xs, ys, zs, rises) => {
     id: at.pre + id,
     ...shape(xs, ys, zs),
     rises: flipped ? FLIP[rises] : rises,
+    surface: "ramp",
   });
 };
 const hole = (xs, zs) => holes.push({ x: tx(xs), z: tz(zs) });
@@ -83,17 +133,18 @@ const place = (pre, ox, oz, fx, fz, build) => {
 const room = (id, [x0, x1], [z0, z1], h, doors) => {
   const wall = (name, side, fixed, [a, b]) => {
     const along = side === "n" || side === "s";
-    const piece = (n, [p, q], ys) =>
+    // (The piece over a door carries a light strip: a wall along X is walked through along Z.)
+    const piece = (n, [p, q], ys, door) =>
       along
-        ? span(`${id}-${name}${n}`, [p, q], ys, fixed)
-        : span(`${id}-${name}${n}`, fixed, ys, [p, q]);
+        ? span(`${id}-${name}${n}`, [p, q], ys, fixed, door && "door-z")
+        : span(`${id}-${name}${n}`, fixed, ys, [p, q], door && "door-x");
     let from = a;
     let n = 0;
     for (const d of doors
       .filter((d) => d.side === side)
       .sort((p, q) => p.at[0] - q.at[0])) {
       if (d.at[0] > from) piece(n++, [from, d.at[0]], [0, h]);
-      piece(n++, d.at, [2.6, h]);
+      piece(n++, d.at, [2.6, h], true);
       from = d.at[1];
     }
     if (b > from) piece(n, [from, b], [0, h]);
@@ -236,21 +287,77 @@ block("gantry-post-e", [1, 2], [21, 22], CAT_Y);
 
 // --- Mid-height blocks in the open stretches of the ring (3.5 m: a jump and a mantle to get on
 // top), and lower walls and crates, so a fight is never more than a couple of steps from cover.
-block("north-block", [-8, 0], [-21, -15], 3.5);
 block("west-block", [-22, -17], [-11, -5], 3.5);
-block("south-block", [-9, -3], [13, 18], 3.5);
 block("east-block", [19, 22], [5, 10], 3.5);
-block("north-crate", [4, 6], [-16, -14], 1.2);
+block("north-crate", [9, 11], [-16, -14], 1.2);
 block("north-wall", [7, 8], [-21, -15], 2.2);
 block("west-wall", [-15, -14], [-9, -4], 2.2);
 block("west-crate", [-20, -18], [5, 7], 1.2);
 block("west-wall-s", [-15, -14], [5, 10], 2.2);
 block("south-wall", [-3, 3], [23.5, 24.5], 2.5);
-block("south-wall-e", [4, 5], [13, 18], 2.2);
+block("south-wall-e", [6, 7], [13, 18], 2.2);
 block("se-wall", [22, 23], [23, 28], 2.5);
 block("se-crate", [22, 24], [16, 18], 1.2);
 block("east-wall", [20, 21], [-9, -5], 2.2);
 block("sw-wall", [-22, -18], [25, 26], 2.5);
+
+// --- The spires: open towers 30 m tall. Two stand north and south of the pit (where the north
+// and south blocks stood); one stands in the middle of each corner district (see blocks and
+// yard). Each is on four legs with nothing between them at ground level, so you walk straight
+// under it. Above, half-floors alternate west and east every 3.5 m, and under the inner edge of
+// each hangs a wall down to the level of the floor below on the other side: stand on that floor,
+// jump against the wall, and the mantle puts you on the next (a 3.5 m climb, like the blocks in
+// the ring; one jump is enough). The walls also stop you walking off the inner edge. A step
+// beside each gets you up from the ground. The top is 30 m: the drop the rolling dive wants for
+// its one-hit kill. The seventh floor, 26.5 m up, is the one the skybridges are on.
+const SPIRE_FLOORS = [5.5, 9, 12.5, 16, 19.5, 23, 26.5, 30];
+const SKY = 6; // the floor the skybridges are on
+const SKY_Y = SPIRE_FLOORS[SKY];
+const ordered = (a, b) => [a, b].sort((p, q) => p - q);
+/** Where each spire's skybridge floor is, in world coordinates: the bridges are built to meet it. */
+const spires = {};
+/** A spire `name` centred on (0, cz) in the current district's coordinates. */
+function spire(name, cz) {
+  const zs = [cz - 3, cz + 3];
+  for (const [lx, lz] of [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ]) {
+    const x0 = lx < 0 ? -5 : 4;
+    const z0 = lz < 0 ? zs[0] : zs[1] - 1;
+    block(
+      `spire-${name}-leg-${lz < 0 ? "n" : "s"}${lx < 0 ? "w" : "e"}`,
+      [x0, x0 + 1],
+      [z0, z0 + 1],
+      SPIRE_FLOORS.at(-1) + 0.5,
+    );
+  }
+  SPIRE_FLOORS.forEach((y, i) => {
+    span(`spire-${name}-floor-${i}`, i % 2 === 0 ? [-4, 0] : [0, 4], [y - 0.5, y], zs);
+    if (i > 0)
+      span(
+        `spire-${name}-wall-${i}`,
+        i % 2 === 0 ? [-0.3, 0] : [0, 0.3],
+        [SPIRE_FLOORS[i - 1], y - 0.5],
+        zs,
+      );
+  });
+  // Cover on the top, and on the skybridge floor.
+  const top = SPIRE_FLOORS.at(-1);
+  span(`spire-${name}-cover-top`, [1, 3], [top, top + 1.2], [cz - 0.5, cz + 0.5]);
+  span(`spire-${name}-cover-mid`, [-3.5, -2.5], [SKY_Y, SKY_Y + 1.2], [cz - 2, cz + 2]);
+  block(`spire-${name}-step`, [-7.5, -5], [cz - 1.5, cz + 1.5], 3);
+  spires[name] = {
+    x: at.ox,
+    z: tz([cz, cz])[0],
+    floor: tx(SKY % 2 === 0 ? [-4, 0] : [0, 4]), // the skybridge floor's extent along X
+    depth: tz(zs),
+  };
+}
+spire("n", -17);
+spire("s", 17);
 
 // The centre's own spawn pads, each behind or under something.
 spawn("nw", -27, -26);
@@ -289,11 +396,13 @@ function blocks() {
   span("low-cover", [14, 18], [4, 5.2], [16, 17]);
   // Street cover.
   block("crate-a", [-2, 0], [-4, -2], 1.2);
-  block("wall-a", [-5, -4], [-2, 6], 2.2);
+  block("wall-a", [-10, -9], [-2, 6], 2.2);
   block("crate-b", [14, 16], [-2, 0], 1.2);
-  block("wall-b", [0, 6], [3, 4], 2.2);
+  block("wall-b", [0, 6], [6, 7], 2.2);
   block("crate-c", [-22, -20], [-3, -1], 1.2);
   spawn("room", 15, -19);
+  // A spire where the streets cross (the two walls above stand clear of its legs and its step).
+  spire(at.pre.slice(0, -1), 1.5);
   spawn("street", -2, 12);
 }
 
@@ -320,6 +429,8 @@ function yard() {
   block("crate-a", [-4, -2], [-10, -8], 1.2);
   block("crate-b", [4, 6], [10, 12], 1.2);
   block("wall-a", [-14, -8], [25, 26], 2.5);
+  // A spire in the lane between the two middle rows.
+  spire(at.pre.slice(0, -1), 1.5);
   spawn("lane", -16, 0.5);
   spawn("crane", 8, 26.5);
 }
@@ -387,6 +498,45 @@ place("n", 0, -PITCH, 1, 1, basin);
 place("s", 0, PITCH, -1, 1, basin);
 place("w", -PITCH, 0, 1, 1, terraces);
 place("e", PITCH, 0, -1, -1, terraces);
+
+// ============================== Skybridges ==============================
+// 26.5 m up, 3 m wide, each from one spire's seventh floor to another's: a ring round the four
+// corner spires, and a spine from the middle of its north side to the middle of its south,
+// through the two centre spires (which the first bridge already joins over the pit). A bridge
+// that runs along X ends where the floor it meets ends, which may be half way through the spire.
+// Low cover stands on alternate sides every 24 m: a bridge is a long way to be seen from.
+{
+  const ys = [SKY_Y - 0.5, SKY_Y];
+  // `oneSide`: all the cover on the far side (the spine: its near side runs on into the spires'
+  // half-floors, so that side is the way through).
+  const bridge = (id, xs, zs, oneSide = false) => {
+    span(id, xs, ys, zs);
+    const alongX = xs[1] - xs[0] > zs[1] - zs[0];
+    const [a, b] = alongX ? xs : zs;
+    let n = 0;
+    for (let c = a + 12; c < b - 6; c += 24, n++) {
+      const side = n % 2 === 0 && !oneSide ? [0, 1] : [2, 3]; // across the 3 m width
+      const across = alongX ? [zs[0] + side[0], zs[0] + side[1]] : [xs[0] + side[0], xs[0] + side[1]];
+      const along = [c, c + 2];
+      span(
+        `${id}-cover-${n}`,
+        alongX ? along : across,
+        [SKY_Y, SKY_Y + 1.2],
+        alongX ? across : along,
+      );
+    }
+  };
+  const { n, s, nw, ne, sw, se } = spires;
+  bridge("sky-centre", [-1.5, 1.5], [n.depth[1], s.depth[0]], true);
+  // The ring. (North and south run along X; west and east along Z, between the spires' faces.)
+  bridge("sky-north", [nw.floor[1], ne.floor[0]], [nw.z - 1.5, nw.z + 1.5]);
+  bridge("sky-south", [sw.floor[1], se.floor[0]], [sw.z - 1.5, sw.z + 1.5]);
+  bridge("sky-west", [nw.x - 1.5, nw.x + 1.5], [nw.depth[1], sw.depth[0]]);
+  bridge("sky-east", [ne.x - 1.5, ne.x + 1.5], [ne.depth[1], se.depth[0]]);
+  // The spine: from the ring's north side to the north spire, and from the south spire on.
+  bridge("sky-spine-n", [-1.5, 1.5], [nw.z + 1.5, n.depth[0]], true);
+  bridge("sky-spine-s", [-1.5, 1.5], [s.depth[1], sw.z - 1.5], true);
+}
 
 // ============================== Avenues and ring road ==============================
 // The avenues run at |x| or |z| from CORE to PITCH - 28. A gate is a walkway at 5 m across the
@@ -482,19 +632,153 @@ span("floor-base", [-E, E], [PIT_Y - 1, PIT_Y], [-E, E]);
     span(`floor-${n++}`, slab.x, [PIT_Y, 0], slab.z);
 }
 
+// ============================== Looks only ==============================
+// Everything below is drawn by the client and is in nobody's way: the server and the movement
+// code never see it, and none of it can be touched. It is either thin, high up, flat on a
+// surface, or outside the perimeter wall.
+
+// --- District signs: each district has a compass code, painted on the perimeter wall behind it
+// (seen over the roofs from anywhere) and on the ground of every avenue that leads into it.
+const signs = [];
+const DISTRICTS = [
+  ["NW", -1, -1],
+  ["N", 0, -1],
+  ["NE", 1, -1],
+  ["W", -1, 0],
+  ["C", 0, 0],
+  ["E", 1, 0],
+  ["SW", -1, 1],
+  ["S", 0, 1],
+  ["SE", 1, 1],
+];
+for (const [code, gx, gz] of DISTRICTS) {
+  const [cx, cz] = [gx * PITCH, gz * PITCH];
+  // On the wall: high above the sector numbers, facing into the arena.
+  if (gz !== 0)
+    signs.push({
+      id: `sign-wall-${code}-z`,
+      text: code,
+      pos: [cx, 20, gz * (HALF - 0.04)],
+      size: 7,
+      face: gz < 0 ? "+z" : "-z",
+    });
+  if (gx !== 0)
+    signs.push({
+      id: `sign-wall-${code}-x`,
+      text: code,
+      pos: [gx * (HALF - 0.04), 20, cz],
+      size: 7,
+      face: gx < 0 ? "+x" : "-x",
+    });
+  // On the ground: just outside each edge that has a neighbour, the top of the letters pointing
+  // into the district, so you read it as you walk in.
+  for (const [dx, dz] of [
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ]) {
+    if (Math.abs(gx + dx) > 1 || Math.abs(gz + dz) > 1) continue;
+    const out = (gx === 0 && gz === 0 ? CORE : 28) + 2.2;
+    signs.push({
+      id: `sign-floor-${code}-${dx}${dz}`,
+      text: code,
+      pos: [cx + dx * out, 0.03, cz + dz * out],
+      size: 2.6,
+      face: "up",
+      yaw: Math.atan2(dx, dz), // the letters' tops point back into the district
+    });
+  }
+}
+
+// --- Props.
+const props = [];
+const prop = (kind, id, pos, extra = {}) =>
+  props.push({ id: `${kind}-${id}`, kind, pos, ...extra });
+// Lamp posts in the margin at every district corner, their arms out over the crossing.
+for (const [code, gx, gz] of DISTRICTS)
+  for (const sx of [-1, 1])
+    for (const sz of [-1, 1]) {
+      const r = (gx === 0 && gz === 0 ? CORE : 28) + 0.9;
+      prop("lamp", `${code}-${sx}${sz}`, [gx * PITCH + sx * r, 0, gz * PITCH + sz * r], {
+        yaw: Math.atan2(sx, sz),
+      });
+    }
+// A pair of pipes and a row of wall units round the inside of the perimeter wall.
+for (const [name, face, fixed] of [
+  ["n", "+z", -HALF],
+  ["s", "-z", HALF],
+  ["w", "+x", -HALF],
+  ["e", "-x", HALF],
+]) {
+  const alongX = face[1] === "z";
+  const at3 = (c, y) => (alongX ? [c, y, fixed] : [fixed, y, c]);
+  for (const y of [9, 9.6])
+    prop("pipe", `${name}-${y}`, at3(0, y), { face, size: [2 * HALF, 0.22, 0.22] });
+  for (let c = -90; c <= 90; c += 20)
+    if (Math.abs(Math.abs(c) - PITCH) > 6 && Math.abs(c) > 6)
+      prop("unit", `${name}-${c}`, at3(c, 5.5), { face });
+}
+// Masts with a light on top, on the things nobody can stand on, and on the perimeter wall.
+for (const [x, z] of [
+  [-HALF, -HALF],
+  [HALF, -HALF],
+  [-HALF, HALF],
+  [HALF, HALF],
+  [0, -HALF],
+  [0, HALF],
+  [-HALF, 0],
+  [HALF, 0],
+])
+  prop("mast", `wall-${x}-${z}`, [x * 1.005, WALL_H, z * 1.005], { size: [0.25, 8, 0.25] });
+for (const [name, sp] of Object.entries(spires))
+  prop("mast", `spire-${name}`, [sp.x + 4.5, 30.5, sp.depth[1] - 0.5], { size: [0.15, 5, 0.15] });
+// (The terraces' tower and the yards' crane are placed twice, the second time turned round.)
+for (const s of [1, -1]) {
+  prop("mast", `tower-${s}`, [s * (-PITCH + 17), 16, s * 11], { size: [0.2, 6, 0.2] });
+  prop("mast", `crane-${s}`, [s * PITCH, 11, s * (-PITCH + 23)], { size: [0.15, 3, 0.15] });
+  // The crane's hook hangs under the middle of its beam, well above head height.
+  prop("hook", `crane-${s}`, [s * (PITCH + 6), 10, s * (-PITCH + 23)], { size: [0.6, 3.6, 0.6] });
+}
+// The city beyond the wall: dark towers with a few lit windows, only ever seen over the top of it.
+{
+  let seed = 7;
+  const rnd = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const N = 30;
+  for (let i = 0; i < N; i++) {
+    const a = ((i + rnd() * 0.6) / N) * Math.PI * 2;
+    const far = HALF * 1.45 + 30 + rnd() * 70;
+    const w = 14 + rnd() * 16;
+    const h = 38 + rnd() * 50;
+    prop(
+      "tower",
+      String(i),
+      [Math.round(Math.sin(a) * far), 0, Math.round(Math.cos(a) * far)],
+      { size: [Math.round(w), Math.round(h), Math.round(14 + rnd() * 16)] },
+    );
+  }
+}
+
 const level = {
   name: "ffa",
   version: 1,
+  // Looks: the FFA map is played at night (the client's sky, fog and lights; see main.ts).
+  sky: "night",
   bounds: { min: [-HALF, -5, -HALF], max: [HALF, 40, HALF] },
   boxes,
   ramps,
   controlPoints: [],
   spawnZones,
   targets: [],
+  signs,
+  props,
 };
 
 const out = fileURLToPath(new URL("./ffa.json", import.meta.url));
 writeFileSync(out, `${JSON.stringify(level, null, 2)}\n`);
 console.log(
-  `wrote ${out}: ${boxes.length} boxes, ${ramps.length} ramps, ${spawnZones.length} spawns`,
+  `wrote ${out}: ${boxes.length} boxes, ${ramps.length} ramps, ${spawnZones.length} spawns, ${signs.length} signs, ${props.length} props`,
 );

@@ -27,6 +27,23 @@ describe("the FFA map", () => {
     expect(level.targets).toHaveLength(0);
   });
 
+  it("carries its looks: night, a surface on every piece, district signs and props", () => {
+    expect(level.sky).toBe("night");
+    expect(level.boxes.every((b) => typeof b.surface === "string")).toBe(true);
+    expect(level.ramps.every((r) => r.surface === "ramp")).toBe(true);
+    // Every district's code is on the perimeter wall behind it and on the avenues into it.
+    for (const code of ["NW", "N", "NE", "W", "C", "E", "SW", "S", "SE"])
+      expect(level.signs.some((s) => s.text === code && s.face === "up")).toBe(true);
+    expect(level.signs.filter((s) => s.face !== "up")).toHaveLength(12);
+    // Props are looks only, so none may stand where a player walks: every one is thin (a lamp
+    // post), up on the wall, above head height, or outside the arena.
+    for (const p of level.props) {
+      const outside = Math.abs(p.pos[0]) >= HALF || Math.abs(p.pos[2]) >= HALF;
+      expect(p.kind === "lamp" || outside || p.pos[1] >= 5).toBe(true);
+    }
+    expect(level.props.filter((p) => p.kind === "lamp").length).toBeGreaterThan(20);
+  });
+
   it("has spawn pads all over the map, more than there are players", () => {
     expect(level.spawnZones.length).toBeGreaterThanOrEqual(16);
     // Every third of the map (a 3 x 3 grid of districts) has at least one.
@@ -188,6 +205,77 @@ describe("the FFA map", () => {
     }
     for (const pad of level.spawnZones)
       expect(seen[cell(pad.pos[0]) + cell(pad.pos[2]) * N], pad.id).toBe(1);
+  });
+
+  it("has six spires you can climb floor by floor", () => {
+    // One hop of the climb, on the south centre spire: from a half-floor, run at the wall under
+    // the edge of the next one (3.5 m up, on the other side) and jump; the mantle puts you on it.
+    // `hero` 1 is the Assassin, who has no second jump: its single jump has to be enough.
+    const hop = (hero: number, fromY: number, x: number, yaw: number) => {
+      let s = spawnState(x, fromY, 17);
+      let top = fromY;
+      for (let i = 0; i < 150; i++) {
+        s = stepPlayer(
+          s,
+          { ...emptyInput(), hero, moveZ: 1, yaw, jump: s.onGround && i > 5 },
+          world,
+          DT,
+        );
+        if (s.onGround) top = Math.max(top, s.y);
+        if (top > fromY + 1) break;
+      }
+      return top;
+    };
+    for (const hero of [0, 1]) {
+      expect(hop(hero, 3, -6.2, EAST), `hero ${hero}: step to the first floor`).toBeCloseTo(5.5);
+      expect(hop(hero, 5.5, -2, EAST), `hero ${hero}: first floor to second`).toBeCloseTo(9);
+      expect(hop(hero, 9, 2, WEST), `hero ${hero}: second floor to third`).toBeCloseTo(12.5);
+    }
+    // One in the centre north and south, and one in each corner district; every top is the 30 m
+    // the rolling dive wants, and every one has a step beside it.
+    // (A corner spire's pieces carry their district's prefix: "nw-spire-nw-floor-7".)
+    const tops = level.boxes.filter((b) => /^(\w+-)?spire-\w+-floor-7$/.test(b.id));
+    expect(tops.map((t) => /spire-(\w+)-floor/.exec(t.id)?.[1]).sort()).toEqual([
+      "n",
+      "ne",
+      "nw",
+      "s",
+      "se",
+      "sw",
+    ]);
+    for (const t of tops) expect(t.pos[1] + t.size[1] / 2).toBe(30);
+    expect(level.boxes.filter((b) => /^(\w+-)?spire-\w+-step$/.test(b.id))).toHaveLength(6);
+  });
+
+  it("joins the spires with skybridges you can walk: a ring and a spine", () => {
+    const SKY = 26.5;
+    // Walk a straight line along the bridges at their height, and stay at it all the way.
+    const walk = (x: number, z: number, yaw: number, ticks: number) => {
+      let s = spawnState(x, SKY, z);
+      for (let i = 0; i < ticks; i++) {
+        s = stepPlayer(s, { ...emptyInput(), moveZ: 1, yaw }, world, DT);
+        if (s.y < SKY - 0.01) break;
+      }
+      return s;
+    };
+    // The spine: from the middle of the ring's north side, south through both centre spires
+    // and over the pit, to the middle of its south side.
+    let s = walk(-0.75, -64.5, Math.PI, 1000);
+    expect(s.y, "spine").toBeCloseTo(SKY);
+    expect(s.z).toBeGreaterThan(62);
+    // The ring: each side, from just off one corner spire to the next.
+    s = walk(-60, -64.5, EAST, 950);
+    expect(s.y, "north side").toBeCloseTo(SKY);
+    expect(s.x).toBeGreaterThan(60);
+    s = walk(-60, 64.5, EAST, 950);
+    expect(s.y, "south side").toBeCloseTo(SKY);
+    expect(s.x).toBeGreaterThan(60);
+    s = walk(-66, -58, Math.PI, 950);
+    expect(s.y, "west side").toBeCloseTo(SKY);
+    expect(s.z).toBeGreaterThan(58);
+    s = walk(66, -58, Math.PI, 950);
+    expect(s.y, "east side").toBeCloseTo(SKY);
+    expect(s.z).toBeGreaterThan(58);
   });
 
   it("uses only abilities the movement code has", () => {

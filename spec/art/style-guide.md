@@ -89,12 +89,24 @@ Readability fixes from the screen-effect review (2026-10-12):
 - Gun (`fx.ts`): GRAPHITE and CONCRETE. Muzzle flash, tracers and impacts: HAZARD.
 - Rule of thumb: any accent that must stay readable in shadow needs a little emissive, because lighting pushes it toward a neutral when snapped.
 
+## Night, district signs and props (2026-10-13)
+
+Tom: "FFA might be better if the map is night", and steps 3 and 4 of the plan for a map that looked plain.
+
+- **Night** is a level's `sky: "night"` (the FFA map; the practice range stays day). `applySky` in `main.ts`: the sky and fog go to a colour between INK and GRAPHITE, the sky light and the "moon" are about half as strong as by day. It is moonlit, not dark: the world drops about one step down the palette and players stay easy to see. What stands out is everything unlit: the SIGNAL and ACID strips, the lamps, the far windows. There are stars.
+  - Walkway tops had to become mid-grey for this: dark steel went black at night, and a player on it with it.
+- **District signs:** the nine districts have compass codes (NW, N, NE, W, C, E, SW, S, SE). Each is painted 7 m tall on the perimeter wall behind its district, above the sector numbers, so you can find your bearings from anywhere by looking over the roofs; and on the ground of every avenue leading in, the letters' tops pointing into the district. INK, a 5x5 pixel font (three pixels is too narrow to tell N from W).
+- **Props** are built from boxes in `client/src/levelDecor.ts` and are **not in the collision world**, so each kind is one nobody can walk into: lamp posts in the margin at every district corner (a SIGNAL head and a pale pool of light on the ground; the pole is 14 cm), a pair of pipes and a row of ventilation units round the inside of the perimeter wall, masts with a light on the wall, the towers and the cranes, a hook hanging under each crane beam, and beyond the wall a ring of dark towers with a few lit windows. Merged into one mesh per material.
+- **Not done:** no real lights (the lamps' pools are painted discs); no glowing panels; nothing marks one district's buildings from its mirrored twin's except the signs.
+
 ## Surface details
 
 Implemented in `client/src/surfaces.ts` (textures) and `client/src/levelRender.ts` (where they go).
 
 - **Textures** are 64×64 canvases drawn in code, nearest-neighbor filtered. One tile = 2 m of world (`TILE_METRES`).
 - **World-space UVs** (`applyWorldUvs`): textures tile by world position, so seams line up across boxes and nothing stretches.
+- **Surface kinds** (2026-10-13): a level piece says what it is with `surface` in the level JSON, and is drawn with that kind's side and top texture (`SURFACES` in `client/src/surfaces.ts`). Until then every piece had the same wall panel and floor plate, and the FFA map looked plain though its layout was not. The kinds: `panel` (the perimeter, rooms, towers and wall-run walls: the two textures below), `concrete` (buildings: light, pour lines and tie holes; a dark gravel roof), `container` and `container-light` (corrugated steel with a stencil mark), `metal` (walkways: tread plate on top, a riveted girder at the side), `pillar` (an INK and BONE chequer band every 2 m), `crate` (planks), `barrier` (low walls: a BONE band), `stripe` (pit rims and kerbs: INK and BONE warning stripes), `ground` (studded paving; dark where it is cut away), `pit` (a dark floor), `ramp` (paving with ACID marks). Neutrals only, plus ACID on ramps.
+  - Two things learned in the first look: solid CONCRETE walls go nearly black on their shadow side, so "concrete" is HAZE speckled with CONCRETE; and random specks on the ground read as static up close, so the paving is a regular stud pattern.
 - **Wall panels** (box sides): BONE, INK seams on a 2 m grid, a HAZE split line, CONCRETE rivets and vent slats.
 - **Floor plates** (box tops, ramps): HAZE, GRAPHITE seams, CONCRETE centre cross.
 - **Painted numbers**: two-digit sector numbers (01, 02, …) in INK, from a 3×5 pixel font, on the inner face of tall long walls (height ≥ 6 m, length ≥ 20 m). For callouts.
@@ -191,7 +203,7 @@ Build in this order. Each layer is visible on its own.
 1. ~~Palette~~ (done)
 2. ~~Screen effect: palette snapping and dither~~ (done, reviewed in game)
 3. **Graphic surface details**: panel lines, warning stripes, large painted numbers and symbols, generated on small canvases (about 64×64) with nearest-neighbor filtering. This is the heart of the Marathon look. *(Started, see "Surface details" below.)*
-4. **Light strips and glowing panels** in SIGNAL.
+4. **Light strips and glowing panels** in SIGNAL. *(Started 2026-10-13: `lightStrips` in `client/src/levelRender.ts`. SIGNAL strips along the edges of walkways (decks, catwalks, gates, bridges, crane beams) and over doorways and passages, from `glow` in the level JSON; ACID strips along both edges of every ramp. Unlit, visual only, merged into one mesh per colour. No glowing panels yet.)*
 5. **Map pass 2**: real architecture (catwalks, pillars, doorways, stairs) as boxes and ramps in `levels/*.json`. Geometry changes affect gameplay, so agree on them with the team.
 6. **Effects**: muzzle flash, tracers and hit sparks in HAZARD; particles; gun viewmodel.
 7. **HUD and typography**: bold graphic HUD in the Marathon spirit.
