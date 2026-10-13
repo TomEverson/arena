@@ -770,7 +770,9 @@ function frame(nowMs: number): void {
   // Grenades, barriers and bombardments, and the sounds they make.
   const skillPoses = poses.filter(isSkillPose);
   for (const p of skillPoses) {
-    if (p.kind === EntityKinds.strike && !knownStrikes.has(p.id)) audio.strikeWarning(p);
+    // A new bombardment: its siren, if it gives any warning before the shells.
+    if (p.kind === EntityKinds.strike && !knownStrikes.has(p.id) && SKILL.bombardWarning > 0)
+      audio.strikeWarning(p);
   }
   knownStrikes.clear();
   for (const p of skillPoses) if (p.kind === EntityKinds.strike) knownStrikes.add(p.id);
@@ -920,9 +922,11 @@ function frame(nowMs: number): void {
     `<span${ult >= 1 ? ' class="on ult"' : ""}>F ${name}${ult >= 1 ? "" : ` ${Math.floor(ult * 100)}%`}</span>`;
   const overdrive = health?.overdrive ?? 0;
   const hooks = Math.floor(player.grappleCharges + 1e-6);
+  const dashes = Math.floor(player.dashCharges + 1e-6);
   const skillsHtml =
     selfHero === HeroKinds.trooper
-      ? skill("Q", "Grenade", activeWeapon.skillQT) +
+      ? `<span${dashes > 0 ? ' class="on"' : ""}>Shift Dash ${"●".repeat(dashes)}${"○".repeat(PARAMS.dashCharges - dashes)}</span>` +
+        skill("Q", "Grenade", activeWeapon.skillQT) +
         skill("E", "Barrier", activeWeapon.skillET) +
         ultimate("Bombardment")
       : // The Assassin: grapple charges as dots, the spinning slash (its dash button), the

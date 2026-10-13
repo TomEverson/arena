@@ -192,7 +192,7 @@ func TestUltimateChargesOverTimeAndFromDamage(t *testing.T) {
 	}
 }
 
-func TestBombardmentNeedsAFullChargeWarnsThenShells(t *testing.T) {
+func TestBombardmentNeedsAFullChargeThenShellsAtOnce(t *testing.T) {
 	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
 	call := &Input{Ult: true, Pitch: aimAtGround(10)}
 	d.step(call, nil)
@@ -202,23 +202,30 @@ func TestBombardmentNeedsAFullChargeWarnsThenShells(t *testing.T) {
 	d.a.Health.Ult = 1
 	d.step(call, nil)
 	strikes := skillEntitiesOf(d.w, protocol.EntityKindStrike)
-	if len(strikes) != 1 || math.Abs(strikes[0].Z+10) > 0.6 || math.Abs(strikes[0].Y) > 1e-9 || strikes[0].Flags != 0 {
-		t.Fatalf("strikes = %+v, want one on the ground near z = -10, still warning", strikes)
+	if len(strikes) != 1 || math.Abs(strikes[0].Z+10) > 0.6 || math.Abs(strikes[0].Y) > 1e-9 {
+		t.Fatalf("strikes = %+v, want one on the ground near z = -10", strikes)
 	}
-	if d.a.Health.Ult > 0.01 {
+	// (Not exactly zero: with no warning the first shell has already landed, and damage dealt charges the next one.)
+	if d.a.Health.Ult > 0.05 {
 		t.Fatalf("calling it should spend the charge, got %v", d.a.Health.Ult)
 	}
 	full := float64(WeaponMaxHealth + WeaponMaxShield)
-	d.settle(int(SkillBombardWarning*TickRate) - 3)
-	if left := d.b.Health.Health + d.b.Health.Shield; left != full {
-		t.Fatalf("hurt during the warning: %v left", left)
+	// Whatever warning there is (none by default), nobody is hurt during it.
+	if warn := int(SkillBombardWarning * TickRate); warn > 5 {
+		d.settle(warn - 3)
+		if left := d.b.Health.Health + d.b.Health.Shield; left != full {
+			t.Fatalf("hurt during the warning: %v left", left)
+		}
+		d.settle(3)
+	} else if s := skillEntitiesOf(d.w, protocol.EntityKindStrike); s[0].Flags != 1 {
+		t.Fatalf("with no warning the shells fall from the first tick: %+v", s)
 	}
-	d.settle(TickRate) // a second of shells: four of them
+	d.settle(TickRate) // a second of shells: about four of them
 	if s := skillEntitiesOf(d.w, protocol.EntityKindStrike); len(s) != 1 || s[0].Flags != 1 {
 		t.Fatalf("strikes while shelling = %+v, want the falling flag set", s)
 	}
 	lost := full - d.b.Health.Health - d.b.Health.Shield
-	if lost < 3*SkillBombardDamage || lost > 5*SkillBombardDamage {
+	if lost < 3*SkillBombardDamage || lost > 6*SkillBombardDamage {
 		t.Fatalf("a second of shells did %v damage, want about %v", lost, 4.0*SkillBombardDamage)
 	}
 	d.settle(int(SkillBombardSeconds*TickRate) + 5)

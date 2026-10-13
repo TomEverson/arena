@@ -20,8 +20,8 @@ The all-rounder and the hero a new player picks: simple skills, about holding gr
 | Slot | Skill | First numbers |
 |---|---|---|
 | Q | **Frag grenade.** Thrown where you look, bounces, explodes on a fuse. Flushes people out of cover | 2 s fuse; about 80 damage at the centre falling to 0 at 5 m; hurts the thrower too; 12 s cooldown |
-| E | **Barrier.** A wall you place in front of you that stops bullets (both ways) | 2.5 m wide, 2 m tall; lasts 6 s or until it has taken 250 damage; 16 s cooldown |
-| Ultimate | **Bombardment.** Mark an area; after a warning, shells fall on it | 8 m across; 2 s warning (a HAZARD ring everyone can see); 4 s of shells, about 40 damage per second inside; cannot be placed under a roof |
+| E | **Barrier.** A wall you place in front of you that stops bullets (both ways) | 4.5 m wide, 3 m tall (2.5 by 2 at first; Tom: "should be larger"); lasts 6 s or until it has taken 250 damage; 16 s cooldown |
+| Ultimate | **Bombardment.** Mark an area; after a warning, shells fall on it | 14 m across (8 m at first; Tom: "should be larger"); a 0.5 s warning (it had 2 s, then none, then Tom settled on "a bit of delay, maybe like 0.5"): the ring blinks and a short siren sounds, then the shells start; 2 s warning (a HAZARD ring everyone can see); 4 s of shells, about 40 damage per second inside; cannot be placed under a roof |
 
 Why these:
 - **Grenade:** everyone understands it, and it is the answer to a player sitting behind a kerb or in a room.

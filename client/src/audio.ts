@@ -1,4 +1,5 @@
 import type { PlayerState } from "./net/protocol.gen";
+import { SKILL } from "./sim/params";
 
 /**
  * Sound, all synthesised with the Web Audio API (no sound files): short bursts of noise and
@@ -332,11 +333,11 @@ export class AudioEngine {
     this.hiss(o, "lowpass", 600, 60, 0.9, 0.6 * size, 0.03);
   }
 
-  /** A bombardment being called in: a rising siren for the two seconds of warning. */
+  /** A bombardment being called in: a rising siren for as long as its warning lasts. */
   strikeWarning(at: { x: number; y: number; z: number }): void {
     const o = this.dest(at);
     if (!o) return;
-    this.tone(o, "sawtooth", 320, 880, 1.9, 0.5);
+    this.tone(o, "sawtooth", 320, 880, Math.max(0.1, SKILL.bombardWarning - 0.1), 0.5);
   }
 
   /** Your own sniper shot: a hard crack, a deep boom and a long tail, then the bolt. */
