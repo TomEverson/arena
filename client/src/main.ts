@@ -262,7 +262,7 @@ let predictor: Predictor | null = null;
 const smoother = new CorrectionSmoother();
 const clock = new ServerClock();
 const remotes = new RemoteTracks();
-const remoteViews = new RemoteViews(scene);
+const remoteViews = new RemoteViews(scene, () => world);
 /** After a melee hit lands on you, corrections blend more gently for a moment (the shove arrives). */
 const KNOCK_WINDOW_MS = 500;
 const KNOCK_SNAP_DISTANCE = 6;

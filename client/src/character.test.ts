@@ -1,7 +1,13 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import { type ArmSolution, CharacterBody, type CharacterLook, solveArm } from "./character";
+import {
+  type ArmSolution,
+  type BodyState,
+  CharacterBody,
+  type CharacterLook,
+  solveArm,
+} from "./character";
 
 // The arm as built: a shoulder at (shoulderX, 0.46, 0) hanging down -Y, an elbow 0.28 below it,
 // the middle of the fist 0.32 below the elbow. The shoulder group is rotated by `q` and the
@@ -73,7 +79,7 @@ describe("character looks", () => {
       const isGun = o.children.some(
         (c) => c instanceof THREE.Mesh && c.material instanceof THREE.MeshBasicMaterial,
       );
-      if (isGun) return;
+      if (isGun || !o.visible) return;
       if (o instanceof THREE.Mesh) out.push(o as THREE.Mesh);
       o.children.forEach(walk);
     };
@@ -115,5 +121,73 @@ describe("character looks", () => {
       return w;
     };
     expect(width("assassin")).toBeLessThan(width("trooper"));
+  });
+});
+
+describe("grappling rig (assassin)", () => {
+  const still = (extra: Partial<BodyState> = {}): BodyState => ({
+    x: 0,
+    y: 0,
+    z: 0,
+    onGround: true,
+    sliding: false,
+    alive: true,
+    armed: true,
+    ...extra,
+  });
+  const viewer = new THREE.Vector3(0, 1.6, 5);
+  /** Visible meshes that are not part of the body's own build: the hand blade and the cable. */
+  const visibleNames = (body: CharacterBody) => {
+    let n = 0;
+    body.root.traverseVisible((o) => {
+      if (o instanceof THREE.Mesh) n++;
+    });
+    return n;
+  };
+
+  it.each<[CharacterLook, boolean]>([
+    ["assassin", true],
+    ["trooper", false],
+  ])("%s draws a blade for the melee swing: %s", (look, slashes) => {
+    const body = new CharacterBody(new THREE.Scene(), 0, look);
+    body.update(still(), 1 / 60, viewer);
+    const before = visibleNames(body);
+    // Into the swing, past the draw (the swing lasts 0.35 s).
+    for (let i = 0; i < 9; i++) body.update(still({ meleeing: true }), 1 / 60, viewer);
+    const during = visibleNames(body);
+    if (slashes) expect(during).toBeGreaterThan(before);
+    else expect(during).toBe(before);
+    // Put away again once the swing is over.
+    for (let i = 0; i < 40; i++) body.update(still(), 1 / 60, viewer);
+    expect(visibleNames(body)).toBe(before);
+  });
+
+  it("fires a cable at the wall on a wall run, on the wall's side, and reels it in after", () => {
+    const body = new CharacterBody(new THREE.Scene(), 0, "assassin");
+    const run = (wallSide: number) =>
+      still({ onGround: false, wallRunning: true, wallSide, y: 1.6 });
+    body.update(still(), 1 / 60, viewer);
+    const before = visibleNames(body);
+    for (let i = 0; i < 20; i++) body.update(run(1), 1 / 60, viewer);
+    expect(visibleNames(body)).toBe(before + 1);
+    // The cable runs up and ahead, on the +X side.
+    const cable = new THREE.Box3();
+    body.root.updateMatrixWorld(true);
+    body.root.traverseVisible((o) => {
+      if (o instanceof THREE.Mesh && o.scale.z > 1) cable.expandByObject(o);
+    });
+    body.root.worldToLocal(cable.max);
+    expect(cable.max.y).toBeGreaterThan(2.5);
+    for (let i = 0; i < 20; i++) body.update(still(), 1 / 60, viewer);
+    expect(visibleNames(body)).toBe(before);
+  });
+
+  it("fires no cable when the wall's side is unknown", () => {
+    const body = new CharacterBody(new THREE.Scene(), 0, "assassin");
+    body.update(still(), 1 / 60, viewer);
+    const before = visibleNames(body);
+    for (let i = 0; i < 20; i++)
+      body.update(still({ onGround: false, wallRunning: true, y: 1.6 }), 1 / 60, viewer);
+    expect(visibleNames(body)).toBe(before);
   });
 });

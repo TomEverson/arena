@@ -18,6 +18,8 @@ export const PALETTE_HEX = {
   SIGNAL: "#2de2e6", // technology: light strips, screens, HUD
   // Team colors: characters only, never on world geometry.
   COBALT: "#3170d8", // the blue team (the trooper's armor stripes)
+  VIOLET: "#5b3a9e", // the violet team (the assassin's sash)
+  BRASS: "#c9a227", // gold trim on characters (thin lines only: it sits near ACID)
 } as const;
 
 export type PaletteName = keyof typeof PALETTE_HEX;

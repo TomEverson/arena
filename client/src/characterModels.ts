@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
+import assassinUrl from "./models/assassin.glb?url";
 import trooperUrl from "./models/trooper.glb?url";
 import { PALETTE } from "./palette";
 
@@ -16,13 +17,13 @@ import { PALETTE } from "./palette";
  * - Bones named after the joints: body > hip_l, hip_r, upper > head, shoulder_l > elbow_l,
  *   shoulder_r > elbow_r, with pivots exactly at the joints in `character.ts`
  *   (`characterModels.test.ts` checks this).
- * - The texture uses palette colours only. HAZARD and COBALT pixels glow a little and SIGNAL
+ * - The texture uses palette colours only. HAZARD and the team colours (COBALT, VIOLET) glow a little and SIGNAL
  *   pixels glow fully, worked out here from the texture, so accents stay readable in shadow.
  */
 
-export type ModelLook = "trooper";
+export type ModelLook = "trooper" | "assassin";
 
-const URLS: Record<ModelLook, string> = { trooper: trooperUrl };
+const URLS: Record<ModelLook, string> = { trooper: trooperUrl, assassin: assassinUrl };
 
 /** The joints a model's bones attach to, by bone name. */
 export const MODEL_BONES = [
@@ -51,6 +52,7 @@ const GLOW: [THREE.Color, number][] = [
   [PALETTE.HAZARD, 0.4],
   [PALETTE.SIGNAL, 1],
   [PALETTE.COBALT, 0.3],
+  [PALETTE.VIOLET, 0.3],
 ];
 
 const models = new Map<ModelLook, CharacterModel>();
