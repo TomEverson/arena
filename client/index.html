@@ -375,6 +375,36 @@
         font: inherit;
         text-align: right;
       }
+      #fov-value {
+        min-width: 42px;
+        color: #fff;
+        text-align: right;
+      }
+      #display-settings,
+      #fov-settings,
+      #fullscreen-settings {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: #cde;
+        cursor: default;
+      }
+      #fullscreen-toggle {
+        accent-color: #2de2e6;
+      }
+      #fov-range {
+        width: 160px;
+        accent-color: #2de2e6;
+      }
+      #resolution-value,
+      #aspect-value {
+        padding: 4px;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid #556;
+        font: inherit;
+      }
       #roominfo {
         font-size: 14px;
         color: #9fd;
@@ -638,6 +668,28 @@
           aria-label="Sensitivity value"
         />
       </div>
+      <div id="display-settings">
+        <label for="resolution-value">Resolution</label>
+        <select id="resolution-value">
+          <option value="240">240p</option>
+          <option value="360">360p</option>
+          <option value="480">480p</option>
+          <option value="720">720p</option>
+          <option value="1080">1080p</option>
+        </select>
+        <label for="aspect-value">Aspect</label>
+        <select id="aspect-value">
+          <option value="16:9">16:9</option>
+          <option value="4:3">4:3</option>
+          <option value="21:9">21:9</option>
+        </select>
+      </div>
+      <div id="fov-settings">
+        <label for="fov-value">FOV</label>
+        <input id="fov-range" type="range" min="60" max="120" step="1" />
+        <span id="fov-value"></span>
+      </div>
+      <label id="fullscreen-settings"><input id="fullscreen-toggle" type="checkbox" /> Fullscreen</label>
       <div id="roominfo"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>

@@ -72,6 +72,7 @@ function paintedNumbers(level: Level): THREE.Group {
 function rampGeometry(
   box: ReturnType<typeof toAabb>,
   rises: Parameters<typeof rampSurface>[0]["rises"],
+  surfaceOnly = false,
 ) {
   const corners: [number, number][] = [
     [box.minX, box.minZ],
@@ -104,6 +105,7 @@ function rampGeometry(
     top[2] as THREE.Vector3,
     top[3] as THREE.Vector3,
   );
+  if (surfaceOnly) return new THREE.BufferGeometry().setFromPoints(pts);
   quad(
     bottom[3] as THREE.Vector3,
     bottom[2] as THREE.Vector3,
@@ -205,7 +207,8 @@ export function buildLevelMeshes(level: Level): THREE.Group {
     group.add(mesh);
   }
   for (const r of level.ramps) {
-    const geo = rampGeometry(toAabb(r), r.rises);
+    // Spire switchbacks are open catwalk ramps: show only the slash surface, not a solid wedge.
+    const geo = rampGeometry(toAabb(r), r.rises, r.id.includes("-flight-"));
     geo.computeVertexNormals();
     applyWorldUvs(geo, new THREE.Vector3());
     const mat = surfaceMaterial(r, "floor");

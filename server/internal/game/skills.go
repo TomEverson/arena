@@ -143,7 +143,8 @@ func (w *World) grenadeBlocked(x, y, z float64) (hit bool, rampTop float64, onRa
 		}
 	}
 	for i := range c.Ramps {
-		if surf, ok := rampSurface(&c.Ramps[i], &b); ok && b.MinY < surf {
+		// (A ramp is a wedge filling its box: under the box there is nothing to hit.)
+		if surf, ok := rampSurface(&c.Ramps[i], &b); ok && b.MinY < surf && b.MaxY > c.Ramps[i].Box.MinY {
 			return true, surf, true
 		}
 	}

@@ -1167,20 +1167,6 @@
       "surface": "crate"
     },
     {
-      "id": "north-wall",
-      "pos": [
-        7.5,
-        1.1,
-        -18
-      ],
-      "size": [
-        1,
-        2.2,
-        6
-      ],
-      "surface": "barrier"
-    },
-    {
       "id": "west-wall",
       "pos": [
         -14.5,
@@ -1307,285 +1293,138 @@
       "surface": "barrier"
     },
     {
-      "id": "spire-n-leg-nw",
+      "id": "spire-n-landing-0",
       "pos": [
-        -4.5,
-        15.25,
-        -19.5
+        5.875,
+        3.5,
+        -16.5
       ],
       "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "spire-n-leg-ne",
-      "pos": [
-        4.5,
-        15.25,
-        -19.5
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "spire-n-leg-sw",
-      "pos": [
-        -4.5,
-        15.25,
-        -14.5
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "spire-n-leg-se",
-      "pos": [
-        4.5,
-        15.25,
-        -14.5
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "spire-n-floor-0",
-      "pos": [
-        -2,
-        5.25,
-        -17
-      ],
-      "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-n-floor-1",
-      "pos": [
-        2,
-        8.75,
-        -17
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-n-wall-1",
-      "pos": [
-        0.15,
-        7,
-        -17
-      ],
-      "size": [
-        0.3,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "spire-n-floor-2",
+      "id": "spire-n-landing-1",
       "pos": [
-        -2,
-        12.25,
-        -17
+        -5.875,
+        7.25,
+        -16.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-n-wall-2",
-      "pos": [
-        -0.15,
-        10.5,
-        -17
-      ],
-      "size": [
-        0.3,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "spire-n-floor-3",
+      "id": "spire-n-landing-2",
       "pos": [
-        2,
-        15.75,
-        -17
+        5.875,
+        11,
+        -16.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-n-wall-3",
-      "pos": [
-        0.15,
-        14,
-        -17
-      ],
-      "size": [
-        0.3,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "spire-n-floor-4",
+      "id": "spire-n-landing-3",
       "pos": [
-        -2,
-        19.25,
-        -17
+        -5.875,
+        14.75,
+        -16.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-n-wall-4",
-      "pos": [
-        -0.15,
-        17.5,
-        -17
-      ],
-      "size": [
-        0.3,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "spire-n-floor-5",
+      "id": "spire-n-landing-4",
       "pos": [
-        2,
-        22.75,
-        -17
+        5.875,
+        18.5,
+        -16.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-n-wall-5",
-      "pos": [
-        0.15,
-        21,
-        -17
-      ],
-      "size": [
-        0.3,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "spire-n-floor-6",
+      "id": "spire-n-landing-5",
       "pos": [
-        -2,
-        26.25,
-        -17
+        -5.875,
+        22.25,
+        -16.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-n-wall-6",
-      "pos": [
-        -0.15,
-        24.5,
-        -17
-      ],
-      "size": [
-        0.3,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "spire-n-floor-7",
+      "id": "spire-n-landing-6",
       "pos": [
-        2,
+        4.375,
+        26,
+        -16.5
+      ],
+      "size": [
+        1.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-top",
+      "pos": [
+        0,
         29.75,
-        -17
+        -18
       ],
       "size": [
-        4,
+        10,
         0.5,
-        6
+        3
       ],
       "surface": "metal",
       "glow": "edges"
     },
     {
-      "id": "spire-n-wall-7",
+      "id": "spire-n-top-end",
       "pos": [
-        0.15,
-        28,
-        -17
+        -4.375,
+        29.75,
+        -15
       ],
       "size": [
-        0.3,
-        3,
-        6
+        1.25,
+        0.5,
+        3
       ],
       "surface": "metal"
     },
     {
       "id": "spire-n-cover-top",
       "pos": [
-        2,
+        1,
         30.6,
-        -17
+        -18
       ],
       "size": [
         2,
@@ -1595,313 +1434,309 @@
       "surface": "crate"
     },
     {
-      "id": "spire-n-cover-mid",
+      "id": "spire-n-post-nw",
       "pos": [
-        -3,
-        27.1,
-        -17
+        -5.25,
+        15.25,
+        -19.75
       ],
       "size": [
-        1,
-        1.1999999999999993,
-        4
+        0.5,
+        30.5,
+        0.5
       ],
-      "surface": "crate"
+      "surface": "metal"
     },
     {
-      "id": "spire-n-step",
+      "id": "spire-n-post-ne",
+      "pos": [
+        5.25,
+        15.25,
+        -19.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-post-sw",
+      "pos": [
+        -5.25,
+        15.25,
+        -13.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-post-se",
+      "pos": [
+        5.25,
+        15.25,
+        -13.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-balcony-n",
+      "pos": [
+        0,
+        26,
+        -20.75
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-balcony-w",
       "pos": [
         -6.25,
-        1.5,
-        -17
+        26,
+        -16.5
       ],
       "size": [
-        2.5,
-        3,
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-balcony-e",
+      "pos": [
+        6.25,
+        26,
+        -16.5
+      ],
+      "size": [
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-n-balcony-join-s",
+      "pos": [
+        0,
+        26,
+        -13.25
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-balcony-join-w",
+      "pos": [
+        -5.25,
+        26,
+        -16.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-balcony-join-e",
+      "pos": [
+        5.25,
+        26,
+        -16.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-n-cover-nw",
+      "pos": [
+        -5.5,
+        26.85,
+        -20.7
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "spire-n-cover-se",
+      "pos": [
+        5.5,
+        26.85,
+        -12.3
+      ],
+      "size": [
+        2,
+        1.1999999999999993,
+        1
+      ],
+      "surface": "crate"
+    },
+    {
+      "id": "spire-s-landing-0",
+      "pos": [
+        5.875,
+        3.5,
+        16.5
+      ],
+      "size": [
+        4.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-landing-1",
+      "pos": [
+        -5.875,
+        7.25,
+        16.5
+      ],
+      "size": [
+        4.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-landing-2",
+      "pos": [
+        5.875,
+        11,
+        16.5
+      ],
+      "size": [
+        4.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-landing-3",
+      "pos": [
+        -5.875,
+        14.75,
+        16.5
+      ],
+      "size": [
+        4.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-landing-4",
+      "pos": [
+        5.875,
+        18.5,
+        16.5
+      ],
+      "size": [
+        4.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-landing-5",
+      "pos": [
+        -5.875,
+        22.25,
+        16.5
+      ],
+      "size": [
+        4.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-landing-6",
+      "pos": [
+        4.375,
+        26,
+        16.5
+      ],
+      "size": [
+        1.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-top",
+      "pos": [
+        0,
+        29.75,
+        18
+      ],
+      "size": [
+        10,
+        0.5,
         3
       ],
-      "surface": "concrete"
-    },
-    {
-      "id": "spire-s-leg-nw",
-      "pos": [
-        -4.5,
-        15.25,
-        14.5
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "spire-s-leg-ne",
-      "pos": [
-        4.5,
-        15.25,
-        14.5
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "spire-s-leg-sw",
-      "pos": [
-        -4.5,
-        15.25,
-        19.5
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "spire-s-leg-se",
-      "pos": [
-        4.5,
-        15.25,
-        19.5
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "spire-s-floor-0",
-      "pos": [
-        -2,
-        5.25,
-        17
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
       "surface": "metal",
       "glow": "edges"
     },
     {
-      "id": "spire-s-floor-1",
+      "id": "spire-s-top-end",
       "pos": [
-        2,
-        8.75,
-        17
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-s-wall-1",
-      "pos": [
-        0.15,
-        7,
-        17
-      ],
-      "size": [
-        0.3,
-        3,
-        6
-      ],
-      "surface": "metal"
-    },
-    {
-      "id": "spire-s-floor-2",
-      "pos": [
-        -2,
-        12.25,
-        17
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-s-wall-2",
-      "pos": [
-        -0.15,
-        10.5,
-        17
-      ],
-      "size": [
-        0.3,
-        3,
-        6
-      ],
-      "surface": "metal"
-    },
-    {
-      "id": "spire-s-floor-3",
-      "pos": [
-        2,
-        15.75,
-        17
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-s-wall-3",
-      "pos": [
-        0.15,
-        14,
-        17
-      ],
-      "size": [
-        0.3,
-        3,
-        6
-      ],
-      "surface": "metal"
-    },
-    {
-      "id": "spire-s-floor-4",
-      "pos": [
-        -2,
-        19.25,
-        17
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-s-wall-4",
-      "pos": [
-        -0.15,
-        17.5,
-        17
-      ],
-      "size": [
-        0.3,
-        3,
-        6
-      ],
-      "surface": "metal"
-    },
-    {
-      "id": "spire-s-floor-5",
-      "pos": [
-        2,
-        22.75,
-        17
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-s-wall-5",
-      "pos": [
-        0.15,
-        21,
-        17
-      ],
-      "size": [
-        0.3,
-        3,
-        6
-      ],
-      "surface": "metal"
-    },
-    {
-      "id": "spire-s-floor-6",
-      "pos": [
-        -2,
-        26.25,
-        17
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-s-wall-6",
-      "pos": [
-        -0.15,
-        24.5,
-        17
-      ],
-      "size": [
-        0.3,
-        3,
-        6
-      ],
-      "surface": "metal"
-    },
-    {
-      "id": "spire-s-floor-7",
-      "pos": [
-        2,
+        -4.375,
         29.75,
-        17
+        15
       ],
       "size": [
-        4,
+        1.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "spire-s-wall-7",
-      "pos": [
-        0.15,
-        28,
-        17
-      ],
-      "size": [
-        0.3,
-        3,
-        6
+        3
       ],
       "surface": "metal"
     },
     {
       "id": "spire-s-cover-top",
       "pos": [
-        2,
+        1,
         30.6,
-        17
+        18
       ],
       "size": [
         2,
@@ -1911,32 +1746,175 @@
       "surface": "crate"
     },
     {
-      "id": "spire-s-cover-mid",
+      "id": "spire-s-post-nw",
       "pos": [
-        -3,
-        27.1,
-        17
+        -5.25,
+        15.25,
+        13.25
       ],
       "size": [
-        1,
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-post-ne",
+      "pos": [
+        5.25,
+        15.25,
+        13.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-post-sw",
+      "pos": [
+        -5.25,
+        15.25,
+        19.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-post-se",
+      "pos": [
+        5.25,
+        15.25,
+        19.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-balcony-s",
+      "pos": [
+        0,
+        26,
+        20.75
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-balcony-w",
+      "pos": [
+        -6.25,
+        26,
+        16.5
+      ],
+      "size": [
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-balcony-e",
+      "pos": [
+        6.25,
+        26,
+        16.5
+      ],
+      "size": [
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "spire-s-balcony-join-n",
+      "pos": [
+        0,
+        26,
+        13.25
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-balcony-join-w",
+      "pos": [
+        -5.25,
+        26,
+        16.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-balcony-join-e",
+      "pos": [
+        5.25,
+        26,
+        16.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "spire-s-cover-nw",
+      "pos": [
+        -5.5,
+        26.85,
+        12.3
+      ],
+      "size": [
+        2,
         1.1999999999999993,
-        4
+        1
       ],
       "surface": "crate"
     },
     {
-      "id": "spire-s-step",
+      "id": "spire-s-cover-se",
       "pos": [
-        -6.25,
-        1.5,
-        17
+        5.5,
+        26.85,
+        20.7
       ],
       "size": [
-        2.5,
-        3,
-        3
+        2,
+        1.1999999999999993,
+        1
       ],
-      "surface": "concrete"
+      "surface": "crate"
     },
     {
       "id": "nw-pass-n",
@@ -2279,285 +2257,138 @@
       "surface": "crate"
     },
     {
-      "id": "nw-spire-nw-leg-nw",
+      "id": "nw-spire-nw-landing-0",
       "pos": [
-        -70.5,
-        15.25,
-        -67
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "nw-spire-nw-leg-ne",
-      "pos": [
-        -61.5,
-        15.25,
-        -67
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "nw-spire-nw-leg-sw",
-      "pos": [
-        -70.5,
-        15.25,
-        -62
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "nw-spire-nw-leg-se",
-      "pos": [
-        -61.5,
-        15.25,
-        -62
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "nw-spire-nw-floor-0",
-      "pos": [
-        -68,
-        5.25,
+        -60.125,
+        3.5,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "nw-spire-nw-floor-1",
-      "pos": [
-        -64,
-        8.75,
-        -64.5
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "nw-spire-nw-wall-1",
-      "pos": [
-        -65.85,
-        7,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "nw-spire-nw-floor-2",
+      "id": "nw-spire-nw-landing-1",
       "pos": [
-        -68,
-        12.25,
+        -71.875,
+        7.25,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "nw-spire-nw-wall-2",
-      "pos": [
-        -66.15,
-        10.5,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "nw-spire-nw-floor-3",
+      "id": "nw-spire-nw-landing-2",
       "pos": [
-        -64,
-        15.75,
+        -60.125,
+        11,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "nw-spire-nw-wall-3",
-      "pos": [
-        -65.85,
-        14,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "nw-spire-nw-floor-4",
+      "id": "nw-spire-nw-landing-3",
       "pos": [
-        -68,
-        19.25,
+        -71.875,
+        14.75,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "nw-spire-nw-wall-4",
-      "pos": [
-        -66.15,
-        17.5,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "nw-spire-nw-floor-5",
+      "id": "nw-spire-nw-landing-4",
       "pos": [
-        -64,
-        22.75,
+        -60.125,
+        18.5,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "nw-spire-nw-wall-5",
-      "pos": [
-        -65.85,
-        21,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "nw-spire-nw-floor-6",
+      "id": "nw-spire-nw-landing-5",
       "pos": [
-        -68,
-        26.25,
+        -71.875,
+        22.25,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "nw-spire-nw-wall-6",
-      "pos": [
-        -66.15,
-        24.5,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "nw-spire-nw-floor-7",
+      "id": "nw-spire-nw-landing-6",
       "pos": [
-        -64,
+        -61.625,
+        26,
+        -64.5
+      ],
+      "size": [
+        1.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-top",
+      "pos": [
+        -66,
         29.75,
-        -64.5
+        -66
       ],
       "size": [
-        4,
+        10,
         0.5,
-        6
+        3
       ],
       "surface": "metal",
       "glow": "edges"
     },
     {
-      "id": "nw-spire-nw-wall-7",
+      "id": "nw-spire-nw-top-end",
       "pos": [
-        -65.85,
-        28,
-        -64.5
+        -70.375,
+        29.75,
+        -63
       ],
       "size": [
-        0.29999999999999716,
-        3,
-        6
+        1.25,
+        0.5,
+        3
       ],
       "surface": "metal"
     },
     {
       "id": "nw-spire-nw-cover-top",
       "pos": [
-        -64,
+        -65,
         30.6,
-        -64.5
+        -66
       ],
       "size": [
         2,
@@ -2567,32 +2398,204 @@
       "surface": "crate"
     },
     {
-      "id": "nw-spire-nw-cover-mid",
+      "id": "nw-spire-nw-post-nw",
       "pos": [
-        -69,
-        27.1,
+        -71.25,
+        15.25,
+        -67.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-post-ne",
+      "pos": [
+        -60.75,
+        15.25,
+        -67.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-post-sw",
+      "pos": [
+        -71.25,
+        15.25,
+        -61.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-post-se",
+      "pos": [
+        -60.75,
+        15.25,
+        -61.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-balcony-n",
+      "pos": [
+        -66,
+        26,
+        -68.75
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-balcony-s",
+      "pos": [
+        -66,
+        26,
+        -60.25
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-balcony-w",
+      "pos": [
+        -72.25,
+        26,
         -64.5
       ],
       "size": [
-        1,
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-balcony-e",
+      "pos": [
+        -59.75,
+        26,
+        -64.5
+      ],
+      "size": [
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "nw-spire-nw-balcony-join-n",
+      "pos": [
+        -66,
+        26,
+        -67.75
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-balcony-join-s",
+      "pos": [
+        -66,
+        26,
+        -61.25
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-balcony-join-w",
+      "pos": [
+        -71.25,
+        26,
+        -64.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-balcony-join-e",
+      "pos": [
+        -60.75,
+        26,
+        -64.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "nw-spire-nw-cover-nw",
+      "pos": [
+        -71.5,
+        26.85,
+        -68.7
+      ],
+      "size": [
+        2,
         1.1999999999999993,
-        4
+        1
       ],
       "surface": "crate"
     },
     {
-      "id": "nw-spire-nw-step",
+      "id": "nw-spire-nw-cover-se",
       "pos": [
-        -72.25,
-        1.5,
-        -64.5
+        -60.5,
+        26.85,
+        -60.3
       ],
       "size": [
-        2.5,
-        3,
-        3
+        2,
+        1.1999999999999993,
+        1
       ],
-      "surface": "concrete"
+      "surface": "crate"
     },
     {
       "id": "se-pass-n",
@@ -2935,285 +2938,138 @@
       "surface": "crate"
     },
     {
-      "id": "se-spire-se-leg-nw",
+      "id": "se-spire-se-landing-0",
       "pos": [
-        70.5,
-        15.25,
-        67
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "se-spire-se-leg-ne",
-      "pos": [
-        61.5,
-        15.25,
-        67
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "se-spire-se-leg-sw",
-      "pos": [
-        70.5,
-        15.25,
-        62
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "se-spire-se-leg-se",
-      "pos": [
-        61.5,
-        15.25,
-        62
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "se-spire-se-floor-0",
-      "pos": [
-        68,
-        5.25,
+        60.125,
+        3.5,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "se-spire-se-floor-1",
-      "pos": [
-        64,
-        8.75,
-        64.5
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "se-spire-se-wall-1",
-      "pos": [
-        65.85,
-        7,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "se-spire-se-floor-2",
+      "id": "se-spire-se-landing-1",
       "pos": [
-        68,
-        12.25,
+        71.875,
+        7.25,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "se-spire-se-wall-2",
-      "pos": [
-        66.15,
-        10.5,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "se-spire-se-floor-3",
+      "id": "se-spire-se-landing-2",
       "pos": [
-        64,
-        15.75,
+        60.125,
+        11,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "se-spire-se-wall-3",
-      "pos": [
-        65.85,
-        14,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "se-spire-se-floor-4",
+      "id": "se-spire-se-landing-3",
       "pos": [
-        68,
-        19.25,
+        71.875,
+        14.75,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "se-spire-se-wall-4",
-      "pos": [
-        66.15,
-        17.5,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "se-spire-se-floor-5",
+      "id": "se-spire-se-landing-4",
       "pos": [
-        64,
-        22.75,
+        60.125,
+        18.5,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "se-spire-se-wall-5",
-      "pos": [
-        65.85,
-        21,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "se-spire-se-floor-6",
+      "id": "se-spire-se-landing-5",
       "pos": [
-        68,
-        26.25,
+        71.875,
+        22.25,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "se-spire-se-wall-6",
-      "pos": [
-        66.15,
-        24.5,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "se-spire-se-floor-7",
+      "id": "se-spire-se-landing-6",
       "pos": [
-        64,
+        61.625,
+        26,
+        64.5
+      ],
+      "size": [
+        1.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-top",
+      "pos": [
+        66,
         29.75,
-        64.5
+        66
       ],
       "size": [
-        4,
+        10,
         0.5,
-        6
+        3
       ],
       "surface": "metal",
       "glow": "edges"
     },
     {
-      "id": "se-spire-se-wall-7",
+      "id": "se-spire-se-top-end",
       "pos": [
-        65.85,
-        28,
-        64.5
+        70.375,
+        29.75,
+        63
       ],
       "size": [
-        0.29999999999999716,
-        3,
-        6
+        1.25,
+        0.5,
+        3
       ],
       "surface": "metal"
     },
     {
       "id": "se-spire-se-cover-top",
       "pos": [
-        64,
+        65,
         30.6,
-        64.5
+        66
       ],
       "size": [
         2,
@@ -3223,32 +3079,204 @@
       "surface": "crate"
     },
     {
-      "id": "se-spire-se-cover-mid",
+      "id": "se-spire-se-post-nw",
       "pos": [
-        69,
-        27.1,
+        71.25,
+        15.25,
+        67.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-post-ne",
+      "pos": [
+        60.75,
+        15.25,
+        67.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-post-sw",
+      "pos": [
+        71.25,
+        15.25,
+        61.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-post-se",
+      "pos": [
+        60.75,
+        15.25,
+        61.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-balcony-n",
+      "pos": [
+        66,
+        26,
+        68.75
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-balcony-s",
+      "pos": [
+        66,
+        26,
+        60.25
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-balcony-w",
+      "pos": [
+        72.25,
+        26,
         64.5
       ],
       "size": [
-        1,
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-balcony-e",
+      "pos": [
+        59.75,
+        26,
+        64.5
+      ],
+      "size": [
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "se-spire-se-balcony-join-n",
+      "pos": [
+        66,
+        26,
+        67.75
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-balcony-join-s",
+      "pos": [
+        66,
+        26,
+        61.25
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-balcony-join-w",
+      "pos": [
+        71.25,
+        26,
+        64.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-balcony-join-e",
+      "pos": [
+        60.75,
+        26,
+        64.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "se-spire-se-cover-nw",
+      "pos": [
+        71.5,
+        26.85,
+        68.7
+      ],
+      "size": [
+        2,
         1.1999999999999993,
-        4
+        1
       ],
       "surface": "crate"
     },
     {
-      "id": "se-spire-se-step",
+      "id": "se-spire-se-cover-se",
       "pos": [
-        72.25,
-        1.5,
-        64.5
+        60.5,
+        26.85,
+        60.3
       ],
       "size": [
-        2.5,
-        3,
-        3
+        2,
+        1.1999999999999993,
+        1
       ],
-      "surface": "concrete"
+      "surface": "crate"
     },
     {
       "id": "ne-box-00",
@@ -3546,285 +3574,138 @@
       "surface": "barrier"
     },
     {
-      "id": "ne-spire-ne-leg-nw",
+      "id": "ne-spire-ne-landing-0",
       "pos": [
-        61.5,
-        15.25,
-        -67
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "ne-spire-ne-leg-ne",
-      "pos": [
-        70.5,
-        15.25,
-        -67
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "ne-spire-ne-leg-sw",
-      "pos": [
-        61.5,
-        15.25,
-        -62
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "ne-spire-ne-leg-se",
-      "pos": [
-        70.5,
-        15.25,
-        -62
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "ne-spire-ne-floor-0",
-      "pos": [
-        64,
-        5.25,
+        71.875,
+        3.5,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "ne-spire-ne-floor-1",
-      "pos": [
-        68,
-        8.75,
-        -64.5
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "ne-spire-ne-wall-1",
-      "pos": [
-        66.15,
-        7,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "ne-spire-ne-floor-2",
+      "id": "ne-spire-ne-landing-1",
       "pos": [
-        64,
-        12.25,
+        60.125,
+        7.25,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "ne-spire-ne-wall-2",
-      "pos": [
-        65.85,
-        10.5,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "ne-spire-ne-floor-3",
+      "id": "ne-spire-ne-landing-2",
       "pos": [
-        68,
-        15.75,
+        71.875,
+        11,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "ne-spire-ne-wall-3",
-      "pos": [
-        66.15,
-        14,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "ne-spire-ne-floor-4",
+      "id": "ne-spire-ne-landing-3",
       "pos": [
-        64,
-        19.25,
+        60.125,
+        14.75,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "ne-spire-ne-wall-4",
-      "pos": [
-        65.85,
-        17.5,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "ne-spire-ne-floor-5",
+      "id": "ne-spire-ne-landing-4",
       "pos": [
-        68,
-        22.75,
+        71.875,
+        18.5,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "ne-spire-ne-wall-5",
-      "pos": [
-        66.15,
-        21,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "ne-spire-ne-floor-6",
+      "id": "ne-spire-ne-landing-5",
       "pos": [
-        64,
-        26.25,
+        60.125,
+        22.25,
         -64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "ne-spire-ne-wall-6",
-      "pos": [
-        65.85,
-        24.5,
-        -64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "ne-spire-ne-floor-7",
+      "id": "ne-spire-ne-landing-6",
       "pos": [
-        68,
+        70.375,
+        26,
+        -64.5
+      ],
+      "size": [
+        1.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-top",
+      "pos": [
+        66,
         29.75,
-        -64.5
+        -66
       ],
       "size": [
-        4,
+        10,
         0.5,
-        6
+        3
       ],
       "surface": "metal",
       "glow": "edges"
     },
     {
-      "id": "ne-spire-ne-wall-7",
+      "id": "ne-spire-ne-top-end",
       "pos": [
-        66.15,
-        28,
-        -64.5
+        61.625,
+        29.75,
+        -63
       ],
       "size": [
-        0.29999999999999716,
-        3,
-        6
+        1.25,
+        0.5,
+        3
       ],
       "surface": "metal"
     },
     {
       "id": "ne-spire-ne-cover-top",
       "pos": [
-        68,
+        67,
         30.6,
-        -64.5
+        -66
       ],
       "size": [
         2,
@@ -3834,32 +3715,204 @@
       "surface": "crate"
     },
     {
-      "id": "ne-spire-ne-cover-mid",
+      "id": "ne-spire-ne-post-nw",
       "pos": [
-        63,
-        27.1,
+        60.75,
+        15.25,
+        -67.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-post-ne",
+      "pos": [
+        71.25,
+        15.25,
+        -67.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-post-sw",
+      "pos": [
+        60.75,
+        15.25,
+        -61.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-post-se",
+      "pos": [
+        71.25,
+        15.25,
+        -61.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-balcony-n",
+      "pos": [
+        66,
+        26,
+        -68.75
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-balcony-s",
+      "pos": [
+        66,
+        26,
+        -60.25
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-balcony-w",
+      "pos": [
+        59.75,
+        26,
         -64.5
       ],
       "size": [
-        1,
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-balcony-e",
+      "pos": [
+        72.25,
+        26,
+        -64.5
+      ],
+      "size": [
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "ne-spire-ne-balcony-join-n",
+      "pos": [
+        66,
+        26,
+        -67.75
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-balcony-join-s",
+      "pos": [
+        66,
+        26,
+        -61.25
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-balcony-join-w",
+      "pos": [
+        60.75,
+        26,
+        -64.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-balcony-join-e",
+      "pos": [
+        71.25,
+        26,
+        -64.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "ne-spire-ne-cover-nw",
+      "pos": [
+        60.5,
+        26.85,
+        -68.7
+      ],
+      "size": [
+        2,
         1.1999999999999993,
-        4
+        1
       ],
       "surface": "crate"
     },
     {
-      "id": "ne-spire-ne-step",
+      "id": "ne-spire-ne-cover-se",
       "pos": [
-        59.75,
-        1.5,
-        -64.5
+        71.5,
+        26.85,
+        -60.3
       ],
       "size": [
-        2.5,
-        3,
-        3
+        2,
+        1.1999999999999993,
+        1
       ],
-      "surface": "concrete"
+      "surface": "crate"
     },
     {
       "id": "sw-box-00",
@@ -4157,285 +4210,138 @@
       "surface": "barrier"
     },
     {
-      "id": "sw-spire-sw-leg-nw",
+      "id": "sw-spire-sw-landing-0",
       "pos": [
-        -61.5,
-        15.25,
-        67
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "sw-spire-sw-leg-ne",
-      "pos": [
-        -70.5,
-        15.25,
-        67
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "sw-spire-sw-leg-sw",
-      "pos": [
-        -61.5,
-        15.25,
-        62
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "sw-spire-sw-leg-se",
-      "pos": [
-        -70.5,
-        15.25,
-        62
-      ],
-      "size": [
-        1,
-        30.5,
-        1
-      ],
-      "surface": "pillar"
-    },
-    {
-      "id": "sw-spire-sw-floor-0",
-      "pos": [
-        -64,
-        5.25,
+        -71.875,
+        3.5,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "sw-spire-sw-floor-1",
-      "pos": [
-        -68,
-        8.75,
-        64.5
-      ],
-      "size": [
-        4,
-        0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "sw-spire-sw-wall-1",
-      "pos": [
-        -66.15,
-        7,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "sw-spire-sw-floor-2",
+      "id": "sw-spire-sw-landing-1",
       "pos": [
-        -64,
-        12.25,
+        -60.125,
+        7.25,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "sw-spire-sw-wall-2",
-      "pos": [
-        -65.85,
-        10.5,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "sw-spire-sw-floor-3",
+      "id": "sw-spire-sw-landing-2",
       "pos": [
-        -68,
-        15.75,
+        -71.875,
+        11,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "sw-spire-sw-wall-3",
-      "pos": [
-        -66.15,
-        14,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "sw-spire-sw-floor-4",
+      "id": "sw-spire-sw-landing-3",
       "pos": [
-        -64,
-        19.25,
+        -60.125,
+        14.75,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "sw-spire-sw-wall-4",
-      "pos": [
-        -65.85,
-        17.5,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "sw-spire-sw-floor-5",
+      "id": "sw-spire-sw-landing-4",
       "pos": [
-        -68,
-        22.75,
+        -71.875,
+        18.5,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "sw-spire-sw-wall-5",
-      "pos": [
-        -66.15,
-        21,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "sw-spire-sw-floor-6",
+      "id": "sw-spire-sw-landing-5",
       "pos": [
-        -64,
-        26.25,
+        -60.125,
+        22.25,
         64.5
       ],
       "size": [
-        4,
+        4.25,
         0.5,
-        6
-      ],
-      "surface": "metal",
-      "glow": "edges"
-    },
-    {
-      "id": "sw-spire-sw-wall-6",
-      "pos": [
-        -65.85,
-        24.5,
-        64.5
-      ],
-      "size": [
-        0.29999999999999716,
-        3,
         6
       ],
       "surface": "metal"
     },
     {
-      "id": "sw-spire-sw-floor-7",
+      "id": "sw-spire-sw-landing-6",
       "pos": [
-        -68,
+        -70.375,
+        26,
+        64.5
+      ],
+      "size": [
+        1.25,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-top",
+      "pos": [
+        -66,
         29.75,
-        64.5
+        66
       ],
       "size": [
-        4,
+        10,
         0.5,
-        6
+        3
       ],
       "surface": "metal",
       "glow": "edges"
     },
     {
-      "id": "sw-spire-sw-wall-7",
+      "id": "sw-spire-sw-top-end",
       "pos": [
-        -66.15,
-        28,
-        64.5
+        -61.625,
+        29.75,
+        63
       ],
       "size": [
-        0.29999999999999716,
-        3,
-        6
+        1.25,
+        0.5,
+        3
       ],
       "surface": "metal"
     },
     {
       "id": "sw-spire-sw-cover-top",
       "pos": [
-        -68,
+        -67,
         30.6,
-        64.5
+        66
       ],
       "size": [
         2,
@@ -4445,32 +4351,204 @@
       "surface": "crate"
     },
     {
-      "id": "sw-spire-sw-cover-mid",
+      "id": "sw-spire-sw-post-nw",
       "pos": [
-        -63,
-        27.1,
+        -60.75,
+        15.25,
+        67.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-post-ne",
+      "pos": [
+        -71.25,
+        15.25,
+        67.75
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-post-sw",
+      "pos": [
+        -60.75,
+        15.25,
+        61.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-post-se",
+      "pos": [
+        -71.25,
+        15.25,
+        61.25
+      ],
+      "size": [
+        0.5,
+        30.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-balcony-n",
+      "pos": [
+        -66,
+        26,
+        68.75
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-balcony-s",
+      "pos": [
+        -66,
+        26,
+        60.25
+      ],
+      "size": [
+        14,
+        0.5,
+        1.5
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-balcony-w",
+      "pos": [
+        -59.75,
+        26,
         64.5
       ],
       "size": [
-        1,
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-balcony-e",
+      "pos": [
+        -72.25,
+        26,
+        64.5
+      ],
+      "size": [
+        1.5,
+        0.5,
+        7
+      ],
+      "surface": "metal",
+      "glow": "edges"
+    },
+    {
+      "id": "sw-spire-sw-balcony-join-n",
+      "pos": [
+        -66,
+        26,
+        67.75
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-balcony-join-s",
+      "pos": [
+        -66,
+        26,
+        61.25
+      ],
+      "size": [
+        10,
+        0.5,
+        0.5
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-balcony-join-w",
+      "pos": [
+        -60.75,
+        26,
+        64.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-balcony-join-e",
+      "pos": [
+        -71.25,
+        26,
+        64.5
+      ],
+      "size": [
+        0.5,
+        0.5,
+        6
+      ],
+      "surface": "metal"
+    },
+    {
+      "id": "sw-spire-sw-cover-nw",
+      "pos": [
+        -60.5,
+        26.85,
+        68.7
+      ],
+      "size": [
+        2,
         1.1999999999999993,
-        4
+        1
       ],
       "surface": "crate"
     },
     {
-      "id": "sw-spire-sw-step",
+      "id": "sw-spire-sw-cover-se",
       "pos": [
-        -59.75,
-        1.5,
-        64.5
+        -71.5,
+        26.85,
+        60.3
       ],
       "size": [
-        2.5,
-        3,
-        3
+        2,
+        1.1999999999999993,
+        1
       ],
-      "surface": "concrete"
+      "surface": "crate"
     },
     {
       "id": "n-bridge",
@@ -5406,13 +5484,13 @@
       "id": "sky-centre",
       "pos": [
         0,
-        26.25,
+        26,
         0
       ],
       "size": [
         3,
         0.5,
-        28
+        26
       ],
       "surface": "metal",
       "glow": "edges"
@@ -5420,9 +5498,9 @@
     {
       "id": "sky-centre-cover-0",
       "pos": [
-        1,
-        27.1,
-        -1
+        -1,
+        26.85,
+        0
       ],
       "size": [
         1,
@@ -5434,12 +5512,12 @@
     {
       "id": "sky-north",
       "pos": [
-        -2,
-        26.25,
+        0,
+        26,
         -64.5
       ],
       "size": [
-        128,
+        118,
         0.5,
         3
       ],
@@ -5449,8 +5527,8 @@
     {
       "id": "sky-north-cover-0",
       "pos": [
-        -53,
-        27.1,
+        -46,
+        26.85,
         -65.5
       ],
       "size": [
@@ -5463,8 +5541,8 @@
     {
       "id": "sky-north-cover-1",
       "pos": [
-        -29,
-        27.1,
+        -22,
+        26.85,
         -63.5
       ],
       "size": [
@@ -5477,8 +5555,8 @@
     {
       "id": "sky-north-cover-2",
       "pos": [
-        -5,
-        27.1,
+        2,
+        26.85,
         -65.5
       ],
       "size": [
@@ -5491,8 +5569,8 @@
     {
       "id": "sky-north-cover-3",
       "pos": [
-        19,
-        27.1,
+        26,
+        26.85,
         -63.5
       ],
       "size": [
@@ -5505,8 +5583,8 @@
     {
       "id": "sky-north-cover-4",
       "pos": [
-        43,
-        27.1,
+        50,
+        26.85,
         -65.5
       ],
       "size": [
@@ -5519,12 +5597,12 @@
     {
       "id": "sky-south",
       "pos": [
-        2,
-        26.25,
+        0,
+        26,
         64.5
       ],
       "size": [
-        128,
+        118,
         0.5,
         3
       ],
@@ -5534,8 +5612,8 @@
     {
       "id": "sky-south-cover-0",
       "pos": [
-        -49,
-        27.1,
+        -46,
+        26.85,
         63.5
       ],
       "size": [
@@ -5548,8 +5626,8 @@
     {
       "id": "sky-south-cover-1",
       "pos": [
-        -25,
-        27.1,
+        -22,
+        26.85,
         65.5
       ],
       "size": [
@@ -5562,8 +5640,8 @@
     {
       "id": "sky-south-cover-2",
       "pos": [
-        -1,
-        27.1,
+        2,
+        26.85,
         63.5
       ],
       "size": [
@@ -5576,8 +5654,8 @@
     {
       "id": "sky-south-cover-3",
       "pos": [
-        23,
-        27.1,
+        26,
+        26.85,
         65.5
       ],
       "size": [
@@ -5590,8 +5668,8 @@
     {
       "id": "sky-south-cover-4",
       "pos": [
-        47,
-        27.1,
+        50,
+        26.85,
         63.5
       ],
       "size": [
@@ -5605,13 +5683,13 @@
       "id": "sky-west",
       "pos": [
         -66,
-        26.25,
+        26,
         0
       ],
       "size": [
         3,
         0.5,
-        123
+        119
       ],
       "surface": "metal",
       "glow": "edges"
@@ -5620,8 +5698,8 @@
       "id": "sky-west-cover-0",
       "pos": [
         -67,
-        27.1,
-        -48.5
+        26.85,
+        -46.5
       ],
       "size": [
         1,
@@ -5634,8 +5712,8 @@
       "id": "sky-west-cover-1",
       "pos": [
         -65,
-        27.1,
-        -24.5
+        26.85,
+        -22.5
       ],
       "size": [
         1,
@@ -5648,8 +5726,8 @@
       "id": "sky-west-cover-2",
       "pos": [
         -67,
-        27.1,
-        -0.5
+        26.85,
+        1.5
       ],
       "size": [
         1,
@@ -5662,8 +5740,8 @@
       "id": "sky-west-cover-3",
       "pos": [
         -65,
-        27.1,
-        23.5
+        26.85,
+        25.5
       ],
       "size": [
         1,
@@ -5676,8 +5754,8 @@
       "id": "sky-west-cover-4",
       "pos": [
         -67,
-        27.1,
-        47.5
+        26.85,
+        49.5
       ],
       "size": [
         1,
@@ -5690,13 +5768,13 @@
       "id": "sky-east",
       "pos": [
         66,
-        26.25,
+        26,
         0
       ],
       "size": [
         3,
         0.5,
-        123
+        119
       ],
       "surface": "metal",
       "glow": "edges"
@@ -5705,8 +5783,8 @@
       "id": "sky-east-cover-0",
       "pos": [
         65,
-        27.1,
-        -48.5
+        26.85,
+        -46.5
       ],
       "size": [
         1,
@@ -5719,8 +5797,8 @@
       "id": "sky-east-cover-1",
       "pos": [
         67,
-        27.1,
-        -24.5
+        26.85,
+        -22.5
       ],
       "size": [
         1,
@@ -5733,8 +5811,8 @@
       "id": "sky-east-cover-2",
       "pos": [
         65,
-        27.1,
-        -0.5
+        26.85,
+        1.5
       ],
       "size": [
         1,
@@ -5747,8 +5825,8 @@
       "id": "sky-east-cover-3",
       "pos": [
         67,
-        27.1,
-        23.5
+        26.85,
+        25.5
       ],
       "size": [
         1,
@@ -5761,8 +5839,8 @@
       "id": "sky-east-cover-4",
       "pos": [
         65,
-        27.1,
-        47.5
+        26.85,
+        49.5
       ],
       "size": [
         1,
@@ -5775,13 +5853,13 @@
       "id": "sky-spine-n",
       "pos": [
         0,
-        26.25,
-        -41.5
+        26,
+        -42.25
       ],
       "size": [
         3,
         0.5,
-        43
+        41.5
       ],
       "surface": "metal",
       "glow": "edges"
@@ -5789,23 +5867,9 @@
     {
       "id": "sky-spine-n-cover-0",
       "pos": [
-        1,
-        27.1,
+        -1,
+        26.85,
         -50
-      ],
-      "size": [
-        1,
-        1.1999999999999993,
-        2
-      ],
-      "surface": "crate"
-    },
-    {
-      "id": "sky-spine-n-cover-1",
-      "pos": [
-        1,
-        27.1,
-        -26
       ],
       "size": [
         1,
@@ -5818,13 +5882,13 @@
       "id": "sky-spine-s",
       "pos": [
         0,
-        26.25,
-        41.5
+        26,
+        42.25
       ],
       "size": [
         3,
         0.5,
-        43
+        41.5
       ],
       "surface": "metal",
       "glow": "edges"
@@ -5832,23 +5896,9 @@
     {
       "id": "sky-spine-s-cover-0",
       "pos": [
-        1,
-        27.1,
-        33
-      ],
-      "size": [
-        1,
-        1.1999999999999993,
-        2
-      ],
-      "surface": "crate"
-    },
-    {
-      "id": "sky-spine-s-cover-1",
-      "pos": [
-        1,
-        27.1,
-        57
+        -1,
+        26.85,
+        34.5
       ],
       "size": [
         1,
@@ -7205,6 +7255,246 @@
       "surface": "ramp"
     },
     {
+      "id": "spire-n-flight-0",
+      "pos": [
+        0,
+        1.875,
+        -18
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-n-flight-1",
+      "pos": [
+        0,
+        5.625,
+        -15
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-n-flight-2",
+      "pos": [
+        0,
+        9.375,
+        -18
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-n-flight-3",
+      "pos": [
+        0,
+        13.125,
+        -15
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-n-flight-4",
+      "pos": [
+        0,
+        16.875,
+        -18
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-n-flight-5",
+      "pos": [
+        0,
+        20.625,
+        -15
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-n-flight-6",
+      "pos": [
+        0,
+        24.375,
+        -18
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-n-flight-7",
+      "pos": [
+        0,
+        28.125,
+        -15
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-s-flight-0",
+      "pos": [
+        0,
+        1.875,
+        18
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-s-flight-1",
+      "pos": [
+        0,
+        5.625,
+        15
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-s-flight-2",
+      "pos": [
+        0,
+        9.375,
+        18
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-s-flight-3",
+      "pos": [
+        0,
+        13.125,
+        15
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-s-flight-4",
+      "pos": [
+        0,
+        16.875,
+        18
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-s-flight-5",
+      "pos": [
+        0,
+        20.625,
+        15
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-s-flight-6",
+      "pos": [
+        0,
+        24.375,
+        18
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "spire-s-flight-7",
+      "pos": [
+        0,
+        28.125,
+        15
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
       "id": "nw-low-ramp",
       "pos": [
         -64,
@@ -7220,6 +7510,126 @@
       "surface": "ramp"
     },
     {
+      "id": "nw-spire-nw-flight-0",
+      "pos": [
+        -66,
+        1.875,
+        -66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "nw-spire-nw-flight-1",
+      "pos": [
+        -66,
+        5.625,
+        -63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "nw-spire-nw-flight-2",
+      "pos": [
+        -66,
+        9.375,
+        -66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "nw-spire-nw-flight-3",
+      "pos": [
+        -66,
+        13.125,
+        -63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "nw-spire-nw-flight-4",
+      "pos": [
+        -66,
+        16.875,
+        -66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "nw-spire-nw-flight-5",
+      "pos": [
+        -66,
+        20.625,
+        -63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "nw-spire-nw-flight-6",
+      "pos": [
+        -66,
+        24.375,
+        -66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "nw-spire-nw-flight-7",
+      "pos": [
+        -66,
+        28.125,
+        -63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
       "id": "se-low-ramp",
       "pos": [
         64,
@@ -7232,6 +7642,366 @@
         6
       ],
       "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "se-spire-se-flight-0",
+      "pos": [
+        66,
+        1.875,
+        66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "se-spire-se-flight-1",
+      "pos": [
+        66,
+        5.625,
+        63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "se-spire-se-flight-2",
+      "pos": [
+        66,
+        9.375,
+        66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "se-spire-se-flight-3",
+      "pos": [
+        66,
+        13.125,
+        63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "se-spire-se-flight-4",
+      "pos": [
+        66,
+        16.875,
+        66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "se-spire-se-flight-5",
+      "pos": [
+        66,
+        20.625,
+        63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "se-spire-se-flight-6",
+      "pos": [
+        66,
+        24.375,
+        66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "se-spire-se-flight-7",
+      "pos": [
+        66,
+        28.125,
+        63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "ne-spire-ne-flight-0",
+      "pos": [
+        66,
+        1.875,
+        -66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "ne-spire-ne-flight-1",
+      "pos": [
+        66,
+        5.625,
+        -63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "ne-spire-ne-flight-2",
+      "pos": [
+        66,
+        9.375,
+        -66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "ne-spire-ne-flight-3",
+      "pos": [
+        66,
+        13.125,
+        -63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "ne-spire-ne-flight-4",
+      "pos": [
+        66,
+        16.875,
+        -66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "ne-spire-ne-flight-5",
+      "pos": [
+        66,
+        20.625,
+        -63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "ne-spire-ne-flight-6",
+      "pos": [
+        66,
+        24.375,
+        -66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "ne-spire-ne-flight-7",
+      "pos": [
+        66,
+        28.125,
+        -63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "sw-spire-sw-flight-0",
+      "pos": [
+        -66,
+        1.875,
+        66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "sw-spire-sw-flight-1",
+      "pos": [
+        -66,
+        5.625,
+        63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "sw-spire-sw-flight-2",
+      "pos": [
+        -66,
+        9.375,
+        66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "sw-spire-sw-flight-3",
+      "pos": [
+        -66,
+        13.125,
+        63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "sw-spire-sw-flight-4",
+      "pos": [
+        -66,
+        16.875,
+        66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "sw-spire-sw-flight-5",
+      "pos": [
+        -66,
+        20.625,
+        63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
+      "surface": "ramp"
+    },
+    {
+      "id": "sw-spire-sw-flight-6",
+      "pos": [
+        -66,
+        24.375,
+        66
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "-x",
+      "surface": "ramp"
+    },
+    {
+      "id": "sw-spire-sw-flight-7",
+      "pos": [
+        -66,
+        28.125,
+        63
+      ],
+      "size": [
+        7.5,
+        3.75,
+        3
+      ],
+      "rises": "+x",
       "surface": "ramp"
     },
     {
@@ -8980,9 +9750,9 @@
       "id": "mast-spire-n",
       "kind": "mast",
       "pos": [
-        4.5,
+        5.25,
         30.5,
-        -14.5
+        -13.25
       ],
       "size": [
         0.15,
@@ -8994,9 +9764,9 @@
       "id": "mast-spire-s",
       "kind": "mast",
       "pos": [
-        4.5,
+        5.25,
         30.5,
-        19.5
+        19.75
       ],
       "size": [
         0.15,
@@ -9008,9 +9778,9 @@
       "id": "mast-spire-nw",
       "kind": "mast",
       "pos": [
-        -61.5,
+        -60.75,
         30.5,
-        -62
+        -61.25
       ],
       "size": [
         0.15,
@@ -9022,9 +9792,9 @@
       "id": "mast-spire-se",
       "kind": "mast",
       "pos": [
-        70.5,
+        71.25,
         30.5,
-        67
+        67.75
       ],
       "size": [
         0.15,
@@ -9036,9 +9806,9 @@
       "id": "mast-spire-ne",
       "kind": "mast",
       "pos": [
-        70.5,
+        71.25,
         30.5,
-        -62
+        -61.25
       ],
       "size": [
         0.15,
@@ -9050,9 +9820,9 @@
       "id": "mast-spire-sw",
       "kind": "mast",
       "pos": [
-        -61.5,
+        -60.75,
         30.5,
-        67
+        67.75
       ],
       "size": [
         0.15,

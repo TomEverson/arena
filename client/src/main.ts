@@ -131,7 +131,35 @@ function useLevel(next: Level): void {
 const view = new RetroRenderer(canvas, scene);
 window.addEventListener("resize", () => view.resize());
 
-const HIP_FOV = 75;
+const FOV_KEY = "arena.fov";
+const readFov = (): number => {
+  const value = Number(localStorage.getItem(FOV_KEY));
+  return Number.isFinite(value) ? Math.max(60, Math.min(120, value)) : 75;
+};
+let hipFov = readFov();
+const fovSettings = document.getElementById("fov-settings") as HTMLDivElement;
+const fovRange = document.getElementById("fov-range") as HTMLInputElement;
+const fovValue = document.getElementById("fov-value") as HTMLSpanElement;
+const resolutionValue = document.getElementById("resolution-value") as HTMLSelectElement;
+const aspectValue = document.getElementById("aspect-value") as HTMLSelectElement;
+resolutionValue.value = localStorage.getItem("arena.res") ?? "720";
+aspectValue.value = localStorage.getItem("arena.aspect") ?? "16:9";
+const reloadDisplay = (): void => {
+  localStorage.setItem("arena.res", resolutionValue.value);
+  localStorage.setItem("arena.aspect", aspectValue.value);
+  location.reload();
+};
+resolutionValue.addEventListener("change", reloadDisplay);
+aspectValue.addEventListener("change", reloadDisplay);
+const setFov = (value: number): void => {
+  hipFov = Math.max(60, Math.min(120, value));
+  fovRange.value = String(hipFov);
+  fovValue.textContent = `${hipFov}°`;
+  localStorage.setItem(FOV_KEY, String(hipFov));
+};
+setFov(hipFov);
+fovRange.addEventListener("input", () => setFov(Number(fovRange.value)));
+fovSettings.addEventListener("click", (e) => e.stopPropagation());
 
 // Your own body is the Dummy too, seen from inside: no head, arms or rifle (the viewmodel has
 // those), just the torso and legs you see when you look down, in every pose the body has.
@@ -310,11 +338,21 @@ const setSensitivity = (value: number): void => {
   localStorage.setItem(SENSITIVITY_KEY, display);
 };
 setSensitivity(sensitivity);
+const sensitivitySettings = document.getElementById("sensitivity-settings") as HTMLDivElement;
+sensitivitySettings.addEventListener("click", (e) => e.stopPropagation());
 for (const input of [sensitivityRange, sensitivityValue]) {
   input.addEventListener("input", () => setSensitivity(Number(input.value)));
 }
-const sensitivitySettings = document.getElementById("sensitivity-settings") as HTMLDivElement;
-sensitivitySettings.addEventListener("click", (e) => e.stopPropagation());
+
+const fullscreenToggle = document.getElementById("fullscreen-toggle") as HTMLInputElement;
+fullscreenToggle.checked = document.fullscreenElement !== null;
+fullscreenToggle.addEventListener("change", () => {
+  if (fullscreenToggle.checked) void document.documentElement.requestFullscreen();
+  else if (document.fullscreenElement) void document.exitFullscreen();
+});
+document.addEventListener("fullscreenchange", () => {
+  fullscreenToggle.checked = document.fullscreenElement !== null;
+});
 const clampPitch = (p: number) => Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, p));
 let adsT = 0; // 0 = hip, 1 = fully aimed (smoothed per frame)
 document.addEventListener("mousemove", (e) => {
@@ -801,7 +839,7 @@ function frame(nowMs: number): void {
   // Aim down sights: smooth zoom.
   const adsHeld = held.has("Mouse2") && currentWeapon().slot !== EMPTY_HANDS;
   adsT += ((adsHeld ? 1 : 0) - adsT) * (1 - Math.exp(-frameDt * 14));
-  const fov = HIP_FOV * (1 + ((currentDef()?.adsFovScale ?? 1) - 1) * adsT);
+  const fov = hipFov * (1 + ((currentDef()?.adsFovScale ?? 1) - 1) * adsT);
   if (Math.abs(cam.fov - fov) > 0.01) {
     cam.fov = fov;
     cam.updateProjectionMatrix();

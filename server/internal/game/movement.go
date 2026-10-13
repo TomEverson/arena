@@ -465,6 +465,11 @@ func moveHorizontal(s *PlayerState, w *CollisionWorld, axisX bool, d float64) wa
 	for i := range w.Boxes {
 		b := &w.Boxes[i]
 		pb := playerBox(s.X, s.Y, s.Z, bodyHeight(s))
+		// A player standing on a box may move across its top; floating-point drift should not turn
+		// the support surface into a horizontal wall.
+		if s.Y >= b.MaxY-GroundEps {
+			continue
+		}
 		if !overlaps(&pb, b) {
 			continue
 		}
@@ -498,6 +503,10 @@ func moveHorizontal(s *PlayerState, w *CollisionWorld, axisX bool, d float64) wa
 
 	for i := range w.Ramps {
 		pb := playerBox(s.X, s.Y, s.Z, bodyHeight(s))
+		// A ramp is a wedge filling its box and nothing more: wholly under the box, it is overhead.
+		if pb.MaxY <= w.Ramps[i].Box.MinY+1e-9 {
+			continue
+		}
 		surf, ok := rampSurface(&w.Ramps[i], &pb)
 		if !ok || s.Y >= surf {
 			continue
@@ -538,7 +547,19 @@ func moveVertical(s *PlayerState, w *CollisionWorld, dy float64) {
 
 	for i := range w.Ramps {
 		pb := playerBox(s.X, s.Y, s.Z, height)
-		if surf, ok := rampSurface(&w.Ramps[i], &pb); ok && s.Y < surf {
+		surf, ok := rampSurface(&w.Ramps[i], &pb)
+		if !ok {
+			continue
+		}
+		if minY := w.Ramps[i].Box.MinY; prevY+height <= minY+1e-6 {
+			// Came from underneath: the flat bottom of the ramp's box is a ceiling, like a box's.
+			if s.Y+height > minY {
+				s.Y = minY - height
+				s.VY = 0
+			}
+			continue
+		}
+		if s.Y < surf {
 			s.Y = surf
 			if s.VY < 0 {
 				s.VY = 0

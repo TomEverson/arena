@@ -146,6 +146,41 @@ export const scenarios: Scenario[] = [
   })(),
 
   (() => {
+    // A ramp up in the air (its box is 3 to 6 m up): you walk and jump under it.
+    const w = inline(
+      [],
+      [{ box: { minX: -2, maxX: 2, minY: 3, maxY: 6, minZ: -12, maxZ: -4 }, rises: "-z" }],
+    );
+    return scenario(
+      "ramp-overhead",
+      "A ramp is a wedge filling its box and nothing more: you walk under one that is overhead, and a jump meets its flat underside.",
+      w,
+      [0, 0, 0],
+      phases([
+        [3, {}],
+        [50, F], // under it
+        [1, { jump: true }],
+        [15, {}],
+        [1, { jump: true }], // the second jump, into the underside
+        [60, {}],
+        [80, F], // and out the far side
+      ]),
+      (t) => {
+        check(
+          t.every((s) => s.y < 3 - P.standHeight + 1e-6),
+          "never lifted onto it or into it",
+        );
+        check(maxOf(t, (s) => s.y) > 1, "the jumps rose to the underside");
+        check(
+          any(t, (s) => s.z < -5 && s.z > -11 && Math.abs(s.y - (3 - P.standHeight)) < 1e-6),
+          "and met it: head against the bottom of the box",
+        );
+        check(last(t).z < -13 && last(t).onGround && last(t).y === 0, "walked out the far side");
+      },
+    );
+  })(),
+
+  (() => {
     const p = phases([
       [3, {}],
       [30, F],

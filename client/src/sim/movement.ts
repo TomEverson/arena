@@ -456,6 +456,9 @@ function moveHorizontal(
   let hit: WallHit | null = null;
 
   for (const b of world.boxes) {
+    // A player standing on a box may move across its top; floating-point drift should not turn
+    // the support surface into a horizontal wall.
+    if (s.y >= b.maxY - P.groundEps) continue;
     if (!overlaps(playerBox(s.x, s.y, s.z, bodyHeight(s)), b)) continue;
     // Small ledge: step up onto it instead of stopping.
     if (b.maxY > s.y && b.maxY - s.y <= P.stepHeight) {
@@ -472,7 +475,10 @@ function moveHorizontal(
   }
 
   for (const r of world.ramps) {
-    const surf = rampSurface(r, playerBox(s.x, s.y, s.z, bodyHeight(s)));
+    const pb = playerBox(s.x, s.y, s.z, bodyHeight(s));
+    // A ramp is a wedge filling its box and nothing more: wholly under the box, it is overhead.
+    if (pb.maxY <= r.box.minY + 1e-9) continue;
+    const surf = rampSurface(r, pb);
     if (surf === null || s.y >= surf) continue;
     if (surf - s.y <= P.rampStep) {
       s.y = surf;
@@ -505,7 +511,16 @@ function moveVertical(s: PlayerState, world: CollisionWorld, dy: number): void {
 
   for (const r of world.ramps) {
     const surf = rampSurface(r, playerBox(s.x, s.y, s.z, height));
-    if (surf !== null && s.y < surf) {
+    if (surf === null) continue;
+    if (prevY + height <= r.box.minY + 1e-6) {
+      // Came from underneath: the flat bottom of the ramp's box is a ceiling, like a box's.
+      if (s.y + height > r.box.minY) {
+        s.y = r.box.minY - height;
+        s.vy = 0;
+      }
+      continue;
+    }
+    if (s.y < surf) {
       s.y = surf;
       if (s.vy < 0) s.vy = 0;
     }

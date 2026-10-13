@@ -8,16 +8,24 @@ import { letterbox, ndcToScreen } from "./viewport";
  * Lower = chunkier. Try ?res=240 (very chunky), 360, 480, 540, 720 (default, barely pixelated).
  */
 const DEFAULT_RENDER_HEIGHT = 720;
+const DEFAULT_ASPECT = 16 / 9;
 
 function requestedHeight(): number {
-  const raw =
-    typeof location === "undefined" ? null : new URLSearchParams(location.search).get("res");
+  const params = typeof location === "undefined" ? null : new URLSearchParams(location.search);
+  const raw = params?.get("res") ?? (typeof localStorage === "undefined" ? null : localStorage.getItem("arena.res"));
   const n = raw === null ? Number.NaN : Number.parseInt(raw, 10);
   return Number.isFinite(n) ? Math.min(1080, Math.max(120, n)) : DEFAULT_RENDER_HEIGHT;
 }
 
+function requestedAspect(): number {
+  const params = typeof location === "undefined" ? null : new URLSearchParams(location.search);
+  const raw = params?.get("aspect") ?? (typeof localStorage === "undefined" ? null : localStorage.getItem("arena.aspect"));
+  return raw === "4:3" ? 4 / 3 : raw === "21:9" ? 21 / 9 : DEFAULT_ASPECT;
+}
+
 export const RENDER_HEIGHT = requestedHeight();
-export const RENDER_WIDTH = Math.round((RENDER_HEIGHT * 16) / 9);
+export const RENDER_ASPECT = requestedAspect();
+export const RENDER_WIDTH = Math.round(RENDER_HEIGHT * RENDER_ASPECT);
 
 /**
  * The palette screen effect. "off" is the plain image; the others snap every pixel to the

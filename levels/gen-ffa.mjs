@@ -7,8 +7,9 @@
 //   centre:      three heights. A sunken pit (-3 m) under a cross of bridges with the crown on
 //                top; a ground ring with a building in each corner; a high loop of decks, roofs,
 //                catwalks and a gantry (4 to 7 m).
-//   spires:      six open towers 30 m tall: one north and one south of the pit, and one in the
-//                middle of each corner district. Skybridges 26.5 m up join them all: a ring
+//   spires:      six open stair towers 30 m tall (a switchback of ramps to the top): one north
+//                and one south of the pit, and one in the middle of each corner district.
+//                Skybridges 26.25 m up join them all, from balcony to balcony: a ring
 //                round the four corners, and a spine from its north side to its south through
 //                the two centre spires. The high ground, and a long way to fall.
 //   corners:     "blocks" (north-west, south-east): four buildings on streets, one a room, one
@@ -66,6 +67,7 @@ const SURFACES = [
   [/^floor-\d+$/, "ground"],
   [/crate|cover/, "crate"],
   [/^box-\d+$/, "container"],
+  [/^spire-\w+-post/, "metal"],
   [/post|pillar|column|leg|^cross-/, "pillar"],
   [/step/, "concrete"],
   [/^gate-\d+-wall$/, "barrier"],
@@ -76,7 +78,7 @@ const SURFACES = [
   [/wall/, "barrier"],
 ];
 const WALKWAY =
-  /^(deck-[ne]|deck-link|catwalk-[ns]|gantry|gate-\d+|skybridge|crane-beam|bridge(-\w+)?|crown(-[we])?|spire-\w+-floor-\d|sky-[a-z-]+)$/;
+  /^(deck-[ne]|deck-link|catwalk-[ns]|gantry|gate-\d+|skybridge|crane-beam|bridge(-\w+)?|crown(-[we])?|spire-\w+-(balcony-[nswe]|top)|sky-[a-z-]+)$/;
 const DOORS = {
   "room-lintel-n": "door-z",
   "room-lintel-e": "door-x",
@@ -290,7 +292,8 @@ block("gantry-post-e", [1, 2], [21, 22], CAT_Y);
 block("west-block", [-22, -17], [-11, -5], 3.5);
 block("east-block", [19, 22], [5, 10], 3.5);
 block("north-crate", [9, 11], [-16, -14], 1.2);
-block("north-wall", [7, 8], [-21, -15], 2.2);
+// The north spire is an open switchback: keep the outside lane clear so the lower route can pass
+// under the second flight and reach the landing.
 block("west-wall", [-15, -14], [-9, -4], 2.2);
 block("west-crate", [-20, -18], [5, 7], 1.2);
 block("west-wall-s", [-15, -14], [5, 10], 2.2);
@@ -301,63 +304,76 @@ block("se-crate", [22, 24], [16, 18], 1.2);
 block("east-wall", [20, 21], [-9, -5], 2.2);
 block("sw-wall", [-22, -18], [25, 26], 2.5);
 
-// --- The spires: open towers 30 m tall. Two stand north and south of the pit (where the north
-// and south blocks stood); one stands in the middle of each corner district (see blocks and
-// yard). Each is on four legs with nothing between them at ground level, so you walk straight
-// under it. Above, half-floors alternate west and east every 3.5 m, and under the inner edge of
-// each hangs a wall down to the level of the floor below on the other side: stand on that floor,
-// jump against the wall, and the mantle puts you on the next (a 3.5 m climb, like the blocks in
-// the ring; one jump is enough). The walls also stop you walking off the inner edge. A step
-// beside each gets you up from the ground. The top is 30 m: the drop the rolling dive wants for
-// its one-hit kill. The seventh floor, 26.5 m up, is the one the skybridges are on.
-const SPIRE_FLOORS = [5.5, 9, 12.5, 16, 19.5, 23, 26.5, 30];
-const SKY = 6; // the floor the skybridges are on
-const SKY_Y = SPIRE_FLOORS[SKY];
+// --- The spires: open stair towers 30 m tall. Two stand north and south of the pit (where the
+// north and south blocks stood); one stands in the middle of each corner district (see blocks
+// and yard). Each is a switchback of eight ramps, 3.75 m up apiece, in two lanes side by side:
+// up one lane to a landing at the end, across it, and back up the other lane. So you run to the
+// top without a jump. Under the first flight of the second lane the ground is open, 3.75 m
+// clear: you can walk through a spire. (Ramps one above another work because a ramp is a wedge
+// filling its box and nothing more: see moveHorizontal and moveVertical.)
+//
+// At 26.25 m, level with the last landing but one, a balcony runs right round the outside: the
+// skybridges meet it. The top is a deck at 30 m: the drop the rolling dive wants for its
+// one-hit kill.
+const SPIRE_RISE = 3.75;
+const SPIRE_TOP = 8 * SPIRE_RISE; // 30
+const SKY_Y = 7 * SPIRE_RISE; // 26.25: the balcony, and the skybridges
 const ordered = (a, b) => [a, b].sort((p, q) => p - q);
-/** Where each spire's skybridge floor is, in world coordinates: the bridges are built to meet it. */
+/** Where each spire is, in world coordinates, for the skybridges and the masts. */
 const spires = {};
-/** A spire `name` centred on (0, cz) in the current district's coordinates. */
-function spire(name, cz) {
-  const zs = [cz - 3, cz + 3];
-  for (const [lx, lz] of [
-    [-1, -1],
-    [1, -1],
-    [-1, 1],
-    [1, 1],
-  ]) {
-    const x0 = lx < 0 ? -5 : 4;
-    const z0 = lz < 0 ? zs[0] : zs[1] - 1;
-    block(
-      `spire-${name}-leg-${lz < 0 ? "n" : "s"}${lx < 0 ? "w" : "e"}`,
-      [x0, x0 + 1],
-      [z0, z0 + 1],
-      SPIRE_FLOORS.at(-1) + 0.5,
-    );
+/** How far a spire's balcony reaches from its centre, along X and along Z. */
+const BALCONY = { x: 7, z: 5 };
+/**
+ * A spire `name` centred on (0, cz) in the current district's coordinates. `flip` swaps the two
+ * lanes, so the first flight (which stands on the ground) is on the other side.
+ */
+function spire(name, cz, flip = false) {
+  const id = (part) => `spire-${name}-${part}`;
+  const lane = (k) =>
+    (k % 2 === 0) !== flip ? [cz - 3, cz] : [cz, cz + 3];
+  const deep = [cz - 3, cz + 3];
+  for (let k = 0; k < 8; k++) {
+    const [y0, y1] = [k * SPIRE_RISE, (k + 1) * SPIRE_RISE];
+    const up = k % 2 === 0; // even flights rise toward +X, odd ones back toward -X
+    ramp(id(`flight-${k}`), [-3.75, 3.75], [y0, y1], lane(k), up ? "+x" : "-x");
+    // The landing at the top of the flight, across both lanes. (The last is part of the top deck.)
+    if (k < 7) {
+      const landing = k === 6 ? (up ? [3.75, 5] : [-5, -3.75]) : up ? [3.75, 8] : [-8, -3.75];
+      span(id(`landing-${k}`), landing, [y1 - 0.5, y1], deep);
+    }
   }
-  SPIRE_FLOORS.forEach((y, i) => {
-    span(`spire-${name}-floor-${i}`, i % 2 === 0 ? [-4, 0] : [0, 4], [y - 0.5, y], zs);
-    if (i > 0)
-      span(
-        `spire-${name}-wall-${i}`,
-        i % 2 === 0 ? [-0.3, 0] : [0, 0.3],
-        [SPIRE_FLOORS[i - 1], y - 0.5],
-        zs,
-      );
-  });
-  // Cover on the top, and on the skybridge floor.
-  const top = SPIRE_FLOORS.at(-1);
-  span(`spire-${name}-cover-top`, [1, 3], [top, top + 1.2], [cz - 0.5, cz + 0.5]);
-  span(`spire-${name}-cover-mid`, [-3.5, -2.5], [SKY_Y, SKY_Y + 1.2], [cz - 2, cz + 2]);
-  block(`spire-${name}-step`, [-7.5, -5], [cz - 1.5, cz + 1.5], 3);
-  spires[name] = {
-    x: at.ox,
-    z: tz([cz, cz])[0],
-    floor: tx(SKY % 2 === 0 ? [-4, 0] : [0, 4]), // the skybridge floor's extent along X
-    depth: tz(zs),
-  };
+  // The top deck: over the lane the last flight is not in, and the end of the one it is.
+  span(id("top"), [-5, 5], [SPIRE_TOP - 0.5, SPIRE_TOP], lane(6));
+  span(id("top-end"), [-5, -3.75], [SPIRE_TOP - 0.5, SPIRE_TOP], lane(7));
+  span(id("cover-top"), [0, 2], [SPIRE_TOP, SPIRE_TOP + 1.2], [lane(6)[0] + 1, lane(6)[0] + 2]);
+  // Four thin posts just outside the corners, the whole height.
+  for (const [n, xs, zs] of [
+    ["nw", [-5.5, -5], [cz - 3.5, cz - 3]],
+    ["ne", [5, 5.5], [cz - 3.5, cz - 3]],
+    ["sw", [-5.5, -5], [cz + 3, cz + 3.5]],
+    ["se", [5, 5.5], [cz + 3, cz + 3.5]],
+  ])
+    block(id(`post-${n}`), xs, zs, SPIRE_TOP + 0.5);
+  // The balcony, right round at the skybridges' height: a strip along each side outside the
+  // posts, and the pieces between the posts that join it to the stairs.
+  const ys = [SKY_Y - 0.5, SKY_Y];
+  const { x: bx, z: bz } = BALCONY;
+  // The two centre spires use the spine itself as the inward balcony edge; leaving that edge out
+  // avoids overlapping the bridge while keeping the outer balcony loop intact.
+  if (name !== "s") span(id("balcony-n"), [-bx, bx], ys, [cz - bz, cz - 3.5]);
+  if (name !== "n") span(id("balcony-s"), [-bx, bx], ys, [cz + 3.5, cz + bz]);
+  span(id("balcony-w"), [-bx, -5.5], ys, [cz - 3.5, cz + 3.5]);
+  span(id("balcony-e"), [5.5, bx], ys, [cz - 3.5, cz + 3.5]);
+  if (name !== "n") span(id("balcony-join-n"), [-5, 5], ys, [cz - 3.5, cz - 3]);
+  if (name !== "s") span(id("balcony-join-s"), [-5, 5], ys, [cz + 3, cz + 3.5]);
+  span(id("balcony-join-w"), [-5.5, -5], ys, deep);
+  span(id("balcony-join-e"), [5, 5.5], ys, deep);
+  span(id("cover-nw"), [-bx + 0.5, -bx + 2.5], [SKY_Y, SKY_Y + 1.2], [cz - bz + 0.3, cz - bz + 1.3]);
+  span(id("cover-se"), [bx - 2.5, bx - 0.5], [SKY_Y, SKY_Y + 1.2], [cz + bz - 1.3, cz + bz - 0.3]);
+  spires[name] = { x: at.ox, z: tz([cz, cz])[0] };
 }
-spire("n", -17);
-spire("s", 17);
+spire("n", -16.5);
+spire("s", 16.5, true); // (its first flight on the side away from the pit, like the north one's)
 
 // The centre's own spawn pads, each behind or under something.
 spawn("nw", -27, -26);
@@ -401,7 +417,7 @@ function blocks() {
   block("wall-b", [0, 6], [6, 7], 2.2);
   block("crate-c", [-22, -20], [-3, -1], 1.2);
   spawn("room", 15, -19);
-  // A spire where the streets cross (the two walls above stand clear of its legs and its step).
+  // A spire where the streets cross (the two walls above stand clear of it).
   spire(at.pre.slice(0, -1), 1.5);
   spawn("street", -2, 12);
 }
@@ -500,22 +516,19 @@ place("w", -PITCH, 0, 1, 1, terraces);
 place("e", PITCH, 0, -1, -1, terraces);
 
 // ============================== Skybridges ==============================
-// 26.5 m up, 3 m wide, each from one spire's seventh floor to another's: a ring round the four
-// corner spires, and a spine from the middle of its north side to the middle of its south,
-// through the two centre spires (which the first bridge already joins over the pit). A bridge
-// that runs along X ends where the floor it meets ends, which may be half way through the spire.
-// Low cover stands on alternate sides every 24 m: a bridge is a long way to be seen from.
+// 26.25 m up, 3 m wide, each from one spire's balcony to another's: a ring round the four corner
+// spires, and a spine from the middle of its north side to the middle of its south, through the
+// two centre spires. Low cover stands on alternate sides every 24 m: a bridge is a long way to
+// be seen from.
 {
   const ys = [SKY_Y - 0.5, SKY_Y];
-  // `oneSide`: all the cover on the far side (the spine: its near side runs on into the spires'
-  // half-floors, so that side is the way through).
-  const bridge = (id, xs, zs, oneSide = false) => {
+  const bridge = (id, xs, zs) => {
     span(id, xs, ys, zs);
     const alongX = xs[1] - xs[0] > zs[1] - zs[0];
     const [a, b] = alongX ? xs : zs;
     let n = 0;
     for (let c = a + 12; c < b - 6; c += 24, n++) {
-      const side = n % 2 === 0 && !oneSide ? [0, 1] : [2, 3]; // across the 3 m width
+      const side = n % 2 === 0 ? [0, 1] : [2, 3]; // across the 3 m width
       const across = alongX ? [zs[0] + side[0], zs[0] + side[1]] : [xs[0] + side[0], xs[0] + side[1]];
       const along = [c, c + 2];
       span(
@@ -527,15 +540,16 @@ place("e", PITCH, 0, -1, -1, terraces);
     }
   };
   const { n, s, nw, ne, sw, se } = spires;
-  bridge("sky-centre", [-1.5, 1.5], [n.depth[1], s.depth[0]], true);
-  // The ring. (North and south run along X; west and east along Z, between the spires' faces.)
-  bridge("sky-north", [nw.floor[1], ne.floor[0]], [nw.z - 1.5, nw.z + 1.5]);
-  bridge("sky-south", [sw.floor[1], se.floor[0]], [sw.z - 1.5, sw.z + 1.5]);
-  bridge("sky-west", [nw.x - 1.5, nw.x + 1.5], [nw.depth[1], sw.depth[0]]);
-  bridge("sky-east", [ne.x - 1.5, ne.x + 1.5], [ne.depth[1], se.depth[0]]);
+  const { x: bx, z: bz } = BALCONY;
+  bridge("sky-centre", [-1.5, 1.5], [n.z + 3.5, s.z - 3.5]);
+  // The ring. (North and south run along X; west and east along Z.)
+  bridge("sky-north", [nw.x + bx, ne.x - bx], [nw.z - 1.5, nw.z + 1.5]);
+  bridge("sky-south", [sw.x + bx, se.x - bx], [sw.z - 1.5, sw.z + 1.5]);
+  bridge("sky-west", [nw.x - 1.5, nw.x + 1.5], [nw.z + bz, sw.z - bz]);
+  bridge("sky-east", [ne.x - 1.5, ne.x + 1.5], [ne.z + bz, se.z - bz]);
   // The spine: from the ring's north side to the north spire, and from the south spire on.
-  bridge("sky-spine-n", [-1.5, 1.5], [nw.z + 1.5, n.depth[0]], true);
-  bridge("sky-spine-s", [-1.5, 1.5], [s.depth[1], sw.z - 1.5], true);
+  bridge("sky-spine-n", [-1.5, 1.5], [nw.z + 1.5, n.z - bz]);
+  bridge("sky-spine-s", [-1.5, 1.5], [s.z + bz, sw.z - 1.5]);
 }
 
 // ============================== Avenues and ring road ==============================
@@ -732,7 +746,7 @@ for (const [x, z] of [
 ])
   prop("mast", `wall-${x}-${z}`, [x * 1.005, WALL_H, z * 1.005], { size: [0.25, 8, 0.25] });
 for (const [name, sp] of Object.entries(spires))
-  prop("mast", `spire-${name}`, [sp.x + 4.5, 30.5, sp.depth[1] - 0.5], { size: [0.15, 5, 0.15] });
+  prop("mast", `spire-${name}`, [sp.x + 5.25, 30.5, sp.z + 3.25], { size: [0.15, 5, 0.15] });
 // (The terraces' tower and the yards' crane are placed twice, the second time turned round.)
 for (const s of [1, -1]) {
   prop("mast", `tower-${s}`, [s * (-PITCH + 17), 16, s * 11], { size: [0.2, 6, 0.2] });

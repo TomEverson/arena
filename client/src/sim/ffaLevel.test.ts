@@ -207,35 +207,31 @@ describe("the FFA map", () => {
       expect(seen[cell(pad.pos[0]) + cell(pad.pos[2]) * N], pad.id).toBe(1);
   });
 
-  it("has six spires you can climb floor by floor", () => {
-    // One hop of the climb, on the south centre spire: from a half-floor, run at the wall under
-    // the edge of the next one (3.5 m up, on the other side) and jump; the mantle puts you on it.
-    // `hero` 1 is the Assassin, who has no second jump: its single jump has to be enough.
-    const hop = (hero: number, fromY: number, x: number, yaw: number) => {
-      let s = spawnState(x, fromY, 17);
-      let top = fromY;
-      for (let i = 0; i < 150; i++) {
-        s = stepPlayer(
-          s,
-          { ...emptyInput(), hero, moveZ: 1, yaw, jump: s.onGround && i > 5 },
-          world,
-          DT,
-        );
-        if (s.onGround) top = Math.max(top, s.y);
-        if (top > fromY + 1) break;
-      }
-      return top;
-    };
+  it("has six spires you run up: a switchback of ramps to a deck 30 m up", () => {
+    // The north centre spire: its first flight starts on the ground at its west end, on the side
+    // away from the pit. Run east up it, cross the landing, run west up the next, and so on.
+    // No jumping: `hero` 1 is the Assassin, who climbs it exactly as the Trooper does.
     for (const hero of [0, 1]) {
-      expect(hop(hero, 3, -6.2, EAST), `hero ${hero}: step to the first floor`).toBeCloseTo(5.5);
-      expect(hop(hero, 5.5, -2, EAST), `hero ${hero}: first floor to second`).toBeCloseTo(9);
-      expect(hop(hero, 9, 2, WEST), `hero ${hero}: second floor to third`).toBeCloseTo(12.5);
+      let s = spawnState(-4.5, 0, -18);
+      let flight = 0;
+      for (let i = 0; i < 60 * 40 && s.y < 29.99; i++) {
+        const lane = flight % 2 === 0 ? -18 : -15; // the middle of each lane
+        const atEnd = flight % 2 === 0 ? s.x > 4.2 : s.x < -4.2;
+        const inLane = Math.abs(s.z - lane) < 0.3;
+        // At the end of a flight: step across the landing into the other lane, then turn back.
+        if (atEnd && s.onGround && Math.abs(s.y - (flight + 1) * 3.75) < 0.01) flight++;
+        const next = flight % 2 === 0 ? -18 : -15;
+        const yaw =
+          Math.abs(s.z - next) > 0.3 ? (next < s.z ? 0 : Math.PI) : flight % 2 === 0 ? EAST : WEST;
+        void inLane;
+        s = stepPlayer(s, { ...emptyInput(), hero, moveZ: 1, yaw }, world, DT);
+      }
+      expect(s.y, `hero ${hero} reached the top deck`).toBeCloseTo(30);
     }
-    // One in the centre north and south, and one in each corner district; every top is the 30 m
-    // the rolling dive wants, and every one has a step beside it.
-    // (A corner spire's pieces carry their district's prefix: "nw-spire-nw-floor-7".)
-    const tops = level.boxes.filter((b) => /^(\w+-)?spire-\w+-floor-7$/.test(b.id));
-    expect(tops.map((t) => /spire-(\w+)-floor/.exec(t.id)?.[1]).sort()).toEqual([
+    // One in the centre north and south, and one in each corner district, all 30 m.
+    // (A corner spire's pieces carry their district's prefix: "nw-spire-nw-top".)
+    const tops = level.boxes.filter((b) => /^(\w+-)?spire-\w+-top$/.test(b.id));
+    expect(tops.map((t) => /spire-(\w+)-top/.exec(t.id)?.[1]).sort()).toEqual([
       "n",
       "ne",
       "nw",
@@ -244,11 +240,20 @@ describe("the FFA map", () => {
       "sw",
     ]);
     for (const t of tops) expect(t.pos[1] + t.size[1] / 2).toBe(30);
-    expect(level.boxes.filter((b) => /^(\w+-)?spire-\w+-step$/.test(b.id))).toHaveLength(6);
+    expect(level.ramps.filter((r) => /spire-\w+-flight-\d$/.test(r.id))).toHaveLength(48);
+  });
+
+  it("lets you walk through a spire at ground level, under its second flight", () => {
+    // The lane nearer the pit is open under the north centre spire: straight through, west to east.
+    let s = spawnState(-8, 0, -15);
+    for (let i = 0; i < 150; i++)
+      s = stepPlayer(s, { ...emptyInput(), moveZ: 1, yaw: EAST }, world, DT);
+    expect(s.y).toBeCloseTo(0);
+    expect(s.x).toBeGreaterThan(8);
   });
 
   it("joins the spires with skybridges you can walk: a ring and a spine", () => {
-    const SKY = 26.5;
+    const SKY = 26.25;
     // Walk a straight line along the bridges at their height, and stay at it all the way.
     const walk = (x: number, z: number, yaw: number, ticks: number) => {
       let s = spawnState(x, SKY, z);
@@ -258,24 +263,34 @@ describe("the FFA map", () => {
       }
       return s;
     };
-    // The spine: from the middle of the ring's north side, south through both centre spires
-    // and over the pit, to the middle of its south side.
-    let s = walk(-0.75, -64.5, Math.PI, 1000);
-    expect(s.y, "spine").toBeCloseTo(SKY);
+    // The spine: from the middle of the ring's north side south to the north centre spire's
+    // balcony, and from the south one's on to the ring's south side; and the bridge over the pit.
+    let s = walk(0, -64.5, Math.PI, 330);
+    expect(s.y, "spine, north half").toBeCloseTo(SKY);
+    expect(s.z).toBeGreaterThan(-21.5);
+    s = walk(0, -11, Math.PI, 150);
+    expect(s.y, "over the pit").toBeCloseTo(SKY);
+    expect(s.z).toBeGreaterThan(11.5);
+    s = walk(0, 21, Math.PI, 330);
+    expect(s.y, "spine, south half").toBeCloseTo(SKY);
     expect(s.z).toBeGreaterThan(62);
-    // The ring: each side, from just off one corner spire to the next.
-    s = walk(-60, -64.5, EAST, 950);
+    // The ring: each side, from one corner spire's balcony to the next one's.
+    s = walk(-59.5, -64.5, EAST, 950);
     expect(s.y, "north side").toBeCloseTo(SKY);
-    expect(s.x).toBeGreaterThan(60);
-    s = walk(-60, 64.5, EAST, 950);
+    expect(s.x).toBeGreaterThan(59);
+    s = walk(-59.5, 64.5, EAST, 950);
     expect(s.y, "south side").toBeCloseTo(SKY);
-    expect(s.x).toBeGreaterThan(60);
-    s = walk(-66, -58, Math.PI, 950);
+    expect(s.x).toBeGreaterThan(59);
+    s = walk(-66, -60, Math.PI, 950);
     expect(s.y, "west side").toBeCloseTo(SKY);
-    expect(s.z).toBeGreaterThan(58);
-    s = walk(66, -58, Math.PI, 950);
+    expect(s.z).toBeGreaterThan(59);
+    s = walk(66, -60, Math.PI, 950);
     expect(s.y, "east side").toBeCloseTo(SKY);
-    expect(s.z).toBeGreaterThan(58);
+    expect(s.z).toBeGreaterThan(59);
+    // And from the stairs onto the balcony: off the east end of the last landing but one.
+    s = walk(4.4, -16.5, EAST, 30);
+    expect(s.y, "landing to balcony").toBeCloseTo(SKY);
+    expect(s.x).toBeGreaterThan(6);
   });
 
   it("uses only abilities the movement code has", () => {
