@@ -177,9 +177,9 @@ func TestKillFlow(t *testing.T) {
 	if d.b.Entity.Flags&protocol.EntityFlagDead == 0 {
 		t.Fatalf("victim entity should be flagged dead")
 	}
-	// Roughly the designed time to kill: 150 total health / 9 per shot at 10 shots/s.
-	if hits := len(eventsOf(d.a, protocol.EventKindHit)); hits < 15 || hits > 18 {
-		t.Fatalf("killed in %d hits, want about 17", hits)
+	// Roughly the designed time to kill: 150 total health / 12 per shot at 10 shots/s.
+	if hits := len(eventsOf(d.a, protocol.EventKindHit)); hits < 12 || hits > 14 {
+		t.Fatalf("killed in %d hits, want about 13", hits)
 	}
 }
 
@@ -288,8 +288,8 @@ func runPast(t *testing.T, d *duel, ticks int) (crossing float64) {
 }
 
 func lagDuel(t *testing.T) *duel {
-	// Shooter at the origin faces -Z; the victim starts 6 m to the left, 10 m ahead.
-	return newDuel(t, nil, Vec3{}, Vec3{X: -6, Z: -10})
+	// Shooter at the origin faces -Z; the victim starts 3.5 m to the left, 10 m ahead.
+	return newDuel(t, nil, Vec3{}, Vec3{X: -3.5, Z: -10})
 }
 
 func TestLagCompensationHitsWhereTheShooterSawThem(t *testing.T) {

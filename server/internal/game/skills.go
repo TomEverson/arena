@@ -41,6 +41,7 @@ type grenade struct {
 	Entity
 	active     bool
 	owner      uint32
+	bombard    bool
 	vx, vy, vz float64
 	fuse       float64
 }
@@ -148,7 +149,11 @@ func (w *World) grenadeBlocked(x, y, z float64) (hit bool, rampTop float64, onRa
 // stepGrenade flies one grenade for a tick and sets it off when its fuse runs out.
 func (w *World) stepGrenade(g *grenade) {
 	if w.flyGrenade(g) {
-		w.explode(g)
+		if g.bombard {
+			w.startStrikeAt(g.owner, g.X, g.Y, g.Z)
+		} else {
+			w.explode(g)
+		}
 		g.active = false
 	}
 }
@@ -172,7 +177,11 @@ func (w *World) flyGrenade(g *grenade) bool {
 			case onRamp && top-(g.Y-grenadeSize) <= slopeStep:
 				g.X, g.Y = nx, top+grenadeSize // up the slope
 			default:
-				g.vx = -g.vx * SkillGrenadeBounce
+				if g.bombard {
+					g.vx = 0
+				} else {
+					g.vx = -g.vx * SkillGrenadeBounce
+				}
 			}
 		}
 		if nz := g.Z + g.vz*h; nz != g.Z {
@@ -183,7 +192,11 @@ func (w *World) flyGrenade(g *grenade) bool {
 			case onRamp && top-(g.Y-grenadeSize) <= slopeStep:
 				g.Z, g.Y = nz, top+grenadeSize
 			default:
-				g.vz = -g.vz * SkillGrenadeBounce
+				if g.bombard {
+					g.vz = 0
+				} else {
+					g.vz = -g.vz * SkillGrenadeBounce
+				}
 			}
 		}
 		ny := g.Y + g.vy*h
@@ -191,11 +204,15 @@ func (w *World) flyGrenade(g *grenade) bool {
 			if onRamp && g.vy <= 0 {
 				g.Y = top + grenadeSize // rest on the slope
 			}
-			g.vy = -g.vy * SkillGrenadeBounce
-			g.vx *= SkillGrenadeFriction
-			g.vz *= SkillGrenadeFriction
-			if math.Abs(g.vy) < 1 {
-				g.vy = 0 // too slow to bounce again: it rolls to a stop
+			if g.bombard {
+				g.vy = 0
+			} else {
+				g.vy = -g.vy * SkillGrenadeBounce
+				g.vx *= SkillGrenadeFriction
+				g.vz *= SkillGrenadeFriction
+				if math.Abs(g.vy) < 1 {
+					g.vy = 0 // too slow to bounce again: it rolls to a stop
+				}
 			}
 		} else {
 			g.Y = ny
@@ -394,24 +411,47 @@ func (w *World) openSky(x, y, z float64) bool {
 	return CastRay(&w.level.Collision, nil, x, y, z, 0, 1, 0, skyHeight).Kind != RayWorld
 }
 
-// callStrike marks the ground the player is looking at for a bombardment. It needs a full
-// charge, something to aim at within range, and open sky above the spot: otherwise nothing
-// happens and the charge is kept.
+// callStrike throws a bombardment marker. It needs a full charge and a free grenade slot;
+// the marker uses grenade flight physics and starts the bombardment after its fuse.
 func (w *World) callStrike(p *Player, in *Input) {
 	if p.Health.Ult < 1 {
 		return
 	}
-	s := &p.State
-	ox, oy, oz := s.X, s.Y+eyeHeight(s), s.Z
 	dx, dy, dz := ViewDirection(in.Yaw, in.Pitch)
-	hit := CastRay(&w.level.Collision, nil, ox, oy, oz, dx, dy, dz, SkillBombardRange)
-	if hit.Kind != RayWorld {
+	for i := range w.skills.grenades {
+		g := &w.skills.grenades[i]
+		if g.active {
+			continue
+		}
+		s := &p.State
+		*g = grenade{
+			active:  true,
+			owner:   p.ID,
+			bombard: true,
+			vx:      dx * SkillGrenadeSpeed,
+			vy:      dy*SkillGrenadeSpeed + SkillGrenadeLift,
+			vz:      dz * SkillGrenadeSpeed,
+			fuse:    SkillBombardFuse,
+		}
+		g.Entity = Entity{
+			ID: w.skills.nextID(SkillGrenadeIdBase), TeamID: p.Entity.TeamID, Kind: protocol.EntityKindGrenade,
+			X: s.X, Y: s.Y + eyeHeight(s) - 0.2, Z: s.Z,
+		}
+		p.Health.Ult = 0
+		p.Health.ProtectedFor = 0
 		return
 	}
-	// Step back off the surface that was hit (a wall face is not a place to stand), then drop to the ground there.
-	x, z := hit.X-dx*0.4, hit.Z-dz*0.4
-	y := supportHeight(&w.level.Collision, x, z, hit.Y+0.5)
+}
+
+// startStrikeAt drops a marker's final position to the ground and starts the bombardment if the
+// spot has open sky. A marker under a roof is a dud.
+func (w *World) startStrikeAt(ownerID uint32, x, y, z float64) {
+	y = supportHeight(&w.level.Collision, x, z, y+0.5)
 	if !w.openSky(x, y+0.2, z) {
+		return
+	}
+	owner := w.byID(ownerID)
+	if owner == nil {
 		return
 	}
 	for i := range w.skills.strikes {
@@ -419,13 +459,11 @@ func (w *World) callStrike(p *Player, in *Input) {
 		if st.active {
 			continue
 		}
-		*st = strike{active: true, owner: p.ID, start: w.tick}
+		*st = strike{active: true, owner: ownerID, start: w.tick}
 		st.Entity = Entity{
-			ID: w.skills.nextID(SkillStrikeIdBase), TeamID: p.Entity.TeamID, Kind: protocol.EntityKindStrike,
+			ID: w.skills.nextID(SkillStrikeIdBase), TeamID: owner.Entity.TeamID, Kind: protocol.EntityKindStrike,
 			X: x, Y: y, Z: z,
 		}
-		p.Health.Ult = 0
-		p.Health.ProtectedFor = 0
 		return
 	}
 }

@@ -201,9 +201,9 @@ describe("time to kill", () => {
     throw new Error("target never died");
   }
 
-  it("is about 1.5-2 s with perfect body shots", () => {
+  it("is about 1.2-2 s with perfect body shots", () => {
     const t = ttk(false);
-    expect(t).toBeGreaterThanOrEqual(1.4);
+    expect(t).toBeGreaterThanOrEqual(1.1);
     expect(t).toBeLessThanOrEqual(2.0);
   });
 

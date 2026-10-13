@@ -235,12 +235,36 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("keyup", (e) => held.delete(e.code));
 
-const MOUSE_SENS = 0.0022;
+// Apex-like baseline at sensitivity 1.00. The setting below scales this without changing ADS ratios.
+const MOUSE_SENS = 0.0011;
+const SENSITIVITY_KEY = "arena.sensitivity";
+const SENSITIVITY_MIN = 0.25;
+const SENSITIVITY_MAX = 3;
+const sensitivityRange = document.getElementById("sensitivity-range") as HTMLInputElement;
+const sensitivityValue = document.getElementById("sensitivity-value") as HTMLInputElement;
+const readSensitivity = (): number => {
+  const value = Number(localStorage.getItem(SENSITIVITY_KEY));
+  return Number.isFinite(value) ? Math.max(SENSITIVITY_MIN, Math.min(SENSITIVITY_MAX, value)) : 1;
+};
+let sensitivity = readSensitivity();
+const setSensitivity = (value: number): void => {
+  sensitivity = Math.max(SENSITIVITY_MIN, Math.min(SENSITIVITY_MAX, value));
+  const display = sensitivity.toFixed(2);
+  sensitivityRange.value = display;
+  sensitivityValue.value = display;
+  localStorage.setItem(SENSITIVITY_KEY, display);
+};
+setSensitivity(sensitivity);
+for (const input of [sensitivityRange, sensitivityValue]) {
+  input.addEventListener("input", () => setSensitivity(Number(input.value)));
+}
+const sensitivitySettings = document.getElementById("sensitivity-settings") as HTMLDivElement;
+sensitivitySettings.addEventListener("click", (e) => e.stopPropagation());
 const clampPitch = (p: number) => Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, p));
 let adsT = 0; // 0 = hip, 1 = fully aimed (smoothed per frame)
 document.addEventListener("mousemove", (e) => {
   if (document.pointerLockElement !== canvas) return;
-  const sens = MOUSE_SENS * (1 + ((currentDef()?.adsSensitivity ?? 1) - 1) * adsT);
+  const sens = MOUSE_SENS * sensitivity * (1 + ((currentDef()?.adsSensitivity ?? 1) - 1) * adsT);
   look.yaw -= e.movementX * sens;
   look.pitch = clampPitch(look.pitch - e.movementY * sens);
 });

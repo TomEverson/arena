@@ -696,7 +696,7 @@ export const scenarios: Scenario[] = [
   (() => {
     const p = phases([
       [3, {}],
-      [150, { moveZ: 1, yaw: PI }],
+      [210, { moveZ: 1, yaw: PI }],
     ]);
     return scenario(
       "greybox-ramp-platform",
@@ -732,7 +732,7 @@ export const scenarios: Scenario[] = [
       [3, {}],
       [22, { ...F }],
       [65, SLIDE_F],
-      [150, F],
+      [240, F],
     ]);
     return scenario(
       "greybox-slide-tunnel",

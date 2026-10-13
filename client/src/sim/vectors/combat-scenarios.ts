@@ -364,7 +364,7 @@ export const weaponScenarios: WeaponScenario[] = [
         "empty hands cannot shoot",
       );
       check(
-        (!!last && last.stash === 5 - 0) || (last?.stash ?? 0) <= 5,
+        (!!last && last.stash === SNIPER.magSize) || (last?.stash ?? 0) <= SNIPER.magSize,
         "the sniper's rounds were kept",
       );
     },
@@ -372,7 +372,7 @@ export const weaponScenarios: WeaponScenario[] = [
   {
     name: "weapon-sniper",
     description:
-      "The sniper alone: a shot every 1.4 s, five rounds, then an automatic 2.6 s reload, with pinpoint aim while scoped.",
+      "The sniper alone: a shot every 1.4 s, ten rounds, then an automatic 2.6 s reload, with pinpoint aim while scoped.",
     seed: 8,
     steps: [
       {
@@ -386,7 +386,7 @@ export const weaponScenarios: WeaponScenario[] = [
         ctx: STILL,
       },
       {
-        ticks: 700,
+        ticks: 1000,
         input: { fire: true, reload: false, melee: false, slot: 0, ads: true },
         ctx: STILL,
       },

@@ -354,6 +354,27 @@
         min-height: 1.2em;
         color: #fc6;
       }
+      #sensitivity-settings {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #cde;
+        cursor: default;
+      }
+      #sensitivity-range {
+        width: 180px;
+        accent-color: #2de2e6;
+      }
+      #sensitivity-value {
+        width: 54px;
+        box-sizing: border-box;
+        padding: 4px;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid #556;
+        font: inherit;
+        text-align: right;
+      }
       #roominfo {
         font-size: 14px;
         color: #9fd;
@@ -605,6 +626,18 @@
         release
       </div>
       <div id="heroes"></div>
+      <div id="sensitivity-settings">
+        <label for="sensitivity-range">Mouse sensitivity</label>
+        <input id="sensitivity-range" type="range" min="0.25" max="3" step="0.05" />
+        <input
+          id="sensitivity-value"
+          type="number"
+          min="0.25"
+          max="3"
+          step="0.05"
+          aria-label="Sensitivity value"
+        />
+      </div>
       <div id="roominfo"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>

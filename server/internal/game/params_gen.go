@@ -12,7 +12,7 @@ const (
 	StandEye            = 1.6
 	SlideEye            = 0.8
 	CrouchEye           = 1.1
-	RunSpeed            = 11
+	RunSpeed            = 8
 	GroundAccel         = 10
 	GroundFriction      = 8
 	StopSpeed           = 3
@@ -36,7 +36,7 @@ const (
 	SlideEndSpeed       = 4
 	SlideMaxTime        = 1.6
 	SlideCooldown       = 0.4
-	CrouchSpeed         = 5
+	CrouchSpeed         = 3.5
 	DashCharges         = 2
 	DashSpeed           = 26
 	DashDuration        = 0.22
@@ -65,7 +65,7 @@ const (
 
 // Weapon tuning (shared/params.json "weapon"), prefixed with Weapon.
 const (
-	WeaponDamage          = 9
+	WeaponDamage          = 12
 	WeaponHeadshotMult    = 1.5
 	WeaponMaxHealth       = 100
 	WeaponMaxShield       = 50
@@ -110,7 +110,7 @@ const (
 	SniperDamage          = 75
 	SniperHeadshotMult    = 2
 	SniperRpm             = 42.857142857142854
-	SniperMagSize         = 5
+	SniperMagSize         = 10
 	SniperReloadTime      = 2.6
 	SniperRange           = 500
 	SniperHipSpread       = 4
@@ -204,7 +204,8 @@ const (
 	SkillUltChargeSeconds    = 90
 	SkillUltChargeDamage     = 600
 	SkillBombardRange        = 80
-	SkillBombardRadius       = 30
+	SkillBombardFuse         = 1
+	SkillBombardRadius       = 20
 	SkillBombardWarning      = 0.5
 	SkillBombardSeconds      = 4
 	SkillBombardInterval     = 0.25

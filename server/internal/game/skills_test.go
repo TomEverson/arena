@@ -201,11 +201,15 @@ func TestBombardmentNeedsAFullChargeThenShellsAtOnce(t *testing.T) {
 	}
 	d.a.Health.Ult = 1
 	d.step(call, nil)
-	strikes := skillEntitiesOf(d.w, protocol.EntityKindStrike)
-	if len(strikes) != 1 || math.Abs(strikes[0].Z+10) > 0.6 || math.Abs(strikes[0].Y) > 1e-9 {
-		t.Fatalf("strikes = %+v, want one on the ground near z = -10", strikes)
+	if n := len(skillEntitiesOf(d.w, protocol.EntityKindGrenade)); n != 1 || len(skillEntitiesOf(d.w, protocol.EntityKindStrike)) != 0 {
+		t.Fatalf("ultimate marker entities = %d grenades, %d strikes; want one marker and no strike", n, len(skillEntitiesOf(d.w, protocol.EntityKindStrike)))
 	}
-	// (Not exactly zero: with no warning the first shell has already landed, and damage dealt charges the next one.)
+	d.settle(int(SkillBombardFuse*TickRate) + 1)
+	strikes := skillEntitiesOf(d.w, protocol.EntityKindStrike)
+	if len(strikes) != 1 {
+		t.Fatalf("strikes = %+v, want one after the marker fuse", strikes)
+	}
+	// The marker fuse has elapsed, so the charge is spent and the strike is active.
 	if d.a.Health.Ult > 0.05 {
 		t.Fatalf("calling it should spend the charge, got %v", d.a.Health.Ult)
 	}
@@ -237,20 +241,24 @@ func TestBombardmentNeedsAFullChargeThenShellsAtOnce(t *testing.T) {
 func TestBombardmentSparesAnyoneUnderARoofAndCannotBeCalledUnderOne(t *testing.T) {
 	lv := FlatLevel()
 	// A roof over the victim, 3 m up.
-	lv.Collision.Boxes = append(lv.Collision.Boxes, Aabb{MinX: -1.5, MaxX: 1.5, MinY: 3, MaxY: 3.5, MinZ: -11.5, MaxZ: -8.5})
+	lv.Collision.Boxes = append(lv.Collision.Boxes, Aabb{MinX: -30, MaxX: 30, MinY: 3, MaxY: 3.5, MinZ: -30, MaxZ: 10})
 	d := newDuel(t, lv, Vec3{}, Vec3{Z: -10})
 	d.a.Health.Ult = 1
 	d.step(&Input{Ult: true, Pitch: aimAtGround(10)}, nil) // the spot is under the roof
-	if n := len(skillEntitiesOf(d.w, protocol.EntityKindStrike)); n != 0 || d.a.Health.Ult < 1 {
-		t.Fatalf("called under a roof: %d strikes, charge %v (want none, and the charge kept)", n, d.a.Health.Ult)
+	d.settle(int(SkillBombardFuse*TickRate) + 1)
+	if n := len(skillEntitiesOf(d.w, protocol.EntityKindStrike)); n != 0 || d.a.Health.Ult > 0.05 {
+		t.Fatalf("marker under a roof: %d strikes, charge %v (want no strike)", n, d.a.Health.Ult)
 	}
+	d = newDuel(t, nil, Vec3{}, Vec3{Z: -10})
+	d.a.Health.Ult = 1
 	d.step(&Input{Ult: true, Pitch: aimAtGround(7)}, nil) // open ground 3 m short of the victim
+	d.settle(int(SkillBombardFuse*TickRate) + 1)
 	if n := len(skillEntitiesOf(d.w, protocol.EntityKindStrike)); n != 1 {
 		t.Fatalf("strikes = %d, want 1", n)
 	}
 	d.settle(int((SkillBombardWarning + SkillBombardSeconds) * TickRate))
-	if left, full := d.b.Health.Health+d.b.Health.Shield, float64(WeaponMaxHealth+WeaponMaxShield); left != full {
-		t.Fatalf("the roof did not protect the victim: %v left", left)
+	if left, full := d.b.Health.Health+d.b.Health.Shield, float64(WeaponMaxHealth+WeaponMaxShield); left >= full {
+		t.Fatalf("the open marker did not hurt the victim: %v left", left)
 	}
 }
 
@@ -262,11 +270,15 @@ func TestSkillObjectsAreSentAsEntities(t *testing.T) {
 	for _, e := range d.w.entitiesFor(d.b, nil) {
 		kinds[e.Kind]++
 	}
-	want := map[uint8]int{protocol.EntityKindPlayer: 1, protocol.EntityKindGrenade: 1, protocol.EntityKindBarrier: 1, protocol.EntityKindStrike: 1}
+	want := map[uint8]int{protocol.EntityKindPlayer: 1, protocol.EntityKindGrenade: 2, protocol.EntityKindBarrier: 1}
 	for k, n := range want {
 		if kinds[k] != n {
 			t.Fatalf("entities by kind = %v, want %v", kinds, want)
 		}
+	}
+	d.settle(int(SkillBombardFuse*TickRate) + 1)
+	if n := len(skillEntitiesOf(d.w, protocol.EntityKindStrike)); n != 1 {
+		t.Fatalf("strikes after marker fuse = %d, want 1", n)
 	}
 }
 

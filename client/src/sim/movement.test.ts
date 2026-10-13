@@ -108,7 +108,7 @@ describe("jump", () => {
       return peak;
     };
     expect(peakWith(8)).toBeGreaterThan(3); // a few ticks after leaving the edge
-    expect(peakWith(30)).toBeLessThan(2.01); // far too late
+    expect(peakWith(45)).toBeLessThan(2.01); // far too late
   });
 });
 
