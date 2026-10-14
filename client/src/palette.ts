@@ -20,6 +20,12 @@ export const PALETTE_HEX = {
   COBALT: "#3170d8", // the blue team (the trooper's armor stripes)
   VIOLET: "#5b3a9e", // the violet team (the assassin's sash)
   BRASS: "#c9a227", // gold trim on characters (thin lines only: it sits near ACID)
+  // Container paint: shipping containers only (models/container-*.png). Muted, so the red never
+  // reads as HAZARD and the blue never reads as COBALT.
+  RUST: "#8e3a2c", // red containers
+  RUST_DARK: "#5a2420", // the shadowed sides of their ribs
+  NAVY: "#2f4b6e", // blue containers
+  NAVY_DARK: "#1d2f47", // the shadowed sides of their ribs
 } as const;
 
 export type PaletteName = keyof typeof PALETTE_HEX;

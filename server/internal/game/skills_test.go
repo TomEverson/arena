@@ -382,16 +382,16 @@ func TestRechargePickupGivesEveryCooldownBackInThePracticeRange(t *testing.T) {
 	}
 }
 
-func TestHeroChangeWaitsForTheNextLifeInALiveMatch(t *testing.T) {
+func TestHeroChangeRespawnsAtOnceInALiveMatch(t *testing.T) {
 	d := newDuel(t, nil, Vec3{}, Vec3{Z: -10})
+	d.a.Health.Health = 10 // hurt mid-fight
 	d.w.SetHero(context.Background(), 1, protocol.HeroKindAssassin)
 	d.step(nil, nil)
-	if d.a.Health.Hero != protocol.HeroKindTrooper || d.a.Health.NextHero != protocol.HeroKindAssassin {
-		t.Fatalf("mid-life: hero %d next %d, want still the trooper with the assassin queued", d.a.Health.Hero, d.a.Health.NextHero)
-	}
-	d.w.resetLife(d.a)
 	if d.a.Health.Hero != protocol.HeroKindAssassin || d.a.Entity.Hero != protocol.HeroKindAssassin {
-		t.Fatalf("after respawn: hero %d, entity %d, want the assassin in both", d.a.Health.Hero, d.a.Entity.Hero)
+		t.Fatalf("after the change: hero %d, entity %d, want the assassin in both", d.a.Health.Hero, d.a.Entity.Hero)
+	}
+	if d.a.Health.Health != WeaponMaxHealth || d.a.Health.ProtectedFor <= 0 {
+		t.Fatalf("after the change: health %v, protected %v, want a fresh life", d.a.Health.Health, d.a.Health.ProtectedFor)
 	}
 	// Others are told who to draw.
 	for _, e := range d.w.entitiesFor(d.b, nil) {

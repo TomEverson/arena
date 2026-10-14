@@ -316,10 +316,10 @@ func (w *World) Practice(ctx context.Context, id uint32, action PracticeAction) 
 	}
 }
 
-// SetHero records which hero a player wants to be. It takes effect on their next life, or at
-// once where it cannot be used to dodge a fight: in the practice range, outside a live match,
-// while they are dead, or while they still have spawn protection (so a player who has just
-// joined or respawned can still pick).
+// SetHero records which hero a player wants to be. In the middle of a live match it respawns
+// them at once as the new hero (a fresh life at a spawn point, like the dev respawn). Where
+// there is no fight to leave (the practice range, outside a live match, while dead, or during
+// spawn protection) the hero is swapped in place.
 func (w *World) SetHero(ctx context.Context, id uint32, hero uint8) {
 	select {
 	case w.inbox <- command{kind: cmdHero, id: id, hero: hero}:
@@ -552,7 +552,11 @@ func (w *World) apply(c command) {
 		for _, p := range w.players {
 			if p.ID == c.id {
 				p.Health.NextHero = c.hero
-				if p.Health.Hero != c.hero && (w.practice || !w.canDamage() || !p.Health.Alive || p.Health.ProtectedFor > 0) {
+				switch {
+				case p.Health.Hero == c.hero:
+				case p.Health.Alive && w.canDamage() && !w.practice && p.Health.ProtectedFor <= 0:
+					w.resetLife(p) // mid-fight: a fresh life as the new hero at a spawn point
+				default:
 					p.Health.Hero = c.hero
 					p.Health.Overdrive = 0
 					p.Weapon = SpawnWeapon(p.Weapon.Rng, c.hero) // the new hero's own weapons

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
+import { hasLevelKit, KitPlacer, placeProp, TOWER_CORE_INSET } from "./levelKit";
 import { PALETTE } from "./palette";
 import type { Level, LevelProp, LevelSign } from "./sim/level";
 import { SIGN_TILE, signTexture } from "./surfaces";
@@ -69,9 +70,16 @@ function lamp(p: LevelProp, parts: Parts): void {
     .setY(H - 0.16);
   parts.box(parts.dark, [0.34, 0.08, 0.34], head.clone().setY(H - 0.06));
   parts.box(parts.glow, [0.26, 0.1, 0.26], head);
+  lampPool(p, parts);
+}
+
+/** The pool of lamp light on the ground under a lamp's head. */
+function lampPool(p: LevelProp, parts: Parts): void {
+  const out = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw));
+  const head = new THREE.Vector3(...p.pos).addScaledVector(out, 1.6);
   const pool = new THREE.CircleGeometry(3.4, 20)
     .rotateX(-Math.PI / 2)
-    .translate(head.x, base.y + 0.035, head.z);
+    .translate(head.x, p.pos[1] + 0.035, head.z);
   parts.pool.push(pool);
 }
 
@@ -199,8 +207,25 @@ export function buildLevelDecor(level: Level): THREE.Group {
   for (const s of level.signs) group.add(signMesh(s));
 
   const parts = new Parts();
+  const kit = new KitPlacer();
   let towers = 0;
   for (const p of level.props) {
+    // The level kit's models where there is one (levelKit.ts); the boxes below otherwise.
+    if (hasLevelKit() && placeProp(kit, p, p.kind === "tower" ? towers : 0)) {
+      if (p.kind === "lamp") lampPool(p, parts);
+      if (p.kind === "tower") {
+        // The dark block the facades hang on, pulled in behind their windows.
+        const [w, h, d] = p.size ?? [16, 50, 16];
+        const inset = 2 * TOWER_CORE_INSET;
+        parts.box(
+          parts.dark,
+          [w - inset, h, d - inset],
+          new THREE.Vector3(...p.pos).setY(p.pos[1] + h / 2),
+        );
+        towers++;
+      }
+      continue;
+    }
     if (p.kind === "lamp") lamp(p, parts);
     else if (p.kind === "mast") mast(p, parts);
     else if (p.kind === "pipe") pipe(p, parts);
@@ -230,6 +255,7 @@ export function buildLevelDecor(level: Level): THREE.Group {
     group.add(new THREE.Mesh(mergeGeometries([...geos]), material));
     for (const g of geos) g.dispose();
   }
+  group.add(kit.build());
   if (level.sky === "night") group.add(stars());
   return group;
 }

@@ -52,6 +52,17 @@ Defined in `client/src/palette.ts`. **Every color in the game comes from this li
 |---|---|---|
 | BRASS | `#c9a227` | Gold trim on characters, thin lines only (it sits near ACID, so never large areas) |
 
+### Container paint: shipping containers only
+
+Added 2026-10-14 with the container model (`client/src/containers.ts`). Muted on purpose, so the red never reads as HAZARD and the blue never reads as COBALT. Never on anything but containers.
+
+| Name | Hex | Use |
+|---|---|---|
+| RUST | `#8e3a2c` | Red containers |
+| RUST_DARK | `#5a2420` | Shadowed sides of their ribs |
+| NAVY | `#2f4b6e` | Blue containers |
+| NAVY_DARK | `#1d2f47` | Shadowed sides of their ribs |
+
 ## Rules
 
 1. **Calm world, loud accents.** Accents stay small. If an accent covers a large area, it stops meaning anything.
@@ -75,6 +86,22 @@ Controls:
 - `DITHER_STRENGTH` in `render.ts`: 0 gives flat color bands, higher values give noisier dithering. Currently `0.03` (was `0.12`, which showed as a visible mesh; `0` is fully flat).
 
 ## Current state of level rendering
+
+**Level kit (2026-10-14):** the FFA map is dressed with Blockbench models instead of textured boxes. `client/src/levelKit.ts` lays modules from `client/src/models/ffa-kit.glb` (source `art/blockbench/ffa-kit.bbmodel`; the first props side by side in `ffa-props.bbmodel`) onto every box, ramp and prop by its `surface` or `kind`; containers come from `containers.ts`. Collision never changes: every module fits inside the piece it dresses.
+
+| Surface / prop | Modules |
+|---|---|
+| `crate` | hard-shell cargo cases, 2×2, 2×1 and 4×1 m |
+| `barrier`, `stripe` | 1 m precast wall and pit-rim modules, repeated along the box |
+| `panel` | real-size 4×3 m wall panels with pilasters (mostly plain, some with a vent or a service hatch), a concrete plinth along the foot and a GRAPHITE cap along the top of any side 3 m or taller, steel plate tops |
+| `concrete`, `ground` | board-formed concrete panels, gravel roofs, 4 m paving slabs (plain, worn, drain or manhole); kerb stones along raised floor edges that drop away; BONE lane dashes down the avenues and the ring road |
+| `pit` | darker paving |
+| `metal` | grated deck tops, girder sides, underside plates; thin posts are lattice towers |
+| `pillar` | base, shaft segments, cap |
+| ramps | tread plates with an ACID nosing and darker edge plates; solid ramps get a skirt under each slope edge, open stair flights girder stringers; a side with a drop beside it gets a handrail (looks only, no collision: `RAMP_RAILS` in levelKit.ts turns them off) |
+| props | lamp, mast, wall vent, pipe with brackets, crane hook, city towers (window facades above the wall line, roof crown, antennas) |
+
+Face modules are tiled per face and stretched slightly to fit; faces outside the perimeter, bottoms on the ground and tiles hidden inside another box are left out. Each module is one InstancedMesh (about 40 draw calls); the FFA map comes to about 16,000 instances and 0.9 M triangles. Without the kit (unit tests) the old textured boxes are drawn.
 
 `client/src/levelRender.ts`:
 - Walls and floors: BONE, brightness varied slightly per box (`0.7 + shade * 0.4`) so boxes stay distinguishable.

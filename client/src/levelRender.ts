@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
+import { buildContainers, isModelContainer } from "./containers";
+import { dressBoxes, dressRamps, hasLevelKit, isKitBox, KitPlacer } from "./levelKit";
 import { PALETTE } from "./palette";
 import { rampSurface } from "./sim/collision";
 import { type Level, type LevelBox, toAabb } from "./sim/level";
@@ -199,6 +201,7 @@ function lightStrips(level: Level): THREE.Group {
 export function buildLevelMeshes(level: Level): THREE.Group {
   const group = new THREE.Group();
   for (const b of level.boxes) {
+    if (isModelContainer(b) || isKitBox(b)) continue; // drawn from the Blockbench models below
     const [w, h, d] = b.size;
     const geo = new THREE.BoxGeometry(w, h, d);
     const mesh = new THREE.Mesh(geo, boxMaterials(b));
@@ -207,14 +210,24 @@ export function buildLevelMeshes(level: Level): THREE.Group {
     group.add(mesh);
   }
   for (const r of level.ramps) {
+    const flight = r.id.includes("-flight-");
+    // With the kit, a flight is its treads and stringers only; a solid ramp keeps its wedge, a
+    // hair under the tread plates laid on its slope.
+    if (flight && hasLevelKit()) continue;
     // Spire switchbacks are open catwalk ramps: show only the slash surface, not a solid wedge.
-    const geo = rampGeometry(toAabb(r), r.rises, r.id.includes("-flight-"));
+    const geo = rampGeometry(toAabb(r), r.rises, flight);
+    if (hasLevelKit()) geo.translate(0, -0.03, 0);
     geo.computeVertexNormals();
     applyWorldUvs(geo, new THREE.Vector3());
     const mat = surfaceMaterial(r, "floor");
     mat.side = THREE.DoubleSide;
     group.add(new THREE.Mesh(geo, mat));
   }
+  group.add(buildContainers(level));
+  const kit = new KitPlacer();
+  dressBoxes(kit, level);
+  dressRamps(kit, level);
+  group.add(kit.build());
   group.add(paintedNumbers(level));
   group.add(lightStrips(level));
   return group;

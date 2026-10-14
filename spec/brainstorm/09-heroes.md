@@ -48,12 +48,12 @@ Until there is a hero picker, everyone is the Trooper, so the Trooper's skills c
 - **Not done:** grenades pass through barriers and other players; no throw or place animation on the body; not playtested, so every number is still a first guess.
 
 ### Hero picker: as built
-- **Where:** the pause screen (Esc, the overlay shown while the mouse is released) has a row of hero buttons. A click there chooses a hero and does not resume the game.
-- **When it takes effect:** on your next life. It is immediate where it cannot be used to dodge a fight: in the practice range, outside a live match, while you are dead, and during spawn protection (so you can still pick just after joining or respawning). The picker says when a change is waiting for your next life.
+- **Where:** the start screen (every way in, room links included, stops there first so the hero is chosen before the game starts) and the pause screen (Esc, the overlay shown while the mouse is released). A click on the pause screen's buttons chooses a hero and does not resume the game.
+- **When it takes effect:** at once (changed 2026-10-14; it used to wait for the next life, which made switching in FFA feel broken). Mid-fight in a live match a change respawns you: a fresh life at a spawn point, like the dev respawn, with no death counted. Elsewhere (practice range, outside a live match, while dead, during spawn protection) the hero is swapped in place. The pause picker warns when a change would respawn you. Open question: switching heals you fully and moves you, so it can be used to escape a lost fight; a cost (a short delay, or counting it as a death) may be needed after playtesting.
 - **Remembered:** the browser keeps your last choice and sends it when you join a room.
 - **What others see:** each player's entity carries their hero, so everyone is drawn as the character they chose (your own body, when you look down, too).
 - **Skills:** each hero has its own three on the same keys (Q, E, F); the HUD row shows the ones for the hero you are.
-- **Not done:** the first-person arms and the hitbox are the same for every hero; there is no picker on the start screen.
+- **Not done:** the first-person arms and the hitbox are the same for every hero; the start-screen picker is a plain row of names (no portraits).
 
 ## Assassin
 | Slot | Skill | First numbers |
@@ -244,7 +244,7 @@ The grapple lines were SIGNAL and started near the hands (yours 0.35 m under the
 - [ ] **Do players walk through the Trooper's barrier, or is it solid?** Solid is simpler to read but can be used to trap or block doors.
 - [ ] **Does the grenade hurt the thrower?** Suggested: yes (it stops point-blank spam).
 - [x] **Slow on hit?** Yes, built 2026-10-13 (see "Balance pass" below). Apex slows a player who is shot (40% for 0.25 s, at most once every 3 s, same for every ammo type).
-- [x] **Hero picker:** on the pause screen (Esc), changeable any time; see "Hero picker: as built".
+- [x] **Hero picker:** on the start screen and the pause screen (Esc), changeable any time (mid-fight it respawns you); see "Hero picker: as built".
 
 ## Balance pass (2026-10-13)
 Playtest feedback: "the rifle is useless when the Trooper can dash twice every 3 s". The rifle needs 13 body hits in a row (1.2 s with perfect aim, about 2.5 s in practice) and was the only gun with travel time, while a dash charge came back in 1.2 s.

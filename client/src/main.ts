@@ -4,6 +4,7 @@ import greybox from "../../levels/greybox.json";
 import { AudioEngine, type MoveSound, MoveSoundTracker, StepCounter } from "./audio";
 import { type BodyState, CABLE_FROM, CharacterBody, HERO_LOOKS, HERO_NAMES } from "./character";
 import { loadCharacterModels } from "./characterModels";
+import { loadContainerModels } from "./containers";
 import { DamageIndicators } from "./damageIndicator";
 import { Fx } from "./fx";
 import { loadGrenadeModels } from "./grenade";
@@ -11,6 +12,7 @@ import { HitFeedback } from "./hitFeedback";
 import { CombatHud } from "./hud";
 import { loadKatanaModel } from "./katana";
 import { buildLevelDecor } from "./levelDecor";
+import { loadLevelKit } from "./levelKit";
 import { buildLevelMeshes } from "./levelRender";
 import { levelByName } from "./levels";
 import { FixedTimestep, TICK_RATE } from "./loop";
@@ -29,6 +31,7 @@ import {
   GameEventFlags,
   HeroKinds,
   type MatchInfo,
+  MatchPhases,
   type PlayerHealth,
   type Score,
   type Shot,
@@ -71,13 +74,15 @@ import { type GrappleLine, isSkillPose, SkillViews } from "./skillView";
 import { loadSniperModel } from "./sniper";
 import { loadUsername, saveUsername, USERNAME_MAX } from "./username";
 
-// Blockbench models: loaded before any character or gun is made (see characterModels.ts, rifle.ts, sniper.ts, katana.ts, grenade.ts).
+// Blockbench models: loaded before any character, gun or level is made (see characterModels.ts, rifle.ts, sniper.ts, katana.ts, grenade.ts, containers.ts, levelKit.ts).
 await Promise.all([
   loadCharacterModels(),
   loadBrickModel(),
   loadSniperModel(),
   loadKatanaModel(),
   loadGrenadeModels(),
+  loadContainerModels(),
+  loadLevelKit(),
 ]);
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -389,32 +394,39 @@ document.addEventListener("mousedown", (e) => {
 });
 document.addEventListener("mouseup", (e) => held.delete(`Mouse${e.button}`));
 document.addEventListener("contextmenu", (e) => e.preventDefault());
-// The hero picker on the pause screen (the overlay shown while the mouse is released).
-const heroesEl = document.getElementById("heroes") as HTMLDivElement;
+// The hero picker: on the start menu (chosen before joining) and on the pause screen (the overlay
+// shown while the mouse is released). Both draw the same buttons.
+const heroPickers = [
+  document.getElementById("heroes") as HTMLDivElement,
+  document.getElementById("menu-heroes") as HTMLDivElement,
+];
 const HERO_KEY = "arena.hero";
 /** The hero chosen last time (kept in the browser), sent to the server when we join. */
 const savedHero = (): number => {
   const n = Number(localStorage.getItem(HERO_KEY));
   return Number.isInteger(n) && n >= 0 && n < HERO_NAMES.length ? n : HeroKinds.trooper;
 };
-/** Draw the picker: who you are now, and who you will be next life if you have changed. */
-function showHeroes(hero: number, next: number): void {
+/** Draw the pickers with `chosen` lit; `note` is the line under them (empty for none). */
+function showHeroes(chosen: number, note: string): void {
   const html =
     `<span class="label">Hero</span>` +
     HERO_NAMES.map(
-      (name, i) => `<button data-hero="${i}"${i === next ? ' class="on"' : ""}>${name}</button>`,
+      (name, i) => `<button data-hero="${i}"${i === chosen ? ' class="on"' : ""}>${name}</button>`,
     ).join("") +
-    `<small>${next === hero ? "" : `You become the ${HERO_NAMES[next] ?? "?"} on your next life.`}</small>`;
-  if (heroesEl.innerHTML !== html) heroesEl.innerHTML = html;
+    `<small>${note}</small>`;
+  for (const el of heroPickers) if (el.innerHTML !== html) el.innerHTML = html;
 }
-heroesEl.addEventListener("click", (e) => {
-  e.stopPropagation(); // a click here chooses a hero: it must not also resume the game
-  const hero = Number((e.target as HTMLElement).dataset.hero);
-  if (!Number.isInteger(hero)) return;
-  localStorage.setItem(HERO_KEY, String(hero));
-  net?.sendHero(hero);
-});
-showHeroes(HeroKinds.trooper, savedHero());
+for (const el of heroPickers) {
+  el.addEventListener("click", (e) => {
+    e.stopPropagation(); // a click here chooses a hero: it must not also resume the game
+    const hero = Number((e.target as HTMLElement).dataset.hero);
+    if (!Number.isInteger(hero)) return;
+    localStorage.setItem(HERO_KEY, String(hero));
+    if (net) net.sendHero(hero);
+    else showHeroes(hero, ""); // not in a room yet: it is sent when we join
+  });
+}
+showHeroes(savedHero(), "");
 const lockPointer = () => void canvas.requestPointerLock();
 hint.addEventListener("click", lockPointer);
 canvas.addEventListener("click", lockPointer);
@@ -635,7 +647,13 @@ function connectNet(connect: TransportFactory | string): void {
       remotes.push(s.tick, s.entities, s.removed, s.full);
       health = s.health;
       useSelfHero(s.health.hero);
-      showHeroes(s.health.hero, s.health.nextHero);
+      // In the middle of a live fight, a change of hero respawns you (the server decides).
+      const midFight =
+        gameMode !== "practice" &&
+        s.match.phase === MatchPhases.live &&
+        s.health.alive &&
+        s.health.protectedFor <= 0;
+      showHeroes(s.health.nextHero, midFight ? "Changing hero now respawns you." : "");
       match = s.match;
       scores = s.scores;
       for (const sh of shotFeed.fresh(s.shots)) if (sh.actor !== myId) pendingShots.push(sh);
@@ -728,27 +746,23 @@ document
 {
   const code = roomFromUrl(location.search);
   const mode = modeFromUrl(location.search);
-  // A room link goes straight in and ?mode=practice skips the menu, once there is a username.
+  // A room link or ?mode=practice still opens on the menu, so the hero (and, the first time, the
+  // name) is chosen before the game starts; Join then carries on to where the link goes.
   const direct = code ? () => startNet(code) : mode ? () => void startRoom(mode) : undefined;
-  if (direct && loadUsername()) {
-    direct();
-  } else {
-    menuEl.classList.add("on"); // choose (and, the first time, say who you are)
-    if (direct) {
-      // Came by a link with no username yet: ask for it, then carry on to where the link goes.
-      menuEl.classList.add("joining");
-      const join = () =>
-        withUsername(() => {
-          menuEl.classList.remove("on", "joining");
-          direct();
-        });
-      document.getElementById("menu-join")?.addEventListener("click", join);
-      nameInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") join();
+  menuEl.classList.add("on");
+  if (direct) {
+    menuEl.classList.add("joining");
+    const join = () =>
+      withUsername(() => {
+        menuEl.classList.remove("on", "joining");
+        direct();
       });
-    }
-    if (!nameInput.value) nameInput.focus();
+    document.getElementById("menu-join")?.addEventListener("click", join);
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") join();
+    });
   }
+  if (!nameInput.value) nameInput.focus();
 }
 
 // --- Simulation ------------------------------------------------------------

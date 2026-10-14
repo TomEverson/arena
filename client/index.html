@@ -343,7 +343,8 @@
         flex-direction: column;
         gap: 14px;
       }
-      #heroes {
+      #heroes,
+      #menu-heroes {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -352,10 +353,12 @@
         font-size: 14px;
         cursor: default;
       }
-      #heroes .label {
+      #heroes .label,
+      #menu-heroes .label {
         color: #9ab;
       }
-      #heroes button {
+      #heroes button,
+      #menu-heroes button {
         font: 700 14px monospace;
         padding: 6px 14px;
         color: #cde;
@@ -363,11 +366,13 @@
         border: 1px solid #556;
         cursor: pointer;
       }
-      #heroes button.on {
+      #heroes button.on,
+      #menu-heroes button.on {
         color: #2de2e6;
         border-color: #2de2e6;
       }
-      #heroes small {
+      #heroes small,
+      #menu-heroes small {
         flex-basis: 100%;
         text-align: center;
         min-height: 1.2em;
@@ -577,6 +582,18 @@
         font: 400 13px monospace;
         color: #9ab;
       }
+      #menu #menu-heroes button {
+        width: 160px;
+        padding: 12px;
+        font-size: 18px;
+      }
+      #menu #menu-heroes button.on {
+        color: #2de2e6;
+        border-color: #2de2e6;
+      }
+      #menu #menu-heroes small {
+        display: none;
+      }
       #menu #menu-note {
         min-height: 1.2em;
         color: #ff8a7a;
@@ -672,6 +689,7 @@
         Your name
         <input id="player-name" type="text" maxlength="16" autocomplete="off" spellcheck="false" />
       </label>
+      <div id="menu-heroes"></div>
       <div class="buttons">
         <button id="play-ffa">
           Play FFA
@@ -683,7 +701,7 @@
         </button>
         <button id="menu-join">
           Join room
-          <small>You opened a room link. Enter a name to join it.</small>
+          <small>Pick your hero, then join.</small>
         </button>
       </div>
       <div id="menu-note"></div>
