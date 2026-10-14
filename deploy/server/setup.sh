@@ -28,25 +28,43 @@ echo "==> installing the server"
 $SUDO install -m 755 -o arena -g arena "$IN/arena-server" /opt/arena/arena-server
 $SUDO install -m 644 -o arena -g arena "$IN"/levels/*.json /opt/arena/levels/
 $SUDO install -m 640 -o arena -g arena "$IN/arena.env" /opt/arena/arena.env
-$SUDO install -m 644 "$IN/arena.service" /etc/systemd/system/arena.service
+$SUDO install -m 644 "$IN/arena.service" "$IN/arena-cert.path" "$IN/arena-cert.service" /etc/systemd/system/
 $SUDO install -m 644 "$IN/Caddyfile" /etc/caddy/Caddyfile
+
+# QUIC (the game's transport) wants bigger UDP buffers than the default.
+printf 'net.core.rmem_max=7500000\nnet.core.wmem_max=7500000\n' | $SUDO tee /etc/sysctl.d/90-arena-quic.conf >/dev/null
+$SUDO sysctl -q --system
 
 # The firewall, if ufw is on: ssh, and the web ports Caddy needs (80 for the certificate, 443 to play).
 if command -v ufw >/dev/null 2>&1 && $SUDO ufw status | grep -q "Status: active"; then
   $SUDO ufw allow OpenSSH >/dev/null
   $SUDO ufw allow 80/tcp >/dev/null
   $SUDO ufw allow 443/tcp >/dev/null
+  $SUDO ufw allow 443/udp >/dev/null
 fi
 
 $SUDO systemctl daemon-reload
-$SUDO systemctl enable arena >/dev/null 2>&1
-$SUDO systemctl restart arena
+# Caddy first, restarted so it lets go of UDP port 443, which is the game server's. Caddy also
+# has to have the certificate before the game server can start with it: on a brand new droplet
+# that takes a moment.
 $SUDO systemctl enable caddy >/dev/null 2>&1
-$SUDO systemctl reload caddy 2>/dev/null || $SUDO systemctl restart caddy
+$SUDO systemctl restart caddy
+CERT="$(sed -n 's/^LoadCredential=cert://p' "$IN/arena.service")"
+for _ in $(seq 1 60); do
+  $SUDO test -s "$CERT" && break
+  sleep 2
+done
+if ! $SUDO test -s "$CERT"; then
+  echo "Caddy has no certificate yet ($CERT): check that the game host name points at this machine and ports 80 and 443 are open, see 'journalctl -u caddy -n 50'" >&2
+  exit 1
+fi
+$SUDO systemctl enable arena arena-cert.path >/dev/null 2>&1
+$SUDO systemctl restart arena
+$SUDO systemctl restart arena-cert.path
 
 echo "==> checking the server answers on this machine"
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -fsS http://127.0.0.1:8080/healthz; then
+  if curl -fsS http://127.0.0.1:8080/healthz && curl -fsS http://127.0.0.1:8080/api/transport; then
     echo
     echo "==> done"
     exit 0

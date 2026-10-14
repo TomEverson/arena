@@ -55,6 +55,22 @@ Transport split:
 This direction requires HTTPS/HTTP/3 deployment, a WebTransport-capable Go server, loss and reorder
 tests, and a direct production endpoint before the client transport is switched over.
 
+## WebTransport, as built (2026-10-14)
+
+The move above is done: browsers play over WebTransport, on the droplet's UDP port 443. What was built, and where it differs from the plan:
+
+- **One session per player** at `https://<game host>:<port>/wt?room=<code>` (`server/internal/gameserver/webtransport.go`, `client/src/net/webtransport.ts`).
+  - **A reliable stream**, opened by the client: the welcome down; hero, respawn, rematch and practice requests up. Each message is a 4-byte length and then the bytes.
+  - **Datagrams** for everything that may be lost: snapshots and pongs down, inputs and pings up. One message each.
+  - **A message too big for a datagram** (over 1100 bytes: a full snapshot of a busy room) goes on a one-way stream of its own. Streams do not block each other, so it still never holds anything else up. This replaces the plan's "keyframes on the reliable stream".
+- **Snapshots survive loss by acknowledgement, not by keyframes.** Every input message carries `ack`, the newest snapshot tick the client has. The server sends full snapshots until one is acknowledged, then deltas in which every change and every removal is repeated until a snapshot carrying it has been acknowledged (`deltaEntities` in `world.go`). The client drops a snapshot older than the newest it has used (`NetClient`). So a lost or late datagram costs nothing but its own bytes.
+- **The wire got small enough for datagrams.** Binary frames carry every struct as an array of its fields in order, with numbers in their shortest form: a quiet two-player snapshot went from about 1750 bytes to about 220 (a datagram carries about 1200). The field order is generated from `protocol/messages.json` for the TypeScript side (`LAYOUTS` in `protocol.gen.ts`) and is the Go structs' own order. The decoder refuses an array of another length, so **both sides must be deployed together** when messages change.
+- **No silent fallback**, as decided: a browser without WebTransport is told it cannot play. The WebSocket `/ws` is still served, for the headless test players (`netcheck` and the others: Node has no WebTransport) and for `?transport=ws` when debugging. It runs the same game code through the same `link` interface, where "may be lost" simply arrives.
+- **Certificates.** In development the server makes a self-signed certificate at every start, and the page gets its hash from `GET /api/transport` (browsers accept a short-lived ECDSA certificate by hash for WebTransport). In production it uses the game host's real certificate (`--wt-cert`, `--wt-key`): see `spec/docs/deploy.md`.
+- **The fake network** (`--fake-latency`, `--loss`) now loses only what may be lost; the welcome is delayed but always arrives.
+- **Go 1.26** is needed now (the WebTransport library asks for it).
+- **Not done:** loss and reorder tests through a real lossy UDP path (the tests lose snapshots inside the server), congestion tuning, and splitting one big snapshot over several datagrams.
+
 ## Scaling notes (for later)
 - Bandwidth is the real limit at high player counts. Fixes: interest management via spatial grid, 16-bit quantization, delta snapshots, lower update rate for distant entities, binary packets.
 - Team-aware relevance: teammates always visible; enemies by distance or line of sight; distant teams at lower detail.

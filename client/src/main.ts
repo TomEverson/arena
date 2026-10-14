@@ -40,9 +40,12 @@ import {
   modeFromUrl,
   roomFromUrl,
   roomLink,
+  transportInfo,
 } from "./net/rooms";
 import { server } from "./net/serverUrl";
 import { CorrectionSmoother, SMOOTH_TIME, SNAP_DISTANCE } from "./net/smoothing";
+import type { TransportFactory } from "./net/transport";
+import { hasWebTransport, webTransportTransport } from "./net/webtransport";
 import { PALETTE } from "./palette";
 import { PracticeStats } from "./practiceStats";
 import { RemoteViews } from "./remoteView";
@@ -582,9 +585,39 @@ function serverDown(note: string): void {
   scores = [];
 }
 
+/**
+ * How to reach the room: over WebTransport (QUIC over UDP), which is what the game is played
+ * over. There is no falling back to a WebSocket by itself: a browser without WebTransport is told
+ * so. `?transport=ws` asks for the WebSocket on purpose (debugging), and a server that has
+ * WebTransport turned off is reached that way too.
+ */
+async function transportFor(code: string): Promise<TransportFactory | string | null> {
+  const room = `?room=${encodeURIComponent(code)}`;
+  if (new URLSearchParams(location.search).get("transport") === "ws")
+    return server.ws(`/ws${room}`);
+  const info = await transportInfo();
+  if (!info) return server.ws(`/ws${room}`);
+  if (!hasWebTransport()) {
+    serverDown(
+      "This browser cannot play: it has no WebTransport. Use a current Chrome, Edge, Firefox or Safari.",
+    );
+    return null;
+  }
+  return webTransportTransport(server.webTransport(info.port, `/wt${room}`), info.certHash);
+}
+
 function startNet(code: string): void {
   roomCode = code;
-  net = new NetClient(server.ws(`/ws?room=${encodeURIComponent(code)}`), {
+  transportFor(code).then(
+    (connect) => {
+      if (connect) connectNet(connect);
+    },
+    () => serverDown(NO_SERVER),
+  );
+}
+
+function connectNet(connect: TransportFactory | string): void {
+  net = new NetClient(connect, {
     onWelcome(w) {
       myId = w.playerId;
       roomCode = w.room;

@@ -34,7 +34,7 @@ arena/
 
 ## Tooling
 - **Client:** pnpm, Vite, strict TypeScript 6 (TypeScript 7 has no JS API yet, which `typescript-eslint` needs), Vitest, ESLint with `typescript-eslint` type-aware rules, Prettier, Three.js
-- **Server:** Go 1.24, coder/websocket, air, golangci-lint (optional; lint skips it if missing)
+- **Server:** Go 1.26, quic-go/webtransport-go (the game transport), coder/websocket (the test tools' transport), air, golangci-lint (optional; lint skips it if missing)
 - **CI:** GitLab CI calling the same pnpm scripts (file written, not run or wired up yet)
 - **Deploy (later):** one Docker image per match on a DigitalOcean droplet, Cloudflare in front of the static client
 

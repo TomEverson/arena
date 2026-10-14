@@ -11,6 +11,8 @@ export interface ServerUrls {
   http(path: string): string;
   /** A WebSocket URL on the server for a path like "/ws?room=ABCD". */
   ws(path: string): string;
+  /** A WebTransport URL on the server's host, on the UDP port it says it is on. Always https. */
+  webTransport(port: number, path: string): string;
 }
 
 /**
@@ -21,13 +23,19 @@ export function serverUrls(base: string, page: { protocol: string; host: string 
   const trimmed = base.trim().replace(/\/+$/, "");
   if (!trimmed) {
     const ws = page.protocol === "https:" ? "wss:" : "ws:";
-    return { http: (path) => path, ws: (path) => `${ws}//${page.host}${path}` };
+    const hostname = page.host.replace(/:\d+$/, "");
+    return {
+      http: (path) => path,
+      ws: (path) => `${ws}//${page.host}${path}`,
+      webTransport: (port, path) => `https://${hostname}:${port}${path}`,
+    };
   }
   const url = new URL(trimmed);
   const ws = url.protocol === "https:" ? "wss:" : "ws:";
   return {
     http: (path) => `${url.origin}${path}`,
     ws: (path) => `${ws}//${url.host}${path}`,
+    webTransport: (port, path) => `https://${url.hostname}:${port}${path}`,
   };
 }
 

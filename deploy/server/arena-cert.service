@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart the Arena game server to pick up a renewed certificate
+
+[Service]
+Type=oneshot
+# Running rooms end, as with any restart; a renewal happens about every two months.
+ExecStart=/usr/bin/systemctl try-restart arena.service

@@ -39,7 +39,19 @@ export async function createRoom(mode: GameMode = "ffa"): Promise<RoomInfo> {
   return { code: body.code, players: 0, maxPlayers: body.maxPlayers };
 }
 
-/** WebSocket close codes the server uses to say why it refused us (see server/internal/gameserver). */
+/**
+ * How the server's game transport is reached: the UDP port WebTransport is on, and in development
+ * the hash of its self-signed certificate (empty with a real one). Null when the server has
+ * WebTransport turned off. Throws if the server cannot be reached.
+ */
+export async function transportInfo(): Promise<{ port: number; certHash: string } | null> {
+  const res = await fetch(server.http("/api/transport"));
+  if (!res.ok) throw new Error(`could not ask the server for its transport (${res.status})`);
+  const body = (await res.json()) as { webtransport: { port: number; certHash: string } | null };
+  return body.webtransport;
+}
+
+/** Close codes the server uses to say why it refused us (see server/internal/gameserver): the same on both transports. */
 export const CLOSE_ROOM_NOT_FOUND = 4001;
 export const CLOSE_ROOM_FULL = 4002;
 

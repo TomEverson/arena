@@ -791,6 +791,7 @@ func TestASpearThatWentOffIsRemovedFromEveryScreen(t *testing.T) {
 				for _, id := range s.Removed {
 					delete(screen, id)
 				}
+				d.w.AckSnapshot(p.ID, s.Tick) // a client says what it has got: deltas follow
 				p.Free <- s
 			}
 		}

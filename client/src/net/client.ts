@@ -3,11 +3,13 @@ import { decode, encode } from "@msgpack/msgpack";
 import {
   type ClientMessage,
   type Input,
+  packClientMessage,
   parseServerMessage,
-  type ServerMessage,
   type SnapshotMessage,
+  unpackServerMessage,
   type WelcomeMessage,
 } from "./protocol.gen";
+import { type Transport, type TransportFactory, webSocketTransport } from "./transport";
 
 export interface NetStats {
   /** Smoothed round-trip time and its jitter (ms). */
@@ -31,17 +33,15 @@ export interface NetHandlers {
 }
 
 const PING_EVERY_MS = 500;
-const SERVER_TYPES = new Set(["welcome", "snapshot", "pong"]);
 
-function parseServerMessageValue(value: unknown): ServerMessage | null {
-  if (!value || typeof value !== "object") return null;
-  const msg = value as { type?: unknown };
-  return typeof msg.type === "string" && SERVER_TYPES.has(msg.type)
-    ? (value as ServerMessage)
-    : null;
-}
-
-/** Thin WebSocket wrapper: parsing, ping/RTT, snapshot rate. No game logic. */
+/**
+ * The connection to the game server: parsing, ping/RTT, snapshot rate, and which messages may be
+ * lost. No game logic. It runs over any Transport (transport.ts); a plain URL means a WebSocket.
+ *
+ * Snapshots can arrive late or twice or not at all, so an old one is dropped here (the game only
+ * ever sees them in order), and every input message says which snapshot we have got: the server
+ * repeats what we have not acknowledged.
+ */
 export class NetClient {
   state: "connecting" | "open" | "closed" = "connecting";
   playerId: number | null = null;
@@ -53,75 +53,84 @@ export class NetClient {
     queued: 0,
   };
 
-  private readonly ws: WebSocket;
+  private readonly transport: Transport;
   private pingTimer: ReturnType<typeof setInterval> | undefined;
   private snapshotTimes: number[] = [];
   private gotRtt = false;
+  /** The tick of the newest snapshot handed to the game (0: none yet). */
+  private snapshotTick = 0;
 
   constructor(
-    url: string,
+    connect: string | TransportFactory,
     private readonly handlers: NetHandlers,
   ) {
-    this.ws = new WebSocket(url);
-    this.ws.binaryType = "arraybuffer";
-    this.ws.onopen = () => {
-      this.state = "open";
-      this.ping();
-      this.pingTimer = setInterval(() => this.ping(), PING_EVERY_MS);
-    };
-    this.ws.onclose = (ev) => {
-      const wasConnected = this.playerId !== null;
-      this.state = "closed";
-      if (this.pingTimer) clearInterval(this.pingTimer);
-      this.handlers.onClose(wasConnected, ev.code);
-    };
-    this.ws.onmessage = (ev) => {
-      const msg =
-        typeof ev.data === "string"
-          ? parseServerMessage(ev.data)
-          : parseServerMessageValue(decode(new Uint8Array(ev.data as ArrayBuffer)));
-      if (!msg) return;
-      switch (msg.type) {
-        case "welcome":
-          this.playerId = msg.playerId;
-          this.handlers.onWelcome(msg);
-          break;
-        case "snapshot": {
-          const now = performance.now();
-          this.stats.snapshotBytes = typeof ev.data === "string" ? ev.data.length : 0;
-          this.snapshotTimes.push(now);
-          while (this.snapshotTimes.length > 0 && now - (this.snapshotTimes[0] as number) > 1000)
-            this.snapshotTimes.shift();
-          this.stats.snapshotsPerSecond = this.snapshotTimes.length;
-          this.stats.queued = msg.queued;
-          this.handlers.onSnapshot(msg);
-          break;
-        }
-        case "pong": {
-          const rtt = performance.now() - msg.t;
-          if (!this.gotRtt) {
-            this.stats.rttMs = rtt;
-            this.gotRtt = true;
-          } else {
-            this.stats.jitterMs += (Math.abs(rtt - this.stats.rttMs) - this.stats.jitterMs) * 0.2;
-            this.stats.rttMs += (rtt - this.stats.rttMs) * 0.2;
-          }
-          break;
-        }
-      }
-    };
+    const factory = typeof connect === "string" ? webSocketTransport(connect) : connect;
+    this.transport = factory({
+      onOpen: () => {
+        this.state = "open";
+        this.ping();
+        this.pingTimer = setInterval(() => this.ping(), PING_EVERY_MS);
+      },
+      onClose: (code) => {
+        const wasConnected = this.playerId !== null;
+        this.state = "closed";
+        if (this.pingTimer) clearInterval(this.pingTimer);
+        this.handlers.onClose(wasConnected, code);
+      },
+      onMessage: (data) => this.receive(data),
+    });
   }
 
-  private send(msg: ClientMessage): void {
-    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(encode(msg));
+  private receive(data: Uint8Array | string): void {
+    const msg =
+      typeof data === "string" ? parseServerMessage(data) : unpackServerMessage(decode(data));
+    if (!msg) return;
+    switch (msg.type) {
+      case "welcome":
+        this.playerId = msg.playerId;
+        this.handlers.onWelcome(msg);
+        break;
+      case "snapshot": {
+        if (msg.tick <= this.snapshotTick) return; // late or repeated: a newer one has been used
+        this.snapshotTick = msg.tick;
+        const now = performance.now();
+        this.stats.snapshotBytes = data.length;
+        this.snapshotTimes.push(now);
+        while (this.snapshotTimes.length > 0 && now - (this.snapshotTimes[0] as number) > 1000)
+          this.snapshotTimes.shift();
+        this.stats.snapshotsPerSecond = this.snapshotTimes.length;
+        this.stats.queued = msg.queued;
+        this.handlers.onSnapshot(msg);
+        break;
+      }
+      case "pong": {
+        const rtt = performance.now() - msg.t;
+        if (!this.gotRtt) {
+          this.stats.rttMs = rtt;
+          this.gotRtt = true;
+        } else {
+          this.stats.jitterMs += (Math.abs(rtt - this.stats.rttMs) - this.stats.jitterMs) * 0.2;
+          this.stats.rttMs += (rtt - this.stats.rttMs) * 0.2;
+        }
+        break;
+      }
+    }
+  }
+
+  /** `lossy`: this message may be lost (it will be sent again, or does not matter by then). */
+  private send(msg: ClientMessage, lossy = false): void {
+    if (this.state !== "open") return;
+    const bytes = encode(packClientMessage(msg));
+    if (lossy) this.transport.sendUnreliable(bytes);
+    else this.transport.sendReliable(bytes);
   }
 
   private ping(): void {
-    this.send({ type: "ping", t: performance.now() });
+    this.send({ type: "ping", t: performance.now() }, true);
   }
 
   sendInputs(inputs: Input[]): void {
-    this.send({ type: "input", inputs });
+    this.send({ type: "input", inputs, ack: this.snapshotTick }, true);
   }
 
   sendRespawn(): void {
@@ -144,6 +153,6 @@ export class NetClient {
   }
 
   close(): void {
-    this.ws.close();
+    this.transport.close();
   }
 }

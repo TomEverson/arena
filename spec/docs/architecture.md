@@ -3,7 +3,7 @@
 > Rationale: [spec/brainstorm/02-tech-decisions.md](../brainstorm/02-tech-decisions.md), [spec/brainstorm/05-netcode.md](../brainstorm/05-netcode.md).
 
 ## Overview
-Browser client (TypeScript, Three.js) <-> WebSocket `/ws` <-> Go authoritative server.
+Browser client (TypeScript, Three.js) <-> WebTransport `/wt` (QUIC over UDP; a WebSocket `/ws` remains for the headless test players) <-> Go authoritative server.
 In dev, Vite serves the client on :5173 and proxies `/ws` and `/healthz` to the Go server on :8080.
 
 ## Server

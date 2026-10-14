@@ -115,9 +115,20 @@ type Player struct {
 	qLen  int
 
 	// Last entity baseline sent to this client. Delta construction happens on the world goroutine.
-	replication      [maxReplicatedEntities]Entity
-	replicationLen   int
-	replicationReady bool
+	// Snapshots may be lost on the way (they travel as datagrams), so nothing is taken as known
+	// to the client until it says so: snapAck is the newest snapshot tick it has acknowledged.
+	//   - Every snapshot is a full one until the client acknowledges one (fullSent, fullTick).
+	//   - replicationSent[i] is the tick replication[i]'s current value was first sent at: it
+	//     goes out again in every snapshot until snapAck reaches that tick.
+	//   - removed lists removals not yet acknowledged the same way.
+	replication     [maxReplicatedEntities]Entity
+	replicationSent [maxReplicatedEntities]uint32
+	replicationLen  int
+	removed         [maxReplicatedEntities]removal
+	removedLen      int
+	snapAck         uint32
+	fullSent        bool
+	fullTick        uint32
 
 	initial    PlayerState
 	hasInitial bool
@@ -190,17 +201,25 @@ const (
 	cmdJoin commandKind = iota
 	cmdLeave
 	cmdInput
+	cmdAck
 	cmdRespawn
 	cmdRematch
 	cmdPractice
 	cmdHero
 )
 
+// removal is an entity taken off a client's screen at a tick, kept until it is acknowledged.
+type removal struct {
+	id   uint32
+	tick uint32
+}
+
 type command struct {
 	kind   commandKind
 	player *Player // join
 	id     uint32  // leave, input
 	input  Input   // input
+	ack    uint32  // ack: the newest snapshot tick the client has
 	action PracticeAction
 	hero   uint8 // hero
 }
@@ -313,6 +332,15 @@ func (w *World) SetHero(ctx context.Context, id uint32, hero uint8) {
 func (w *World) SubmitInput(id uint32, in Input) {
 	select {
 	case w.inbox <- command{kind: cmdInput, id: id, input: in}:
+	default:
+	}
+}
+
+// AckSnapshot records that a client has received the snapshot of this tick (it says so with its
+// inputs). Like SubmitInput it never blocks.
+func (w *World) AckSnapshot(id uint32, tick uint32) {
+	select {
+	case w.inbox <- command{kind: cmdAck, id: id, ack: tick}:
 	default:
 	}
 }
@@ -487,6 +515,14 @@ func (w *World) apply(c command) {
 				w.resetLife(p)
 			}
 		}
+	case cmdAck:
+		for _, p := range w.players {
+			// Only ticks that have been sent, and only forwards (acks can arrive out of order).
+			if p.ID == c.id && c.ack > p.snapAck && uint64(c.ack) <= w.tick {
+				p.snapAck = c.ack
+				return
+			}
+		}
 	case cmdLeave:
 		for i, p := range w.players {
 			if p.ID == c.id {
@@ -572,14 +608,21 @@ func (w *World) sendSnapshots() {
 		s.Match = w.matchInfo()
 		s.Scores = w.scoresInto(s.Scores[:0])
 		s.Entities = w.entitiesFor(p, s.Entities[:0])
-		s.Full = !p.replicationReady
 		s.Removed = s.Removed[:0]
-		if p.replicationReady {
-			w.deltaEntities(p, s)
-		} else {
+		// Full snapshots until the client has acknowledged one; deltas from then on.
+		s.Full = !p.fullSent || p.snapAck < p.fullTick
+		if s.Full {
 			copy(p.replication[:], s.Entities)
 			p.replicationLen = len(s.Entities)
-			p.replicationReady = true
+			for i := 0; i < p.replicationLen; i++ {
+				p.replicationSent[i] = s.Tick
+			}
+			p.removedLen = 0
+			if !p.fullSent {
+				p.fullSent, p.fullTick = true, s.Tick
+			}
+		} else {
+			w.deltaEntities(p, s)
 		}
 		s.Events = p.recentEvents(s.Events[:0], w.tick)
 		s.Shots = w.shots.recent(s.Shots[:0], w.tick)
@@ -591,7 +634,9 @@ func (w *World) sendSnapshots() {
 	}
 }
 
-// deltaEntities replaces the current relevance set with changed entities and explicit removals.
+// deltaEntities replaces the current relevance set with changed entities and explicit removals,
+// plus everything sent before that the client has not acknowledged yet (a snapshot can be lost:
+// a change or a removal is repeated until a snapshot carrying it is known to have arrived).
 // Unchanged entities stay in the per-client baseline, so the client can keep interpolating them.
 // An entity missing from this snapshot stays in the baseline only while it still exists and is
 // within interest (it was just not sent this time: far things are sent less often). One that no
@@ -612,9 +657,15 @@ func (w *World) deltaEntities(viewer *Player, s *Snapshot) {
 			current[i] = true
 			continue
 		}
-		s.Removed = append(s.Removed, old.ID)
+		if viewer.removedLen == len(viewer.removed) {
+			viewer.fullSent = false // more unacknowledged removals than fit: start again from a full snapshot
+		} else {
+			viewer.removed[viewer.removedLen] = removal{id: old.ID, tick: s.Tick}
+			viewer.removedLen++
+		}
 		last := viewer.replicationLen - 1
 		viewer.replication[i] = viewer.replication[last]
+		viewer.replicationSent[i] = viewer.replicationSent[last]
 		viewer.replicationLen--
 		if i < last {
 			current[i] = current[last]
@@ -637,14 +688,36 @@ func (w *World) deltaEntities(viewer *Player, s *Snapshot) {
 		if idx < 0 {
 			idx = viewer.replicationLen
 			viewer.replicationLen++
+			// Back again (or an id reused): it is no longer something to take away.
+			for r := 0; r < viewer.removedLen; r++ {
+				if viewer.removed[r].id == e.ID {
+					viewer.removedLen--
+					viewer.removed[r] = viewer.removed[viewer.removedLen]
+					break
+				}
+			}
 		}
 		if changed || viewer.replication[idx] != e {
 			viewer.replication[idx] = e
+			viewer.replicationSent[idx] = s.Tick
+		}
+		// Sent now if it changed now, or if its last change has not been acknowledged.
+		if viewer.replicationSent[idx] > viewer.snapAck {
 			s.Entities[write] = e
 			write++
 		}
 	}
 	s.Entities = s.Entities[:write]
+	// Removals: drop the acknowledged ones, send the rest (again).
+	keep := 0
+	for r := 0; r < viewer.removedLen; r++ {
+		if viewer.removed[r].tick > viewer.snapAck {
+			viewer.removed[keep] = viewer.removed[r]
+			keep++
+			s.Removed = append(s.Removed, viewer.removed[r].id)
+		}
+	}
+	viewer.removedLen = keep
 }
 
 // exists reports whether an entity with this id is in the world this tick (see sendSnapshots).

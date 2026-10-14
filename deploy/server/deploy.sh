@@ -21,7 +21,9 @@ echo "==> building the server for linux/$ARCH"
 cp levels/*.json "$out/levels/"
 sed "s/{{GAME_HOST}}/$GAME_HOST/" deploy/server/Caddyfile.template >"$out/Caddyfile"
 printf 'ALLOWED_ORIGINS=%s\n' "$SITE_HOSTS" >"$out/arena.env"
-cp deploy/server/arena.service deploy/server/setup.sh "$out/"
+sed "s/{{GAME_HOST}}/$GAME_HOST/g" deploy/server/arena.service >"$out/arena.service"
+sed "s/{{GAME_HOST}}/$GAME_HOST/g" deploy/server/arena-cert.path >"$out/arena-cert.path"
+cp deploy/server/arena-cert.service deploy/server/setup.sh "$out/"
 
 echo "==> copying to $DROPLET"
 ssh "$DROPLET" 'mkdir -p ~/arena-incoming'

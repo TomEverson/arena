@@ -321,6 +321,8 @@ export interface Score {
 export interface InputMessage {
   type: "input";
   inputs: Input[];
+  /** The tick of the newest snapshot this client has received (0: none yet). Snapshots can be lost, so the server repeats what it sent until it is acknowledged here. */
+  ack: number;
 }
 
 /** Round-trip and clock probe. */
@@ -419,6 +421,48 @@ export type ServerMessage =
   | PongMessage;
 
 const SERVER_TYPES = new Set<string>(["welcome","snapshot","pong"]);
+
+/** Field order of every struct and message, as binary frames carry them (arrays, no field names). */
+const LAYOUTS: Record<string, readonly (readonly [string, string])[]> = {"Input":[["seq","u32"],["moveX","f64"],["moveZ","f64"],["yaw","f64"],["pitch","f64"],["jump","bool"],["dash","bool"],["slide","bool"],["ads","bool"],["fire","bool"],["reload","bool"],["melee","bool"],["skillQ","bool"],["reel","bool"],["skillE","bool"],["ult","bool"],["hero","u8"],["overdrive","bool"],["slot","u8"],["runSpeedMult","f64"],["adsSpeedMult","f64"],["viewTick","f64"]],"PlayerState":[["x","f64"],["y","f64"],["z","f64"],["vx","f64"],["vy","f64"],["vz","f64"],["onGround","bool"],["crouching","bool"],["sliding","bool"],["slideTime","f64"],["slideCooldown","f64"],["dashCharges","f64"],["dashTime","f64"],["dashDirX","f64"],["dashDirZ","f64"],["airJumps","u8"],["coyote","f64"],["jumpBuffer","f64"],["mantling","bool"],["mantleT","f64"],["mantleFromX","f64"],["mantleFromY","f64"],["mantleFromZ","f64"],["mantleToX","f64"],["mantleToY","f64"],["mantleToZ","f64"],["wallRunning","bool"],["wallRunTime","f64"],["wallNormalX","f64"],["wallNormalZ","f64"],["wallJumps","u8"],["wallCooldown","f64"],["rollT","f64"],["rollDirX","f64"],["rollDirY","f64"],["rollDirZ","f64"],["grappling","bool"],["grappleX","f64"],["grappleY","f64"],["grappleZ","f64"],["grapple2","bool"],["grapple2X","f64"],["grapple2Y","f64"],["grapple2Z","f64"],["grappleLen","f64"],["grapple2Len","f64"],["grappleT","f64"],["grappleStall","f64"],["grappleCharges","f64"],["slowT","f64"]],"Entity":[["id","u32"],["teamId","u16"],["x","f64"],["y","f64"],["z","f64"],["yaw","f64"],["pitch","f64"],["flags","u16"],["kind","u8"],["hero","u8"]],"WeaponState":[["slot","u8"],["gun","u8"],["ammo","u8"],["stash","u8"],["switchT","f64"],["reloadT","f64"],["cooldown","f64"],["burst","u8"],["sinceShot","f64"],["meleeT","f64"],["meleeCooldown","f64"],["skillQT","f64"],["skillET","f64"],["diveT","f64"],["slashT","f64"],["rng","u32"]],"PlayerHealth":[["health","f64"],["shield","f64"],["alive","bool"],["respawnIn","f64"],["protectedFor","f64"],["ult","f64"],["hero","u8"],["overdrive","f64"],["nextHero","u8"]],"GameEvent":[["seq","u32"],["tick","u32"],["kind","u8"],["actor","u32"],["other","u32"],["amount","f64"],["flags","u8"],["health","f64"],["shield","f64"]],"Shot":[["seq","u32"],["tick","u32"],["actor","u32"],["gun","u8"],["x","f64"],["y","f64"],["z","f64"],["dx","f64"],["dy","f64"],["dz","f64"]],"MatchInfo":[["phase","u8"],["timeLeft","f64"],["suddenDeath","bool"],["winner","u32"],["players","u8"],["minPlayers","u8"],["rematchVotes","u8"]],"Score":[["id","u32"],["kills","u16"],["deaths","u16"]],"server:welcome":[["type","string"],["playerId","u32"],["tickRate","u16"],["snapshotRate","u16"],["level","string"],["room","string"],["maxPlayers","u8"],["mode","string"]],"server:snapshot":[["type","string"],["tick","u32"],["ackSeq","u32"],["queued","u8"],["full","bool"],["you","PlayerState"],["entities","[Entity]"],["removed","[u32]"],["health","PlayerHealth"],["weapon","WeaponState"],["events","[GameEvent]"],["shots","[Shot]"],["match","MatchInfo"],["scores","[Score]"]],"server:pong":[["type","string"],["t","f64"],["tick","u32"]],"client":[["type","string"],["inputs","[Input]"],["ack","u32"],["t","f64"],["hero","u8"],["action","string"]]};
+
+function unpack(type: string, value: unknown): unknown {
+  if (type.startsWith("[")) {
+    const inner = type.slice(1, -1);
+    return Array.isArray(value) ? value.map((v) => unpack(inner, v)) : [];
+  }
+  const layout = LAYOUTS[type];
+  if (!layout) return value;
+  const items = Array.isArray(value) ? (value as unknown[]) : [];
+  const out: Record<string, unknown> = {};
+  layout.forEach(([name, t], i) => {
+    out[name] = unpack(t, items[i]);
+  });
+  return out;
+}
+
+function pack(type: string, value: unknown): unknown {
+  if (type.startsWith("[")) {
+    const inner = type.slice(1, -1);
+    return Array.isArray(value) ? value.map((v) => pack(inner, v)) : [];
+  }
+  const layout = LAYOUTS[type];
+  if (!layout) return value ?? (type === "string" ? "" : type === "bool" ? false : 0);
+  const fields = (value ?? {}) as Record<string, unknown>;
+  return layout.map(([name, t]) => pack(t, fields[name]));
+}
+
+/** Decode a binary frame's value (the decoded MessagePack array) into a server message, or null. */
+export function unpackServerMessage(value: unknown): ServerMessage | null {
+  if (!Array.isArray(value)) return null;
+  const type: unknown = value[0];
+  if (typeof type !== "string" || !SERVER_TYPES.has(type)) return null;
+  return unpack(`server:${type}`, value) as ServerMessage;
+}
+
+/** A client message as the array a binary frame carries (encode it with MessagePack). */
+export function packClientMessage(msg: ClientMessage): unknown[] {
+  return pack("client", msg) as unknown[];
+}
 
 /** Parse a server message. Returns null for anything that is not a known message. */
 export function parseServerMessage(text: string): ServerMessage | null {

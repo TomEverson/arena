@@ -484,7 +484,11 @@
     "input": {
       "doc": "The latest few inputs, oldest first. Resent redundantly so a lost message does not lose inputs; the server skips sequence numbers it already has.",
       "fields": {
-        "inputs": "[Input]"
+        "inputs": "[Input]",
+        "ack": {
+          "type": "u32",
+          "doc": "The tick of the newest snapshot this client has received (0: none yet). Snapshots can be lost, so the server repeats what it sent until it is acknowledged here."
+        }
       }
     },
     "ping": {

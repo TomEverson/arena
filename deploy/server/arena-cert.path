@@ -1,0 +1,9 @@
+[Unit]
+Description=Restart the Arena game server when its certificate is renewed
+
+[Path]
+# Caddy rewrites this file when it renews the certificate (about every two months).
+PathChanged=/var/lib/caddy/.local/share/caddy/certificates/acme-v02.api.letsencrypt.org-directory/{{GAME_HOST}}/{{GAME_HOST}}.crt
+
+[Install]
+WantedBy=multi-user.target

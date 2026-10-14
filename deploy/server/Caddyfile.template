@@ -1,6 +1,13 @@
 # Written to /etc/caddy/Caddyfile by deploy.sh, with the game host name filled in.
-# Caddy gets and renews the certificate by itself, and passes everything (the HTTP API and the
-# WebSocket) to the game server on this machine.
+# Caddy gets and renews the certificate by itself, and passes the HTTP API (and the WebSocket the
+# test tools use) to the game server on this machine. It stays off UDP: port 443 over UDP is the
+# game server's own, for WebTransport.
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
 {{GAME_HOST}} {
 	reverse_proxy 127.0.0.1:8080
 }

@@ -2,17 +2,28 @@ package gameserver
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log"
+	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	os "os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
+	"github.com/quic-go/webtransport-go"
+	"github.com/vmihailenco/msgpack/v5"
 
 	"arena/server/internal/game"
 	"arena/server/internal/protocol"
@@ -594,4 +605,141 @@ func TestOtherOriginsAreRefusedUnlessAllowed(t *testing.T) {
 	if res.StatusCode != http.StatusOK || res.Header.Get("Access-Control-Allow-Origin") != "" {
 		t.Fatalf("a plain request: status %d, allow-origin %q", res.StatusCode, res.Header.Get("Access-Control-Allow-Origin"))
 	}
+}
+
+// A WebTransport session end to end, with the real codec: the welcome on the control stream,
+// inputs up as datagrams, snapshots down as datagrams, and the player moving.
+func TestWebTransportPlaysOverDatagrams(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	rooms := NewRooms(ctx, RoomsConfig{Modes: map[string]ModeConfig{ModeFFA: {Level: game.FlatLevel(), Match: practice()}}})
+	srv := &Server{Rooms: rooms, Codec: wire.MsgPack{}, LevelName: "test"}
+	udp, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := DevCertificate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := srv.ServeWebTransport(udp, cert, true)
+	go func() { _ = run(ctx) }()
+	room, err := rooms.Create(ModeFFA)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	client := &webtransport.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true, NextProtos: []string{http3.NextProtoH3}},
+		QUICConfig:      &quic.Config{EnableDatagrams: true, EnableStreamResetPartialDelivery: true},
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	dialCtx, dialCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer dialCancel()
+	url := fmt.Sprintf("https://%s/wt?room=%s", udp.LocalAddr(), room.Code)
+	_, session, err := client.Dial(dialCtx, url, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	control, err := session.OpenStreamSync(dialCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := control.Write([]byte{0, 0, 0, 0}); err != nil { // the empty frame that opens the stream
+		t.Fatal(err)
+	}
+	var head [4]byte
+	if _, err := io.ReadFull(control, head[:]); err != nil {
+		t.Fatalf("reading the welcome: %v", err)
+	}
+	hello := make([]byte, binary.BigEndian.Uint32(head[:]))
+	if _, err := io.ReadFull(control, hello); err != nil {
+		t.Fatal(err)
+	}
+	var welcome protocol.Welcome
+	if err := msgpack.Unmarshal(hello, &welcome); err != nil || welcome.Type != protocol.ServerTypeWelcome || welcome.Room != room.Code {
+		t.Fatalf("welcome = %+v (%v)", welcome, err)
+	}
+
+	// Walk forward for a second, acknowledging what arrives; watch our own position in the snapshots.
+	var snaps, deltas int
+	var first, last protocol.Snapshot
+	var ack uint32
+	for seq := uint32(1); seq <= 60; seq++ {
+		msg, err := msgpack.Marshal([]any{"input", [][]any{inputArray(seq)}, ack, 0, 0, ""})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := session.SendDatagram(msg); err != nil {
+			t.Fatalf("sending an input datagram: %v", err)
+		}
+		readCtx, readCancel := context.WithTimeout(ctx, 30*time.Millisecond)
+		for {
+			data, err := session.ReceiveDatagram(readCtx)
+			if err != nil {
+				break
+			}
+			var snap protocol.Snapshot
+			if msgpack.Unmarshal(data, &snap) != nil || snap.Type != protocol.ServerTypeSnapshot {
+				continue
+			}
+			if len(data) > maxDatagram {
+				t.Fatalf("a %d byte snapshot came as a datagram", len(data))
+			}
+			if snaps == 0 {
+				first = snap
+			}
+			snaps++
+			if !snap.Full {
+				deltas++
+			}
+			last, ack = snap, snap.Tick
+		}
+		readCancel()
+	}
+	if snaps < 20 {
+		t.Fatalf("only %d snapshots arrived as datagrams in a second", snaps)
+	}
+	if deltas == 0 {
+		t.Fatal("snapshots never became deltas: the acknowledgements are not getting through")
+	}
+	if moved := math.Hypot(last.You.X-first.You.X, last.You.Z-first.You.Z); moved < 1 || last.AckSeq == 0 {
+		t.Fatalf("the player did not walk: moved %.2f m, ackSeq %d", moved, last.AckSeq)
+	}
+
+	// The room API answers over HTTP/3 on the same port: browsers that know the host speaks
+	// HTTP/3 send their ordinary requests there too.
+	h3 := &http.Client{Transport: &http3.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true, NextProtos: []string{http3.NextProtoH3}}}}
+	res, err := h3.Post(fmt.Sprintf("https://%s/api/rooms", udp.LocalAddr()), "application/json", strings.NewReader(`{"mode":"ffa"}`))
+	if err != nil {
+		t.Fatalf("creating a room over HTTP/3: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("creating a room over HTTP/3: status %d", res.StatusCode)
+	}
+
+	// A room that does not exist is refused with the same code the WebSocket uses.
+	_, bad, err := client.Dial(dialCtx, fmt.Sprintf("https://%s/wt?room=NOPE1", udp.LocalAddr()), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	waitCtx, waitCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer waitCancel()
+	_, err = bad.AcceptStream(waitCtx) // nothing ever comes: it ends with the reason the session closed
+	var closed *webtransport.SessionError
+	if !errors.As(err, &closed) || closed.ErrorCode != webtransport.SessionErrorCode(CloseRoomNotFound) {
+		t.Fatalf("an unknown room should close with %d: %v", CloseRoomNotFound, err)
+	}
+}
+
+// inputArray is an Input as the binary codec carries it: its fields in order, walking forward.
+func inputArray(seq uint32) []any {
+	in := protocol.Input{Seq: seq, MoveZ: 1}
+	v := reflect.ValueOf(in)
+	out := make([]any, v.NumField())
+	for i := range out {
+		out[i] = v.Field(i).Interface()
+	}
+	return out
 }

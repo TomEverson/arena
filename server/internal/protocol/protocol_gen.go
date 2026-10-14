@@ -387,6 +387,7 @@ type Pong struct {
 type ClientMessage struct {
 	Type   string  `json:"type"`
 	Inputs []Input `json:"inputs,omitempty"`
+	Ack    uint32  `json:"ack,omitempty"`
 	T      float64 `json:"t,omitempty"`
 	Hero   uint8   `json:"hero,omitempty"`
 	Action string  `json:"action,omitempty"`

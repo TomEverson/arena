@@ -5,14 +5,16 @@ The client is static files on **Cloudflare Workers**; the game server is one Go 
 server's address and the server is told which sites may talk to it.
 
 ```text
-Browser ── https ──> Cloudflare Worker "arena"      (the page: HTML, JS, models)
+Browser ── https ──────────> Cloudflare Worker "arena"            (the page: HTML, JS, models)
    │
-   └──── https + wss ──> game host ──> Caddy :443 ──> arena-server 127.0.0.1:8080   (the droplet)
+   ├── https (TCP 443) ────> Caddy ──> arena-server 127.0.0.1:8080  (the room API)       ┐ the
+   └── WebTransport (UDP 443) ───────> arena-server :443            (the game itself)    ┘ droplet
 ```
 
 The browser talks to the droplet directly (not through Cloudflare), so game traffic takes the
-shortest path. This is the WebSocket transport the game uses today; the WebTransport direction in
-`spec/brainstorm/05-netcode.md` would replace Caddy's part later, on the same droplet.
+shortest path. The game itself is WebTransport: QUIC over UDP port 443, straight into the game
+server. Caddy keeps TCP 443: it gets and renews the certificate, and passes the small HTTP API
+through. Both use the same certificate and host name.
 
 ## Settings: `deploy/.env`
 
@@ -49,19 +51,26 @@ a level changes both sides: deploy both, server first.
 | `/opt/arena/arena-server` | The server binary |
 | `/opt/arena/levels/` | The level files it loads at start (`ffa.json`, `greybox.json` for the practice range) |
 | `/opt/arena/arena.env` | `ALLOWED_ORIGINS`, from `SITE_HOSTS` |
-| `/etc/systemd/system/arena.service` | Runs it as the user `arena`, restarts it if it stops |
-| `/etc/caddy/Caddyfile` | Caddy: the certificate for `GAME_HOST` (got and renewed by itself) and the pass-through to the server |
+| `/etc/systemd/system/arena.service` | Runs it as the user `arena`, restarts it if it stops. systemd hands it a copy of Caddy's certificate at start (`LoadCredential`) and lets it bind port 443 |
+| `/etc/systemd/system/arena-cert.path`, `arena-cert.service` | Restart the game server when Caddy renews the certificate (about every two months; running rooms end) |
+| `/etc/caddy/Caddyfile` | Caddy: the certificate for `GAME_HOST` (got and renewed by itself) and the pass-through to the server. HTTP/3 is turned off there so UDP 443 is free for the game server |
+| `/etc/sysctl.d/90-arena-quic.conf` | Bigger UDP buffers, which QUIC wants |
 
-The server listens on `127.0.0.1:8080` only; Caddy holds ports 80 and 443. Useful on the droplet:
+The server listens on `127.0.0.1:8080` (TCP, for Caddy) and on UDP `:443` (WebTransport, for
+players). Caddy holds TCP ports 80 and 443. The game server answers the room API over HTTP/3 on
+UDP 443 as well: a browser that knows the host speaks HTTP/3 sends its ordinary requests there.
+A firewall in front of the droplet must let **UDP 443** in, besides TCP 80 and 443. Useful on the droplet:
 `systemctl status arena`, `journalctl -u arena -f`, `curl localhost:8080/healthz`.
 
 ## How the two halves find each other
 
 - **Client:** `client/src/net/serverUrl.ts`. With `VITE_SERVER_URL` unset (development), the page
-  talks to its own origin and Vite proxies to the local server. Set at build time, the room API and
-  the WebSocket go to that address.
-- **Server:** `--allowed-origins=<host>,<host>`. The WebSocket and the HTTP API (CORS) accept pages
-  from those hosts, and from localhost. A page from anywhere else is refused.
+  talks to its own origin and Vite proxies the room API to the local server. Set at build time, the
+  room API goes to that address. Either way the page asks `GET /api/transport` which UDP port
+  WebTransport is on (and, in development, the hash of the server's self-signed certificate) and
+  connects there directly.
+- **Server:** `--allowed-origins=<host>,<host>`. WebTransport, the WebSocket and the HTTP API (CORS)
+  accept pages from those hosts, and from localhost. A page from anywhere else is refused.
 
 ## Adding a real domain later
 

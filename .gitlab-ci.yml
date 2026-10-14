@@ -10,7 +10,7 @@ default:
       - .pnpm-store
       - .go/pkg/mod
   before_script:
-    - export GOVERSION=1.24.6 GOPATH="$CI_PROJECT_DIR/.go" GOMODCACHE="$CI_PROJECT_DIR/.go/pkg/mod"
+    - export GOVERSION=1.26.0 GOPATH="$CI_PROJECT_DIR/.go" GOMODCACHE="$CI_PROJECT_DIR/.go/pkg/mod"
     - curl -fsSL "https://go.dev/dl/go${GOVERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xz
     - export PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
     - corepack enable

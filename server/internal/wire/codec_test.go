@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vmihailenco/msgpack/v5"
+
 	"arena/server/internal/protocol"
 )
 
@@ -96,5 +98,58 @@ func TestMsgPackRoundTripAndCompactness(t *testing.T) {
 	}
 	if len(packed) >= len(jsonBytes) {
 		t.Fatalf("msgpack input was not compact: %d bytes vs JSON welcome %d bytes", len(packed), len(jsonBytes))
+	}
+}
+
+// A binary frame is an array: the type, then the message's fields in the flat ClientMessage
+// order, with empty values for the fields the message does not use.
+func TestMsgPackDecodesClientArrays(t *testing.T) {
+	enc := func(v any) []byte {
+		t.Helper()
+		b, err := msgpack.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	var m protocol.ClientMessage
+	if err := (MsgPack{}).DecodeClient(enc([]any{"ping", []any{}, 0, 12.5, 0, ""}), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Type != protocol.ClientTypePing || m.T != 12.5 {
+		t.Fatalf("ping decoded as %+v", m)
+	}
+	if err := (MsgPack{}).DecodeClient(enc([]any{"practice", []any{}, 0, 0, 0, "refill"}), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Type != protocol.ClientTypePractice || m.Action != "refill" || m.T != 0 {
+		t.Fatalf("practice decoded as %+v", m)
+	}
+	// Always the whole array: the decoder refuses one of another length, so a client and a
+	// server built from different versions of messages.json do not half-understand each other.
+	if err := (MsgPack{}).DecodeClient(enc([]any{"respawn"}), &m); err == nil {
+		t.Fatal("a short array should be refused")
+	}
+	if err := (MsgPack{}).DecodeClient(enc([]any{"respawn", []any{}, 0, 0, 0, ""}), &m); err != nil || m.Type != protocol.ClientTypeRespawn {
+		t.Fatalf("respawn decoded as %+v (%v)", m, err)
+	}
+}
+
+// Snapshots travel as datagrams when they fit, so their size matters: a quiet two-player
+// snapshot must be well under one datagram.
+func TestMsgPackSnapshotFitsADatagram(t *testing.T) {
+	s := &protocol.Snapshot{
+		Type: protocol.ServerTypeSnapshot, Tick: 123456, AckSeq: 98765, Queued: 2,
+		You:      protocol.PlayerState{X: 1.2345, Y: 2.5, Z: -3.75, VX: 4.1, VZ: -2.2, OnGround: true},
+		Entities: []protocol.Entity{{ID: 2, TeamID: 2, X: 4.5, Y: 5.25, Z: 6.125, Yaw: 0.5, Pitch: -0.1, Flags: 16}},
+		Scores:   []protocol.Score{{ID: 1, Kills: 3, Deaths: 1}, {ID: 2, Kills: 1, Deaths: 3}},
+	}
+	b, err := (MsgPack{}).EncodeSnapshot(nil, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("a quiet two-player snapshot is %d bytes", len(b))
+	if len(b) > 450 {
+		t.Fatalf("a quiet two-player snapshot is %d bytes: too big to leave room in a datagram", len(b))
 	}
 }

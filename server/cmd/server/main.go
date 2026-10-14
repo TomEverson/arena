@@ -3,9 +3,11 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os/signal"
 	"path/filepath"
@@ -31,6 +33,9 @@ func main() {
 	length := flag.Duration("match-length", time.Duration(game.MatchLengthSeconds*float64(time.Second)), "length of a match")
 	results := flag.Duration("results", time.Duration(game.MatchResultsSeconds*float64(time.Second)), "how long the results show before the next match")
 	roomIdle := flag.Duration("room-idle", time.Minute, "how long an empty room is kept")
+	wtAddr := flag.String("wt-addr", "", "UDP address for WebTransport, what browsers play over (default: the same port as --addr; \"off\" turns it off)")
+	wtCert := flag.String("wt-cert", "", "certificate file (PEM) for WebTransport: the real certificate of the host name players connect to. Without it a self-signed development certificate is made, which browsers accept by its hash")
+	wtKey := flag.String("wt-key", "", "private key file (PEM) for --wt-cert")
 	allowedOrigins := flag.String("allowed-origins", "", "comma-separated host names the client may be served from besides localhost (e.g. arena.example.com,*.example.com)")
 	flag.Parse()
 
@@ -90,6 +95,33 @@ func main() {
 	}
 	if len(srv.AllowedOrigins) > 0 {
 		log.Printf("allowed origins: %s (and localhost)", strings.Join(srv.AllowedOrigins, ", "))
+	}
+	if *wtAddr != "off" {
+		udpAddr := *wtAddr
+		if udpAddr == "" {
+			udpAddr = *addr
+		}
+		conn, err := net.ListenPacket("udp", udpAddr)
+		if err != nil {
+			log.Fatalf("webtransport: listening on udp %s: %v", udpAddr, err)
+		}
+		var cert tls.Certificate
+		selfSigned := *wtCert == ""
+		if selfSigned {
+			cert, err = gameserver.DevCertificate()
+		} else {
+			cert, err = tls.LoadX509KeyPair(*wtCert, *wtKey)
+		}
+		if err != nil {
+			log.Fatalf("webtransport certificate: %v", err)
+		}
+		run := srv.ServeWebTransport(conn, cert, selfSigned)
+		log.Printf("webtransport on udp %s (self-signed development certificate: %v)", conn.LocalAddr(), selfSigned)
+		go func() {
+			if err := run(ctx); err != nil {
+				log.Fatalf("webtransport: %v", err)
+			}
+		}()
 	}
 	httpSrv := &http.Server{Addr: *addr, Handler: srv.Handler()}
 

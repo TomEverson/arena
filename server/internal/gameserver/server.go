@@ -45,7 +45,9 @@ type Server struct {
 	// besides localhost: the site's own host names when the client is hosted somewhere else
 	// (a pattern per host, as path.Match reads it: "arena.example.com", "*.example.com").
 	AllowedOrigins []string
-	nextID         atomic.Uint32
+	// wt is the WebTransport side (webtransport.go), set by ServeWebTransport; nil when off.
+	wt     *wtServer
+	nextID atomic.Uint32
 	// Snapshot metrics are intentionally kept at the network edge: they measure the encoded
 	// payload that clients actually receive, rather than the in-memory game snapshot.
 	snapshotCount atomic.Uint64
@@ -57,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("POST /api/rooms", s.handleCreateRoom)
 	mux.HandleFunc("GET /api/rooms/{code}", s.handleRoomInfo)
+	mux.HandleFunc("GET /api/transport", s.handleTransport)
 	mux.HandleFunc("/ws", s.handleWS)
 	return s.cors(mux)
 }
@@ -167,6 +170,90 @@ func (s *Server) handleRoomInfo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// link is one client's connection, whatever carries it (a WebSocket, a WebTransport session).
+// Frames are whole encoded messages. Sends never block the caller for long and may be called
+// from several goroutines.
+type link interface {
+	// sendReliable delivers the frame, in order with the other reliable ones.
+	sendReliable(frame []byte)
+	// sendLossy delivers the frame if it can, without ever waiting behind an older one. The frame
+	// must not be kept after the call returns.
+	sendLossy(frame []byte)
+}
+
+// play runs one player in a room over a connection: it joins the world, sends the welcome and
+// then snapshots until ctx ends. It returns what to do with each message from the client, and
+// the function that takes the player out again.
+func (s *Server) play(ctx context.Context, room *Room, l link) (onMessage func(data []byte), leave func(), err error) {
+	// The fake network: latency on everything, loss only on what is allowed to be lost. A frame
+	// is copied when the link may hold on to it past the call.
+	steady := netsim.Link{Latency: s.Link.Latency}
+	reliable := func(frame []byte) {
+		if steady.Active() {
+			frame = append([]byte(nil), frame...)
+		}
+		steady.Deliver(func() { l.sendReliable(frame) })
+	}
+	lossy := func(frame []byte) {
+		if s.Link.Active() {
+			frame = append([]byte(nil), frame...)
+		}
+		s.Link.Deliver(func() { l.sendLossy(frame) })
+	}
+
+	p := game.NewPlayer(s.nextID.Add(1))
+	levelName := room.LevelName // each mode can run its own map
+	if levelName == "" {
+		levelName = s.LevelName
+	}
+	hello, err := s.Codec.EncodeWelcome(nil, &protocol.Welcome{
+		Type:         protocol.ServerTypeWelcome,
+		PlayerID:     p.ID,
+		TickRate:     game.TickRate,
+		SnapshotRate: game.SnapshotRate,
+		Level:        levelName,
+		Room:         room.Code,
+		Mode:         room.Mode,
+		MaxPlayers:   uint8(room.Capacity()),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Printf("player %d joined room %s", p.ID, room.Code)
+	reliable(hello)
+
+	room.World.Join(ctx, p)
+	go s.writeLoop(ctx, p, lossy)
+
+	onMessage = func(data []byte) {
+		s.Link.Deliver(func() {
+			var msg protocol.ClientMessage // fresh value: Deliver may run this on another goroutine
+			if err := s.Codec.DecodeClient(data, &msg); err != nil {
+				return
+			}
+			s.handle(ctx, room, p.ID, &msg, lossy)
+		})
+	}
+	leave = func() {
+		// ctx may already be cancelled; leave must still reach the world.
+		room.World.Leave(context.Background(), p.ID)
+		log.Printf("player %d left room %s", p.ID, room.Code)
+	}
+	return onMessage, leave, nil
+}
+
+// wsLink is a WebSocket: one ordered stream, so "lossy" frames simply arrive like the rest.
+type wsLink struct {
+	ctx     context.Context
+	conn    *websocket.Conn
+	msgType websocket.MessageType
+}
+
+func (l wsLink) sendReliable(frame []byte) { _ = l.conn.Write(l.ctx, l.msgType, frame) }
+func (l wsLink) sendLossy(frame []byte)    { _ = l.conn.Write(l.ctx, l.msgType, frame) }
+
+// handleWS serves the WebSocket transport: what the headless test players use (Node has no
+// WebTransport), and browsers when asked to with ?transport=ws.
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: append(append([]string{}, devOrigins...), s.AllowedOrigins...),
@@ -196,59 +283,19 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	if s.Codec.Binary() {
 		msgType = websocket.MessageBinary
 	}
-	// send applies the fake network to an outgoing frame. The frame is copied
-	// only when the link may hold on to it past this call.
-	send := func(frame []byte) {
-		if s.Link.Active() {
-			frame = append([]byte(nil), frame...)
-		}
-		s.Link.Deliver(func() { _ = conn.Write(ctx, msgType, frame) })
-	}
-
-	p := game.NewPlayer(s.nextID.Add(1))
-	log.Printf("player %d joined room %s", p.ID, room.Code)
-
-	levelName := room.LevelName // each mode can run its own map
-	if levelName == "" {
-		levelName = s.LevelName
-	}
-	hello, err := s.Codec.EncodeWelcome(nil, &protocol.Welcome{
-		Type:         protocol.ServerTypeWelcome,
-		PlayerID:     p.ID,
-		TickRate:     game.TickRate,
-		SnapshotRate: game.SnapshotRate,
-		Level:        levelName,
-		Room:         room.Code,
-		Mode:         room.Mode,
-		MaxPlayers:   uint8(room.Capacity()),
-	})
+	onMessage, leave, err := s.play(ctx, room, wsLink{ctx: ctx, conn: conn, msgType: msgType})
 	if err != nil {
 		log.Printf("encode welcome: %v", err)
 		return
 	}
-	send(hello)
-
-	room.World.Join(ctx, p)
-	defer func() {
-		// ctx may already be cancelled; leave must still reach the world.
-		room.World.Leave(context.Background(), p.ID)
-		log.Printf("player %d left room %s", p.ID, room.Code)
-	}()
-
-	go s.writeLoop(ctx, p, send)
+	defer leave()
 
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {
 			return
 		}
-		s.Link.Deliver(func() {
-			var msg protocol.ClientMessage // fresh value: Deliver may run this on another goroutine
-			if err := s.Codec.DecodeClient(data, &msg); err != nil {
-				return
-			}
-			s.handle(ctx, room, p.ID, &msg, send)
-		})
+		onMessage(data)
 	}
 }
 
@@ -265,6 +312,9 @@ func (s *Server) handle(
 		// Resent redundantly by the client; the world skips sequence numbers it already has.
 		for i := range msg.Inputs {
 			room.World.SubmitInput(id, msg.Inputs[i])
+		}
+		if msg.Ack > 0 {
+			room.World.AckSnapshot(id, msg.Ack) // what it has got, so the rest can be repeated
 		}
 	case protocol.ClientTypePing:
 		frame, err := s.Codec.EncodePong(nil, &protocol.Pong{

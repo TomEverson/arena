@@ -132,6 +132,59 @@ function genTs() {
   out.push(union("ClientMessage", "client"));
   out.push(union("ServerMessage", "server"));
   out.push(`const SERVER_TYPES = new Set<string>(${JSON.stringify(Object.keys(schema.server))});\n`);
+
+  // Binary frames carry every struct as an array of its fields in declaration order (no field
+  // names on the wire). The layouts below are that order; the Go side gets it from its structs.
+  const layoutOf = (fields, typed) => [
+    ...(typed ? [["type", "string"]] : []),
+    ...Object.entries(fields).map(([fname, spec]) => [fname, field(spec).type]),
+  ];
+  const layouts = {};
+  for (const [name, s] of Object.entries(schema.structs)) layouts[name] = layoutOf(s.fields, false);
+  for (const [name, m] of Object.entries(schema.server)) layouts[`server:${name}`] = layoutOf(m.fields, true);
+  // Client messages are one flat struct on the server: the type, then every message's fields.
+  layouts.client = [["type", "string"], ...Object.values(schema.client).flatMap((m) => layoutOf(m.fields, false))];
+  out.push("/** Field order of every struct and message, as binary frames carry them (arrays, no field names). */");
+  out.push(`const LAYOUTS: Record<string, readonly (readonly [string, string])[]> = ${JSON.stringify(layouts)};\n`);
+  out.push(`function unpack(type: string, value: unknown): unknown {
+  if (type.startsWith("[")) {
+    const inner = type.slice(1, -1);
+    return Array.isArray(value) ? value.map((v) => unpack(inner, v)) : [];
+  }
+  const layout = LAYOUTS[type];
+  if (!layout) return value;
+  const items = Array.isArray(value) ? (value as unknown[]) : [];
+  const out: Record<string, unknown> = {};
+  layout.forEach(([name, t], i) => {
+    out[name] = unpack(t, items[i]);
+  });
+  return out;
+}
+
+function pack(type: string, value: unknown): unknown {
+  if (type.startsWith("[")) {
+    const inner = type.slice(1, -1);
+    return Array.isArray(value) ? value.map((v) => pack(inner, v)) : [];
+  }
+  const layout = LAYOUTS[type];
+  if (!layout) return value ?? (type === "string" ? "" : type === "bool" ? false : 0);
+  const fields = (value ?? {}) as Record<string, unknown>;
+  return layout.map(([name, t]) => pack(t, fields[name]));
+}
+
+/** Decode a binary frame's value (the decoded MessagePack array) into a server message, or null. */
+export function unpackServerMessage(value: unknown): ServerMessage | null {
+  if (!Array.isArray(value)) return null;
+  const type: unknown = value[0];
+  if (typeof type !== "string" || !SERVER_TYPES.has(type)) return null;
+  return unpack(\`server:\${type}\`, value) as ServerMessage;
+}
+
+/** A client message as the array a binary frame carries (encode it with MessagePack). */
+export function packClientMessage(msg: ClientMessage): unknown[] {
+  return pack("client", msg) as unknown[];
+}
+`);
   out.push("/** Parse a server message. Returns null for anything that is not a known message. */");
   out.push("export function parseServerMessage(text: string): ServerMessage | null {");
   out.push("  const msg = JSON.parse(text) as { type?: unknown };");

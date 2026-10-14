@@ -8,8 +8,10 @@ import (
 	"arena/server/internal/protocol"
 )
 
-// MsgPack is the production binary codec. It uses the generated JSON field names so the
-// TypeScript client can decode the same protocol objects without a second schema.
+// MsgPack is the production binary codec. Every struct is an array of its fields in declaration
+// order, with no field names on the wire: a snapshot is about a third the size it was as a map,
+// which is what lets most of them fit in one datagram. The TypeScript client has the same field
+// order, generated from protocol/messages.json (LAYOUTS in protocol.gen.ts).
 type MsgPack struct{}
 
 func (MsgPack) Binary() bool { return true }
@@ -18,6 +20,10 @@ func appendMsgPack(dst []byte, value any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
 	enc.SetCustomStructTag("json")
+	enc.UseArrayEncodedStructs(true)
+	// The smallest form of every number: a zero or whole-valued float is one byte, not nine.
+	enc.UseCompactInts(true)
+	enc.UseCompactFloats(true)
 	if err := enc.Encode(value); err != nil {
 		return dst, err
 	}
